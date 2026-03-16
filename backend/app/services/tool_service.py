@@ -17,6 +17,7 @@ from app.services.library_service import (
     list_library_files,
     build_library_context,
 )
+from app.services.git_service import GitService
 
 BASE_DIR = Path(__file__).resolve().parents[3]
 DATA_DIR = BASE_DIR / "data"
@@ -47,6 +48,8 @@ def list_tools() -> dict[str, Any]:
         {"name": "preview_project_patch"},
         {"name": "apply_project_patch"},
         {"name": "replace_in_file"},
+        {"name": "git_status"},
+        {"name": "git_commit_push"},
         {"name": "list_library"},
         {"name": "build_library_context"},
     ]
@@ -180,6 +183,14 @@ def run_tool(tool_name: str, args: dict[str, Any] | None = None) -> dict[str, An
             str(args.get("new_text", "")),
             int(args.get("max_chars", 20000)),
         )
+
+    if tool_name == "git_status":
+        git = GitService()
+        return git.status()
+
+    if tool_name == "git_commit_push":
+        git = GitService()
+        return git.commit_and_push(str(args.get("message", "AI update")))
 
     if tool_name == "list_library":
         return list_library_files()
