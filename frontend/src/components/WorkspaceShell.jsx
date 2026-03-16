@@ -2,6 +2,7 @@ import DesktopStatusBar from "./DesktopStatusBar";
 import SupervisorView from "./SupervisorView";
 import RunHistoryView from "./RunHistoryView";
 import BackendControlPanel from "./BackendControlPanel";
+import AutonomousDevPanel from "./AutonomousDevPanel";
 
 export default function WorkspaceShell() {
   return (
@@ -11,6 +12,7 @@ export default function WorkspaceShell() {
         <SupervisorView />
         <RunHistoryView />
         <BackendControlPanel />
+        <AutonomousDevPanel />
       </div>
     </div>
   );

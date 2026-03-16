@@ -1,4 +1,3 @@
-
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
@@ -16,8 +15,8 @@ from app.api.routes.agent_supervisor import router as agent_supervisor_router
 from app.api.routes.run_history import router as run_history_router
 from app.api.routes.desktop_bridge import router as desktop_bridge_router
 from app.api.routes.desktop_lifecycle import router as desktop_lifecycle_router
+from app.api.routes.autonomous_dev import router as autonomous_dev_router
 
-# Optional runtime routes (safe import)
 try:
     from app.api.routes.browser_runtime import router as browser_runtime_router
 except Exception:
@@ -28,13 +27,7 @@ try:
 except Exception:
     desktop_runtime_router = None
 
-
 app = FastAPI(title="Jarvis Backend")
-
-
-# -----------------------------
-# CORS
-# -----------------------------
 
 app.add_middleware(
     CORSMiddleware,
@@ -43,11 +36,6 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
-
-
-# -----------------------------
-# ROOT
-# -----------------------------
 
 @app.get("/")
 def root():
@@ -93,15 +81,12 @@ def root():
                 "/api/run-history/run",
                 "/api/run-history/runs",
                 "/api/run-history/runs/{run_id}",
+                "/api/autodev/status",
+                "/api/autodev/run",
             ],
         },
         media_type="application/json; charset=utf-8",
     )
-
-
-# -----------------------------
-# HEALTH
-# -----------------------------
 
 @app.get("/api/health")
 def health():
@@ -109,11 +94,6 @@ def health():
         content={"status": "ok"},
         media_type="application/json; charset=utf-8",
     )
-
-
-# -----------------------------
-# CORE ROUTERS
-# -----------------------------
 
 app.include_router(chat_router)
 app.include_router(models_router)
@@ -128,11 +108,7 @@ app.include_router(agent_supervisor_router)
 app.include_router(run_history_router)
 app.include_router(desktop_bridge_router)
 app.include_router(desktop_lifecycle_router)
-
-
-# -----------------------------
-# OPTIONAL RUNTIME ROUTERS
-# -----------------------------
+app.include_router(autonomous_dev_router)
 
 if browser_runtime_router:
     app.include_router(browser_runtime_router)
@@ -140,19 +116,9 @@ if browser_runtime_router:
 if desktop_runtime_router:
     app.include_router(desktop_runtime_router)
 
-
-# -----------------------------
-# STARTUP
-# -----------------------------
-
 @app.on_event("startup")
 async def startup_event():
     print("Jarvis backend started")
-
-
-# -----------------------------
-# SHUTDOWN
-# -----------------------------
 
 @app.on_event("shutdown")
 async def shutdown_event():
