@@ -1,3 +1,4 @@
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
@@ -14,6 +15,7 @@ from app.api.routes.project_patch import router as project_patch_router
 from app.api.routes.agent_supervisor import router as agent_supervisor_router
 from app.api.routes.run_history import router as run_history_router
 from app.api.routes.desktop_bridge import router as desktop_bridge_router
+from app.api.routes.desktop_lifecycle import router as desktop_lifecycle_router
 
 # Optional runtime routes (safe import)
 try:
@@ -76,6 +78,8 @@ def root():
                 "/api/desktop/handshake",
                 "/api/desktop/workspace",
                 "/api/desktop/open-project",
+                "/api/desktop-lifecycle/config",
+                "/api/desktop-lifecycle/env",
                 "/api/supervisor/status",
                 "/api/supervisor/agents",
                 "/api/supervisor/agents/register",
@@ -123,6 +127,7 @@ app.include_router(project_patch_router)
 app.include_router(agent_supervisor_router)
 app.include_router(run_history_router)
 app.include_router(desktop_bridge_router)
+app.include_router(desktop_lifecycle_router)
 
 
 # -----------------------------
