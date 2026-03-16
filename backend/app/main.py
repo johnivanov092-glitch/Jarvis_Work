@@ -16,6 +16,7 @@ from app.api.routes.run_history import router as run_history_router
 from app.api.routes.desktop_bridge import router as desktop_bridge_router
 from app.api.routes.desktop_lifecycle import router as desktop_lifecycle_router
 from app.api.routes.autonomous_dev import router as autonomous_dev_router
+from app.api.routes.project_brain import router as project_brain_router
 
 try:
     from app.api.routes.browser_runtime import router as browser_runtime_router
@@ -83,6 +84,11 @@ def root():
                 "/api/run-history/runs/{run_id}",
                 "/api/autodev/status",
                 "/api/autodev/run",
+                "/api/project-brain/status",
+                "/api/project-brain/snapshot",
+                "/api/project-brain/index/search",
+                "/api/project-brain/analyze",
+                "/api/project-brain/plan",
             ],
         },
         media_type="application/json; charset=utf-8",
@@ -109,6 +115,7 @@ app.include_router(run_history_router)
 app.include_router(desktop_bridge_router)
 app.include_router(desktop_lifecycle_router)
 app.include_router(autonomous_dev_router)
+app.include_router(project_brain_router)
 
 if browser_runtime_router:
     app.include_router(browser_runtime_router)

@@ -3,6 +3,7 @@ import SupervisorView from "./SupervisorView";
 import RunHistoryView from "./RunHistoryView";
 import BackendControlPanel from "./BackendControlPanel";
 import AutonomousDevPanel from "./AutonomousDevPanel";
+import ProjectBrainPanel from "./ProjectBrainPanel";
 
 export default function WorkspaceShell() {
   return (
@@ -13,6 +14,7 @@ export default function WorkspaceShell() {
         <RunHistoryView />
         <BackendControlPanel />
         <AutonomousDevPanel />
+        <ProjectBrainPanel />
       </div>
     </div>
   );
