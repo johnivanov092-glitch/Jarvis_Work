@@ -16,7 +16,15 @@ from app.api.routes.run_history import router as run_history_router
 from app.api.routes.desktop_bridge import router as desktop_bridge_router
 from app.api.routes.desktop_lifecycle import router as desktop_lifecycle_router
 from app.api.routes.autonomous_dev import router as autonomous_dev_router
-from app.api.routes.project_brain import router as project_brain_router
+
+# Prefer api/routes project brain, but also support legacy router path from packs
+try:
+    from app.api.routes.project_brain import router as project_brain_router
+except Exception:
+    try:
+        from app.routers.project_brain_router import router as project_brain_router
+    except Exception:
+        project_brain_router = None
 
 try:
     from app.api.routes.multi_agent import router as multi_agent_router
@@ -60,76 +68,82 @@ app.add_middleware(
 
 @app.get("/")
 def root():
+    base_routes = [
+        "/api/health",
+        "/api/chat/send",
+        "/api/models",
+        "/api/profiles",
+        "/api/settings",
+        "/api/library/files",
+        "/api/memory/profiles",
+        "/api/agents/run",
+        "/api/tools",
+        "/api/tools/run",
+        "/api/project/patch/preview",
+        "/api/project/patch/apply",
+        "/api/project/patch/replace",
+        "/api/browser/search",
+        "/api/browser/run",
+        "/api/browser/screenshot",
+        "/api/desktop/status",
+        "/api/desktop/info",
+        "/api/desktop/handshake",
+        "/api/desktop/workspace",
+        "/api/desktop/open-project",
+        "/api/desktop-lifecycle/config",
+        "/api/desktop-lifecycle/env",
+        "/api/supervisor/status",
+        "/api/supervisor/agents",
+        "/api/supervisor/agents/register",
+        "/api/supervisor/run",
+        "/api/supervisor/runs",
+        "/api/supervisor/events",
+        "/api/supervisor/schedule",
+        "/api/supervisor/jobs",
+        "/api/supervisor/bootstrap",
+        "/api/run-history/status",
+        "/api/run-history/run",
+        "/api/run-history/runs",
+        "/api/run-history/runs/{run_id}",
+        "/api/autodev/status",
+        "/api/autodev/run",
+        "/api/multi-agent/status",
+        "/api/multi-agent/agents",
+        "/api/multi-agent/bootstrap",
+        "/api/multi-agent/run",
+        "/api/multi-agent/runs",
+        "/api/phase10/status",
+        "/api/phase10/research/run",
+        "/api/phase10/browser/run",
+        "/api/phase11/status",
+        "/api/phase11/patch/preview",
+        "/api/phase11/patch/apply",
+        "/api/phase11/patch/rollback",
+        "/api/phase11/patch/verify",
+        "/api/phase11/patch/backups",
+        "/api/phase12/status",
+        "/api/phase12/executions",
+        "/api/phase12/executions/{execution_id}",
+        "/api/phase12/executions/{execution_id}/events",
+        "/api/phase12/executions/{execution_id}/artifacts",
+        "/api/phase12/executions/start",
+    ]
+
+    if project_brain_router:
+        base_routes.extend([
+            "/api/project-brain/status",
+            "/api/project-brain/snapshot",
+            "/api/project-brain/index/search",
+            "/api/project-brain/analyze",
+            "/api/project-brain/plan",
+        ])
+
     return JSONResponse(
         content={
             "name": "Jarvis Backend",
             "status": "running",
             "docs": "http://127.0.0.1:8000/docs",
-            "routes": [
-                "/api/health",
-                "/api/chat/send",
-                "/api/models",
-                "/api/profiles",
-                "/api/settings",
-                "/api/library/files",
-                "/api/memory/profiles",
-                "/api/agents/run",
-                "/api/tools",
-                "/api/tools/run",
-                "/api/project/patch/preview",
-                "/api/project/patch/apply",
-                "/api/project/patch/replace",
-                "/api/browser/search",
-                "/api/browser/run",
-                "/api/browser/screenshot",
-                "/api/desktop/status",
-                "/api/desktop/info",
-                "/api/desktop/handshake",
-                "/api/desktop/workspace",
-                "/api/desktop/open-project",
-                "/api/desktop-lifecycle/config",
-                "/api/desktop-lifecycle/env",
-                "/api/supervisor/status",
-                "/api/supervisor/agents",
-                "/api/supervisor/agents/register",
-                "/api/supervisor/run",
-                "/api/supervisor/runs",
-                "/api/supervisor/events",
-                "/api/supervisor/schedule",
-                "/api/supervisor/jobs",
-                "/api/supervisor/bootstrap",
-                "/api/run-history/status",
-                "/api/run-history/run",
-                "/api/run-history/runs",
-                "/api/run-history/runs/{run_id}",
-                "/api/autodev/status",
-                "/api/autodev/run",
-                "/api/project-brain/status",
-                "/api/project-brain/snapshot",
-                "/api/project-brain/index/search",
-                "/api/project-brain/analyze",
-                "/api/project-brain/plan",
-                "/api/multi-agent/status",
-                "/api/multi-agent/agents",
-                "/api/multi-agent/bootstrap",
-                "/api/multi-agent/run",
-                "/api/multi-agent/runs",
-                "/api/phase10/status",
-                "/api/phase10/research/run",
-                "/api/phase10/browser/run",
-                "/api/phase11/status",
-                "/api/phase11/patch/preview",
-                "/api/phase11/patch/apply",
-                "/api/phase11/patch/rollback",
-                "/api/phase11/patch/verify",
-                "/api/phase11/patch/backups",
-                "/api/phase12/status",
-                "/api/phase12/executions",
-                "/api/phase12/executions/{execution_id}",
-                "/api/phase12/executions/{execution_id}/events",
-                "/api/phase12/executions/{execution_id}/artifacts",
-                "/api/phase12/executions/start",
-            ],
+            "routes": base_routes,
         },
         media_type="application/json; charset=utf-8",
     )
@@ -155,7 +169,9 @@ app.include_router(run_history_router)
 app.include_router(desktop_bridge_router)
 app.include_router(desktop_lifecycle_router)
 app.include_router(autonomous_dev_router)
-app.include_router(project_brain_router)
+
+if project_brain_router:
+    app.include_router(project_brain_router)
 
 if multi_agent_router:
     app.include_router(multi_agent_router)
