@@ -61,4 +61,19 @@ export const api = {
     request("/api/jarvis/memory/save", { method: "POST", body: payload }),
   deleteMemory: (id) =>
     request("/api/jarvis/memory/delete", { method: "POST", body: { id } }),
+
+  getProjectSnapshot: () => request("/snapshot"),
+  getProjectFile: (path) => request(`/file?path=${encodeURIComponent(path)}`),
+
+  previewPatch: ({ path, instruction, content }) =>
+    request("/agent/ollama/run", {
+      method: "POST",
+      body: {
+        mode: "code",
+        selected_path: path,
+        selected_content: content,
+        goal: instruction,
+        project_files: [path],
+      },
+    }),
 };
