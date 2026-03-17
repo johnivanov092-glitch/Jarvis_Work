@@ -112,7 +112,7 @@ button, input, textarea, select { font: inherit; }
   background: #262626; color: var(--text); padding: 10px 12px; text-align: left; cursor: pointer;
 }
 .search-item.static { cursor: default; }
-.settings-field { display: flex; flex-direction: column; gap: 8px; color: #d8d8d8; font-size: 13px; }
+.settings-field, .task-field { display: flex; flex-direction: column; gap: 8px; color: #d8d8d8; font-size: 13px; }
 .main-panel { display: grid; grid-template-rows: 84px 1fr; min-width: 0; min-height: 0; }
 .top-bar {
   display: grid; grid-template-columns: 180px 1fr 260px; align-items: center; gap: 12px;
@@ -187,21 +187,21 @@ button, input, textarea, select { font: inherit; }
 .send-btn:disabled, .soft-btn:disabled { opacity: 0.55; cursor: default; }
 
 .code-shell-wrap { min-height: 0; padding: 16px 18px; }
-.code-workspace-v5 {
-  display: grid; grid-template-columns: 300px minmax(0, 1fr) 380px; gap: 14px; height: 100%;
+.code-workspace-v6 {
+  display: grid; grid-template-columns: 300px minmax(0, 1fr) 400px; gap: 14px; height: 100%;
 }
 .code-left, .code-center, .code-right,
 .file-explorer, .code-editor-shell, .diff-viewer, .terminal-panel, .patch-controls,
-.patch-history-panel, .batch-verify-panel, .project-map-panel, .patch-plan-panel, .file-ops-panel {
+.patch-history-panel, .batch-verify-panel, .project-map-panel, .patch-plan-panel, .file-ops-panel, .task-runner-panel {
   min-height: 0;
 }
 .code-right {
   display: grid;
-  grid-template-rows: 250px 250px 340px 240px 220px 1fr;
+  grid-template-rows: 330px 250px 250px 320px 240px 220px 1fr;
   gap: 14px;
 }
 .file-explorer, .code-editor-shell, .diff-viewer, .terminal-panel, .patch-controls,
-.patch-history-panel, .batch-verify-panel, .project-map-panel, .patch-plan-panel, .file-ops-panel {
+.patch-history-panel, .batch-verify-panel, .project-map-panel, .patch-plan-panel, .file-ops-panel, .task-runner-panel {
   border: 1px solid var(--border); border-radius: 16px; background: #1e1e1e; overflow: hidden;
 }
 .pane-title {
@@ -222,14 +222,16 @@ button, input, textarea, select { font: inherit; }
   background: transparent; border: 0; color: inherit; text-align: left; cursor: pointer; padding: 0;
 }
 .file-row.active, .history-row.active { border-color: #5c5c5c; background: #303030; }
-.file-row-name, .project-map-path, .patch-plan-path, .batch-verify-path { font-weight: 600; }
-.file-row-path, .history-path, .project-map-meta, .patch-plan-reason { font-size: 12px; color: var(--muted); margin-top: 6px; word-break: break-all; }
+.file-row-name, .project-map-path, .patch-plan-path, .batch-verify-path, .task-run-path { font-weight: 600; }
+.file-row-path, .history-path, .project-map-meta, .patch-plan-reason, .task-run-reason { font-size: 12px; color: var(--muted); margin-top: 6px; word-break: break-all; }
 .stage-btn {
   height: 32px; padding: 0 12px; border-radius: 10px; border: 1px solid var(--border); background: #2b2b2b; color: var(--text); cursor: pointer;
 }
 .stage-btn.staged { background: #3a3a3a; border-color: #676767; }
 .history-row-top { display: flex; justify-content: space-between; gap: 10px; }
-.history-action { text-transform: uppercase; font-size: 11px; letter-spacing: 0.08em; }
+.history-action, .task-run-action, .patch-plan-action {
+  text-transform: uppercase; font-size: 11px; letter-spacing: 0.08em; color: #e6e6e6;
+}
 .history-id, .history-time { color: var(--muted); font-size: 12px; }
 .pane-empty { padding: 14px; color: var(--muted); }
 .editor-subtitle { padding: 10px 14px; color: var(--muted); border-bottom: 1px solid var(--border); font-size: 12px; }
@@ -268,41 +270,39 @@ button, input, textarea, select { font: inherit; }
 .verify-title { font-weight: 700; margin-bottom: 6px; }
 .verify-meta { color: var(--muted); font-size: 12px; margin-bottom: 8px; }
 .verify-list { margin: 0; padding-left: 18px; color: #e6e6e6; }
-.batch-verify-body, .batch-verify-list, .project-map-summary, .patch-plan-body, .patch-plan-items, .patch-plan-notes {
+.batch-verify-body, .batch-verify-list, .project-map-summary, .patch-plan-body, .patch-plan-items, .patch-plan-notes, .task-runner-body, .task-run-result {
   display: flex; flex-direction: column; gap: 10px; padding: 12px;
 }
 .project-map-summary { flex-direction: row; flex-wrap: wrap; }
 .project-map-chip {
   padding: 6px 10px; border-radius: 999px; background: #2b2b2b; border: 1px solid var(--border); font-size: 12px;
 }
-.project-map-row, .patch-plan-row, .batch-verify-row {
+.project-map-row, .patch-plan-row, .batch-verify-row, .task-run-row {
   border: 1px solid var(--border-soft); border-radius: 10px; background: #262626; padding: 10px 12px;
 }
-.patch-plan-action {
-  text-transform: uppercase; font-size: 11px; letter-spacing: 0.08em; color: #e6e6e6;
-}
-.patch-plan-goal {
+.patch-plan-goal, .task-run-header {
   padding: 12px; border-bottom: 1px solid var(--border); color: #eaeaea;
 }
-.patch-plan-note { color: #dcdcdc; font-size: 13px; }
+.patch-plan-note, .task-run-log { color: #dcdcdc; font-size: 13px; }
 .file-op-section {
   padding: 12px; border-top: 1px solid var(--border); display: flex; flex-direction: column; gap: 10px;
 }
-.file-op-title { font-weight: 700; }
+.file-op-title, .task-run-title { font-weight: 700; }
 .file-op-buttons { display: flex; gap: 10px; }
-.terminal-log { max-height: calc(100vh - 910px); overflow: auto; padding: 12px; }
+.task-run-section { display: flex; flex-direction: column; gap: 8px; }
+.terminal-log { max-height: calc(100vh - 1110px); overflow: auto; padding: 12px; }
 .terminal-line {
   font-family: "JetBrains Mono", monospace; font-size: 12px; line-height: 1.5;
   color: #d9d9d9; margin-bottom: 8px;
 }
 
-@media (max-width: 1600px) {
-  .code-workspace-v5 { grid-template-columns: 260px minmax(0, 1fr) 340px; }
+@media (max-width: 1700px) {
+  .code-workspace-v6 { grid-template-columns: 260px minmax(0, 1fr) 360px; }
 }
 @media (max-width: 1280px) {
   .top-bar { grid-template-columns: 1fr; justify-items: start; height: auto; }
   .top-right { justify-self: start; }
   .jarvis-app { grid-template-columns: 240px 1fr; }
-  .code-workspace-v5 { grid-template-columns: 1fr; }
-  .code-right { grid-template-rows: repeat(6, minmax(220px, auto)); }
+  .code-workspace-v6 { grid-template-columns: 1fr; }
+  .code-right { grid-template-rows: repeat(7, minmax(220px, auto)); }
 }

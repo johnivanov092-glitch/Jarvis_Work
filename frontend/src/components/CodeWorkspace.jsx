@@ -9,6 +9,7 @@ import BatchVerifyPanel from "./BatchVerifyPanel";
 import ProjectMapPanel from "./ProjectMapPanel";
 import PatchPlanPanel from "./PatchPlanPanel";
 import FileOpsPanel from "./FileOpsPanel";
+import TaskRunnerPanel from "./TaskRunnerPanel";
 
 export default function CodeWorkspace() {
   const [files, setFiles] = useState([]);
@@ -35,6 +36,9 @@ export default function CodeWorkspace() {
   const [batchLoading, setBatchLoading] = useState(false);
   const [projectMap, setProjectMap] = useState(null);
   const [patchPlan, setPatchPlan] = useState(null);
+  const [taskGoal, setTaskGoal] = useState("Добавь безопасное улучшение в текущий файл и подготовь verify.");
+  const [taskMode, setTaskMode] = useState("code");
+  const [taskRun, setTaskRun] = useState(null);
 
   useEffect(() => {
     loadFiles();
@@ -117,7 +121,7 @@ export default function CodeWorkspace() {
     setLogs((prev) => [
       `${new Date().toLocaleTimeString()}  ${message}`,
       ...prev,
-    ].slice(0, 160));
+    ].slice(0, 180));
   }
 
   async function buildDiff(original, updated) {
@@ -390,6 +394,21 @@ export default function CodeWorkspace() {
     }
   }
 
+  async function handleRunTask() {
+    try {
+      const result = await api.runTask({
+        goal: taskGoal,
+        mode: taskMode,
+        current_path: selectedPath,
+        staged_paths: stagedPaths,
+      });
+      setTaskRun(result);
+      appendLog("Task Runner завершил планирование.");
+    } catch (e) {
+      appendLog(`Ошибка task runner: ${e.message || "unknown error"}`);
+    }
+  }
+
   async function handleCreateFile(path, content) {
     try {
       const result = await api.createFile({ path, content });
@@ -445,7 +464,7 @@ export default function CodeWorkspace() {
   const stagedCount = useMemo(() => stagedPaths.length, [stagedPaths]);
 
   return (
-    <div className="code-workspace-v5">
+    <div className="code-workspace-v6">
       <div className="code-left">
         <FileExplorer
           files={files}
@@ -542,6 +561,15 @@ export default function CodeWorkspace() {
       </div>
 
       <div className="code-right">
+        <TaskRunnerPanel
+          goal={taskGoal}
+          setGoal={setTaskGoal}
+          mode={taskMode}
+          setMode={setTaskMode}
+          taskRun={taskRun}
+          onRunTask={handleRunTask}
+        />
+
         <PatchPlanPanel
           plan={patchPlan}
           onBuildPlan={handleBuildPlan}

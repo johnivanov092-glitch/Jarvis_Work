@@ -133,4 +133,10 @@ export const api = {
       method: "POST",
       body: { goal, current_path, current_content, staged_paths },
     }),
+
+  runTask: ({ goal, mode, current_path, staged_paths }) =>
+    request("/api/jarvis/task/run", {
+      method: "POST",
+      body: { goal, mode, current_path, staged_paths },
+    }),
 };
