@@ -1,637 +1,624 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import {
-  Bot,
-  Globe,
-  LoaderCircle,
-  Paperclip,
-  Plus,
-  RefreshCw,
-  Search,
-  Send,
-  ShieldCheck,
-  Sparkles,
-  Undo2,
-  Wand2,
-  X,
-} from "lucide-react";
-
+import { useEffect, useMemo, useState } from "react";
 import { api } from "../api/ide";
 
-function classNames(...items) {
-  return items.filter(Boolean).join(" ");
-}
+const DEFAULT_AGENT_PROFILE = "Сбалансированный";
 
-function normalizeBackups(payload) {
+function normalizeArray(payload) {
   if (Array.isArray(payload)) return payload;
-  if (Array.isArray(payload?.backups)) return payload.backups;
   if (Array.isArray(payload?.items)) return payload.items;
+  if (Array.isArray(payload?.results)) return payload.results;
+  if (Array.isArray(payload?.data)) return payload.data;
   return [];
 }
 
-function extractPreviewText(preview) {
-  if (!preview) return "";
-  return preview.diff || preview.patch || preview.preview || preview.unified_diff || JSON.stringify(preview, null, 2);
+function getChatId(chat) {
+  return chat?.id ?? chat?.chat_id ?? chat?.uuid;
 }
 
-function newSession() {
-  return {
-    id: Math.random().toString(36).slice(2, 10),
-    title: "New chat",
-    messages: [
-      {
-        id: crypto.randomUUID(),
-        role: "assistant",
-        content:
-          "Jarvis готов. Прикрепляй файлы, проектные файлы и пиши обычным языком — я сам решу, нужен чат, план, код или веб-исследование.",
-      },
-    ],
-    attachmentIds: [],
-    attachments: [],
-    selectedProjectPaths: [],
-    plan: [],
-    diffPreview: null,
-    codeSuggestion: null,
-    webResults: [],
-    agentsUsed: [],
-    expectedSha: null,
-  };
+function getChatTitle(chat) {
+  return chat?.title || chat?.name || "Новый чат";
 }
 
-function MessageBubble({ message }) {
+function getChatPinned(chat) {
+  return Boolean(chat?.pinned ?? chat?.is_pinned);
+}
+
+function getMessageRole(message) {
+  return message?.role || message?.sender || "assistant";
+}
+
+function getMessageContent(message) {
   return (
-    <div className={classNames("message-row", message.role === "user" ? "is-user" : "is-assistant")}>
-      <div className="message-avatar">{message.role === "user" ? "Е" : <Bot size={16} />}</div>
-      <div className="message-card">
-        {message.label ? <div className="message-label">{message.label}</div> : null}
-        <div className="message-content">{message.content}</div>
-        {Array.isArray(message.plan) && message.plan.length ? (
-          <div className="inline-plan">
-            {message.plan.map((item, index) => (
-              <div key={`${index}-${item}`} className="plan-line">
-                <span>{index + 1}.</span>
-                <span>{item}</span>
-              </div>
-            ))}
-          </div>
-        ) : null}
-      </div>
-    </div>
-  );
-}
-
-function AttachmentChip({ item, onRemove }) {
-  return (
-    <div className="attachment-chip">
-      <Paperclip size={14} />
-      <span>{item.name}</span>
-      <button type="button" className="ghost-icon" onClick={() => onRemove?.(item.id)}>
-        <X size={14} />
-      </button>
-    </div>
+    message?.content ??
+    message?.text ??
+    message?.message ??
+    message?.answer ??
+    ""
   );
 }
 
 export default function JarvisChatShell() {
-  const [sessions, setSessions] = useState([newSession()]);
-  const [activeSessionId, setActiveSessionId] = useState(() => sessions?.[0]?.id || newSession().id);
-  const [message, setMessage] = useState("");
-  const [mode, setMode] = useState("auto");
-  const [webEnabled, setWebEnabled] = useState(true);
-  const [ollama, setOllama] = useState({ models: [], default_model: "", status: "idle" });
-  const [selectedModel, setSelectedModel] = useState("");
-  const [projectFiles, setProjectFiles] = useState([]);
-  const [projectFilesLoading, setProjectFilesLoading] = useState(false);
-  const [projectPickerOpen, setProjectPickerOpen] = useState(false);
-  const [projectFilter, setProjectFilter] = useState("");
-  const [legacyAgents, setLegacyAgents] = useState([]);
-  const [busy, setBusy] = useState(false);
-  const [statusLine, setStatusLine] = useState("Jarvis Chat ready");
-  const [applyLoading, setApplyLoading] = useState(false);
-  const [verifyLoading, setVerifyLoading] = useState(false);
-  const [rollbackLoading, setRollbackLoading] = useState(false);
-  const [backups, setBackups] = useState([]);
-  const fileInputRef = useRef(null);
-  const messagesEndRef = useRef(null);
+  const [activeLeftTab, setActiveLeftTab] = useState("chats");
+  const [activeTopTab, setActiveTopTab] = useState("chat");
+  const [chats, setChats] = useState([]);
+  const [selectedChatId, setSelectedChatId] = useState(null);
+  const [messages, setMessages] = useState([]);
+  const [composer, setComposer] = useState("");
+  const [searchQuery, setSearchQuery] = useState("");
+  const [searchData, setSearchData] = useState({ chats: [], projects: [] });
+  const [loadingChats, setLoadingChats] = useState(false);
+  const [loadingMessages, setLoadingMessages] = useState(false);
+  const [sending, setSending] = useState(false);
+  const [models, setModels] = useState([]);
+  const [selectedModel, setSelectedModel] = useState("qwen3:8b");
+  const [agentProfile, setAgentProfile] = useState(DEFAULT_AGENT_PROFILE);
+  const [error, setError] = useState("");
 
-  const activeSession = useMemo(
-    () => sessions.find((item) => item.id === activeSessionId) || sessions[0],
-    [sessions, activeSessionId]
-  );
-
-  const filteredProjectFiles = useMemo(() => {
-    const q = projectFilter.trim().toLowerCase();
-    if (!q) return projectFiles.slice(0, 300);
-    return projectFiles.filter((item) => item.path.toLowerCase().includes(q)).slice(0, 300);
-  }, [projectFiles, projectFilter]);
-
-  const loadSnapshot = useCallback(async () => {
-    setProjectFilesLoading(true);
-    try {
-      const payload = await api.projectSnapshot();
-      setProjectFiles(payload.files || []);
-      setStatusLine(`Loaded ${payload.files_count || 0} project files`);
-    } catch (error) {
-      setProjectFiles([]);
-      setStatusLine(`Snapshot error: ${error.message}`);
-    } finally {
-      setProjectFilesLoading(false);
-    }
-  }, []);
-
-  const loadOllama = useCallback(async () => {
-    try {
-      const payload = await api.ollamaStatus();
-      setOllama(payload);
-      setSelectedModel((current) => current || payload.default_model || payload.models?.[0] || "");
-    } catch (error) {
-      setOllama({ models: [], default_model: "", status: "error", error: error.message });
-      setStatusLine(`Ollama error: ${error.message}`);
-    }
-  }, []);
-
-  const loadLegacyAgents = useCallback(async () => {
-    try {
-      const payload = await api.legacyAgents();
-      setLegacyAgents(payload.agents || []);
-    } catch {
-      setLegacyAgents([]);
-    }
-  }, []);
-
-  const loadBackups = useCallback(async () => {
-    try {
-      const payload = await api.listBackups(20);
-      setBackups(normalizeBackups(payload));
-    } catch {
-      setBackups([]);
-    }
+  useEffect(() => {
+    loadBootData();
   }, []);
 
   useEffect(() => {
-    loadSnapshot();
-    loadOllama();
-    loadLegacyAgents();
-    loadBackups();
-  }, [loadSnapshot, loadOllama, loadLegacyAgents, loadBackups]);
+    if (selectedChatId) {
+      loadMessages(selectedChatId);
+    } else {
+      setMessages([]);
+    }
+  }, [selectedChatId]);
 
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
-  }, [activeSession?.messages]);
-
-  const updateActiveSession = useCallback((updater) => {
-    setSessions((current) =>
-      current.map((item) => (item.id === activeSessionId ? (typeof updater === "function" ? updater(item) : updater) : item))
-    );
-  }, [activeSessionId]);
-
-  const createChat = () => {
-    const fresh = newSession();
-    setSessions((current) => [fresh, ...current]);
-    setActiveSessionId(fresh.id);
-    setMessage("");
-  };
-
-  const removeAttachment = (attachmentId) => {
-    updateActiveSession((session) => ({
-      ...session,
-      attachments: session.attachments.filter((item) => item.id !== attachmentId),
-      attachmentIds: session.attachmentIds.filter((id) => id !== attachmentId),
-      selectedProjectPaths: session.selectedProjectPaths.filter((path) => {
-        const removed = session.attachments.find((item) => item.id === attachmentId);
-        return removed?.project_path ? path !== removed.project_path : true;
-      }),
-    }));
-  };
-
-  const handleUploadFiles = async (files) => {
-    const list = Array.from(files || []);
-    if (!list.length) return;
-    setBusy(true);
-    setStatusLine("Uploading attachments...");
-    try {
-      const uploaded = [];
-      for (const file of list) {
-        const payload = await api.uploadAttachment(file);
-        if (payload?.attachment) uploaded.push(payload.attachment);
+    const timer = setTimeout(() => {
+      if (activeLeftTab === "search" && searchQuery.trim()) {
+        runSearch(searchQuery.trim());
+      } else if (!searchQuery.trim()) {
+        setSearchData({ chats: [], projects: [] });
       }
-      updateActiveSession((session) => ({
-        ...session,
-        attachments: [...session.attachments, ...uploaded],
-        attachmentIds: [...session.attachmentIds, ...uploaded.map((item) => item.id)],
-      }));
-      setStatusLine(`Attached ${uploaded.length} file(s)`);
-    } catch (error) {
-      setStatusLine(`Upload error: ${error.message}`);
-    } finally {
-      setBusy(false);
-      if (fileInputRef.current) fileInputRef.current.value = "";
-    }
-  };
+    }, 250);
 
-  const attachProjectFile = async (path) => {
-    setBusy(true);
+    return () => clearTimeout(timer);
+  }, [searchQuery, activeLeftTab]);
+
+  async function loadBootData() {
+    setError("");
     try {
-      const payload = await api.attachProjectFile(path);
-      const attachment = payload?.attachment;
-      if (!attachment) return;
-      updateActiveSession((session) => ({
-        ...session,
-        attachments: [...session.attachments, attachment],
-        attachmentIds: [...session.attachmentIds, attachment.id],
-        selectedProjectPaths: Array.from(new Set([...(session.selectedProjectPaths || []), attachment.project_path || path])),
-      }));
-      setProjectPickerOpen(false);
-      setStatusLine(`Project file attached: ${path}`);
-    } catch (error) {
-      setStatusLine(`Attach project file error: ${error.message}`);
-    } finally {
-      setBusy(false);
+      await Promise.all([loadChats(), loadSettings(), loadModels()]);
+    } catch (e) {
+      setError(e.message || "Не удалось загрузить интерфейс");
     }
-  };
+  }
 
-  const sendMessage = async () => {
-    const text = message.trim();
-    if (!text || busy || !activeSession) return;
+  async function loadChats() {
+    setLoadingChats(true);
+    try {
+      const payload = await api.listChats();
+      const items = normalizeArray(payload);
+      setChats(items);
 
-    const userMessage = { id: crypto.randomUUID(), role: "user", content: text };
-    updateActiveSession((session) => ({ ...session, messages: [...session.messages, userMessage] }));
-    setMessage("");
-    setBusy(true);
-    setStatusLine("Jarvis is thinking...");
+      if (!selectedChatId && items.length) {
+        setSelectedChatId(getChatId(items[0]));
+      }
+    } finally {
+      setLoadingChats(false);
+    }
+  }
+
+  async function loadModels() {
+    try {
+      const payload = await api.getModels();
+      const items = normalizeArray(payload);
+      const prepared = items.map((item) =>
+        typeof item === "string" ? { name: item } : item
+      );
+      setModels(prepared);
+      if (prepared[0]?.name && !selectedModel) {
+        setSelectedModel(prepared[0].name);
+      }
+    } catch {
+      setModels([{ name: "qwen3:8b" }]);
+    }
+  }
+
+  async function loadSettings() {
+    try {
+      const payload = await api.getSettings();
+      setSelectedModel(
+        payload?.model_default || payload?.default_model || "qwen3:8b"
+      );
+      setAgentProfile(payload?.agent_profile || DEFAULT_AGENT_PROFILE);
+    } catch {
+      setSelectedModel("qwen3:8b");
+      setAgentProfile(DEFAULT_AGENT_PROFILE);
+    }
+  }
+
+  async function loadMessages(chatId) {
+    setLoadingMessages(true);
+    setError("");
+    try {
+      const payload = await api.getMessages(chatId);
+      setMessages(normalizeArray(payload));
+    } catch (e) {
+      setError(e.message || "Не удалось загрузить сообщения");
+      setMessages([]);
+    } finally {
+      setLoadingMessages(false);
+    }
+  }
+
+  async function runSearch(query) {
+    try {
+      const payload = await api.searchEverything(query);
+      setSearchData(payload);
+    } catch {
+      setSearchData({ chats: [], projects: [] });
+    }
+  }
+
+  async function handleCreateChat() {
+    setError("");
+    try {
+      const payload = await api.createChat("Новый чат");
+      const createdId = getChatId(payload);
+      await loadChats();
+      if (createdId) {
+        setSelectedChatId(createdId);
+      }
+    } catch (e) {
+      setError(e.message || "Не удалось создать чат");
+    }
+  }
+
+  async function handleRenameChat(chat) {
+    const current = getChatTitle(chat);
+    const title = window.prompt("Новое название чата", current);
+    if (!title || title.trim() === current) return;
 
     try {
-      const payload = await api.sendChat({
-        message: text,
-        model: selectedModel,
-        mode,
-        webEnabled,
-        sessionId: activeSession.id,
-        attachmentIds: activeSession.attachmentIds,
-        selectedProjectPaths: activeSession.selectedProjectPaths,
+      await api.renameChat(getChatId(chat), title.trim());
+      await loadChats();
+    } catch (e) {
+      setError(e.message || "Не удалось переименовать чат");
+    }
+  }
+
+  async function handleDeleteChat(chat) {
+    const ok = window.confirm(`Удалить чат "${getChatTitle(chat)}"?`);
+    if (!ok) return;
+
+    try {
+      await api.deleteChat(getChatId(chat));
+      const deletedId = getChatId(chat);
+      await loadChats();
+
+      if (selectedChatId === deletedId) {
+        const next = chats.find((item) => getChatId(item) !== deletedId);
+        setSelectedChatId(next ? getChatId(next) : null);
+      }
+    } catch (e) {
+      setError(e.message || "Не удалось удалить чат");
+    }
+  }
+
+  async function handleTogglePin(chat) {
+    try {
+      await api.pinChat(getChatId(chat), !getChatPinned(chat));
+      await loadChats();
+    } catch (e) {
+      setError(e.message || "Не удалось закрепить чат");
+    }
+  }
+
+  async function handleSend() {
+    const content = composer.trim();
+    if (!content) return;
+
+    let chatId = selectedChatId;
+
+    try {
+      setSending(true);
+      setError("");
+
+      if (!chatId) {
+        const created = await api.createChat(content.slice(0, 40) || "Новый чат");
+        chatId = getChatId(created);
+        setSelectedChatId(chatId);
+        await loadChats();
+      }
+
+      const localUserMessage = {
+        id: `local-user-${Date.now()}`,
+        role: "user",
+        content,
+      };
+      setMessages((prev) => [...prev, localUserMessage]);
+      setComposer("");
+
+      await api.addMessage({
+        chat_id: chatId,
+        role: "user",
+        content,
+        metadata: {
+          saved_in_memory: true,
+          pinned_in_memory: false,
+          model: selectedModel,
+          agent_profile: agentProfile,
+          route: activeTopTab,
+        },
       });
 
-      let preview = null;
-      let expectedSha = activeSession.expectedSha;
-      if (payload?.code_suggestion?.target_path && payload?.code_suggestion?.updated_content) {
-        try {
-          const currentFile = await api.readFile(payload.code_suggestion.target_path);
-          expectedSha = currentFile.sha256 || null;
-          preview = await api.previewPatch(payload.code_suggestion.target_path, payload.code_suggestion.updated_content);
-        } catch {
-          preview = null;
-        }
+      let assistantText =
+        "Jarvis получил сообщение. Подключи свой текущий обработчик ответа, если нужно вернуть полный LLM-ответ.";
+
+      try {
+        await api.addMessage({
+          chat_id: chatId,
+          role: "assistant",
+          content: assistantText,
+          metadata: {
+            saved_in_memory: true,
+            pinned_in_memory: false,
+            model: selectedModel,
+            agent_profile: agentProfile,
+            route: activeTopTab,
+          },
+        });
+      } catch {
+        // Если backend сам генерирует assistant message, не дублируем ошибку
       }
 
-      const assistantMessage = {
-        id: crypto.randomUUID(),
-        role: "assistant",
-        label: `${payload?.route?.mode || "chat"}${payload?.model ? ` • ${payload.model}` : ""}`,
-        content: payload?.answer || "Пустой ответ модели.",
-        plan: Array.isArray(payload?.plan) ? payload.plan : [],
-      };
-
-      updateActiveSession((session) => ({
-        ...session,
-        title: session.title === "New chat" ? text.slice(0, 32) : session.title,
-        messages: [...session.messages, assistantMessage],
-        plan: Array.isArray(payload?.plan) ? payload.plan : [],
-        webResults: payload?.web_results || [],
-        agentsUsed: payload?.agents_used || [],
-        diffPreview: preview,
-        codeSuggestion: payload?.code_suggestion || null,
-        expectedSha,
-      }));
-
-      setStatusLine(`Mode: ${payload?.route?.mode || "chat"}`);
-    } catch (error) {
-      updateActiveSession((session) => ({
-        ...session,
-        messages: [
-          ...session.messages,
-          { id: crypto.randomUUID(), role: "assistant", label: "error", content: error.message || "Chat error" },
-        ],
-      }));
-      setStatusLine(`Chat error: ${error.message}`);
+      await loadMessages(chatId);
+      await loadChats();
+    } catch (e) {
+      setError(e.message || "Не удалось отправить сообщение");
     } finally {
-      setBusy(false);
+      setSending(false);
     }
-  };
+  }
 
-  const applyPatch = async () => {
-    if (!activeSession?.codeSuggestion?.target_path || !activeSession?.codeSuggestion?.updated_content) return;
-    setApplyLoading(true);
+  async function handleSaveCurrentChatToMemory() {
+    const chat = chats.find((item) => getChatId(item) === selectedChatId);
+    if (!chat) return;
+
     try {
-      const payload = await api.applyPatch(
-        activeSession.codeSuggestion.target_path,
-        activeSession.codeSuggestion.updated_content,
-        activeSession.expectedSha || null
-      );
-      updateActiveSession((session) => ({
-        ...session,
-        messages: [
-          ...session.messages,
-          {
-            id: crypto.randomUUID(),
-            role: "assistant",
-            label: "patch",
-            content: payload?.status ? `Patch applied: ${payload.status}` : "Patch applied",
-          },
-        ],
-      }));
-      await loadBackups();
-      setStatusLine("Patch applied");
-    } catch (error) {
-      setStatusLine(`Apply error: ${error.message}`);
-    } finally {
-      setApplyLoading(false);
+      await api.pinChat(getChatId(chat), true);
+      await loadChats();
+    } catch (e) {
+      setError(e.message || "Не удалось сохранить чат в памяти");
     }
-  };
+  }
 
-  const verifyPatch = async () => {
-    if (!activeSession?.codeSuggestion?.target_path) return;
-    setVerifyLoading(true);
-    try {
-      const payload = await api.verifyPatch(activeSession.codeSuggestion.target_path);
-      updateActiveSession((session) => ({
-        ...session,
-        messages: [
-          ...session.messages,
-          {
-            id: crypto.randomUUID(),
-            role: "assistant",
-            label: "verify",
-            content: payload?.status ? `Verify: ${payload.status}` : "Verify complete",
-          },
-        ],
-      }));
-      setStatusLine("Verify complete");
-    } catch (error) {
-      setStatusLine(`Verify error: ${error.message}`);
-    } finally {
-      setVerifyLoading(false);
-    }
-  };
+  const pinnedChats = useMemo(
+    () => chats.filter((chat) => getChatPinned(chat)),
+    [chats]
+  );
 
-  const rollbackPatch = async (backupId) => {
-    if (!backupId) return;
-    setRollbackLoading(true);
-    try {
-      const payload = await api.rollbackPatch(backupId);
-      updateActiveSession((session) => ({
-        ...session,
-        messages: [
-          ...session.messages,
-          {
-            id: crypto.randomUUID(),
-            role: "assistant",
-            label: "rollback",
-            content: payload?.status ? `Rollback: ${payload.status}` : "Rollback complete",
-          },
-        ],
-      }));
-      await loadBackups();
-      setStatusLine("Rollback complete");
-    } catch (error) {
-      setStatusLine(`Rollback error: ${error.message}`);
-    } finally {
-      setRollbackLoading(false);
-    }
-  };
+  const regularChats = useMemo(
+    () => chats.filter((chat) => !getChatPinned(chat)),
+    [chats]
+  );
+
+  const chatGroups = [
+    { label: "Закреплённые", items: pinnedChats },
+    { label: "Все чаты", items: regularChats },
+  ];
+
+  const selectedChat = chats.find((chat) => getChatId(chat) === selectedChatId);
+
+  const topTabs = [
+    { key: "chat", label: "Chat" },
+    { key: "code", label: "Code" },
+    { key: "orchestrator", label: "Orchestrator" },
+    { key: "image", label: "Text-to-Image" },
+  ];
 
   return (
-    <div className="chat-shell">
-      <aside className="chat-sidebar">
-        <div className="sidebar-top">
-          <button type="button" className="primary-button wide" onClick={createChat}>
-            <Plus size={16} />
-            <span>New chat</span>
+    <div className="jarvis-app">
+      <aside className="sidebar">
+        <button className="new-chat-btn" onClick={handleCreateChat}>
+          <span className="plus">＋</span>
+          <span>Новый чат</span>
+        </button>
+
+        <nav className="left-nav">
+          <button
+            className={`left-nav-item ${activeLeftTab === "search" ? "active" : ""}`}
+            onClick={() => setActiveLeftTab("search")}
+          >
+            <span className="left-nav-icon">⌕</span>
+            <span>Поиск</span>
           </button>
-          <button type="button" className="ghost-button" onClick={loadSnapshot} disabled={projectFilesLoading}>
-            <RefreshCw size={15} />
+
+          <button
+            className={`left-nav-item ${activeLeftTab === "chats" ? "active" : ""}`}
+            onClick={() => setActiveLeftTab("chats")}
+          >
+            <span className="left-nav-icon">☰</span>
+            <span>Чаты</span>
           </button>
-        </div>
 
-        <div className="sidebar-section-label">Chats</div>
-        <div className="session-list">
-          {sessions.map((item) => (
-            <button
-              key={item.id}
-              type="button"
-              className={classNames("session-item", item.id === activeSessionId && "active")}
-              onClick={() => setActiveSessionId(item.id)}
-            >
-              <span>{item.title}</span>
-            </button>
-          ))}
-        </div>
+          <button
+            className={`left-nav-item ${activeLeftTab === "projects" ? "active" : ""}`}
+            onClick={() => setActiveLeftTab("projects")}
+          >
+            <span className="left-nav-icon">▣</span>
+            <span>Проекты</span>
+          </button>
 
-        <div className="sidebar-section-label">Legacy agents</div>
-        <div className="agent-mini-list">
-          {legacyAgents.slice(0, 8).map((agent) => (
-            <div key={agent.id} className="agent-mini-card">
-              <div className="agent-mini-title">{agent.title}</div>
-              <div className="agent-mini-text">{agent.kind}</div>
-            </div>
-          ))}
-        </div>
-      </aside>
+          <button
+            className={`left-nav-item ${activeLeftTab === "settings" ? "active" : ""}`}
+            onClick={() => setActiveLeftTab("settings")}
+          >
+            <span className="left-nav-icon">⚙</span>
+            <span>Настройки</span>
+          </button>
+        </nav>
 
-      <main className="chat-main">
-        <header className="chat-topbar">
-          <div className="brand">
-            <Sparkles size={16} />
-            <span>Jarvis</span>
-          </div>
+        <div className="left-content">
+          {activeLeftTab === "chats" ? (
+            <div className="chat-groups">
+              {chatGroups.map((group) => (
+                <section key={group.label} className="chat-group">
+                  <div className="group-title">{group.label}</div>
 
-          <div className="toolbar-row">
-            <label className="control-chip">
-              <span>Mode</span>
-              <select value={mode} onChange={(event) => setMode(event.target.value)}>
-                <option value="auto">Auto</option>
-                <option value="chat">Chat</option>
-                <option value="plan">Plan</option>
-                <option value="research">Research</option>
-                <option value="code">Code</option>
-                <option value="analyze">Analyze</option>
-              </select>
-            </label>
-
-            <label className="control-chip">
-              <span>Model</span>
-              <select value={selectedModel} onChange={(event) => setSelectedModel(event.target.value)}>
-                {(ollama.models || []).map((model) => (
-                  <option key={model} value={model}>
-                    {model}
-                  </option>
-                ))}
-              </select>
-            </label>
-
-            <button
-              type="button"
-              className={classNames("toggle-chip", webEnabled && "is-on")}
-              onClick={() => setWebEnabled((current) => !current)}
-            >
-              <Globe size={15} />
-              <span>{webEnabled ? "Web on" : "Web off"}</span>
-            </button>
-          </div>
-        </header>
-
-        <section className="chat-stream">
-          <div className="message-list">
-            {activeSession?.messages.map((item) => (
-              <MessageBubble key={item.id} message={item} />
-            ))}
-            <div ref={messagesEndRef} />
-          </div>
-        </section>
-
-        <section className="composer-panel">
-          {activeSession?.attachments?.length ? (
-            <div className="attachment-row">
-              {activeSession.attachments.map((item) => (
-                <AttachmentChip key={item.id} item={item} onRemove={removeAttachment} />
+                  {group.items.length ? (
+                    group.items.map((chat) => (
+                      <button
+                        key={getChatId(chat)}
+                        className={`chat-card ${selectedChatId === getChatId(chat) ? "active" : ""}`}
+                        onClick={() => setSelectedChatId(getChatId(chat))}
+                      >
+                        <div className="chat-card-top">
+                          <div className="chat-card-title">{getChatTitle(chat)}</div>
+                          <div className="chat-card-actions" onClick={(e) => e.stopPropagation()}>
+                            <button
+                              className={`mini-icon ${getChatPinned(chat) ? "is-pinned" : ""}`}
+                              onClick={() => handleTogglePin(chat)}
+                              title="Закрепить в памяти"
+                            >
+                              📌
+                            </button>
+                            <button
+                              className="mini-icon"
+                              onClick={() => handleRenameChat(chat)}
+                              title="Переименовать"
+                            >
+                              ✎
+                            </button>
+                            <button
+                              className="mini-icon"
+                              onClick={() => handleDeleteChat(chat)}
+                              title="Удалить"
+                            >
+                              🗑
+                            </button>
+                          </div>
+                        </div>
+                        <div className="chat-card-meta">
+                          Память чатов
+                        </div>
+                      </button>
+                    ))
+                  ) : (
+                    <div className="empty-hint">Здесь пока пусто.</div>
+                  )}
+                </section>
               ))}
             </div>
           ) : null}
 
-          <div className="composer-actions-row">
-            <button type="button" className="ghost-button" onClick={() => fileInputRef.current?.click()}>
-              <Paperclip size={15} />
-              <span>Attach file</span>
-            </button>
-            <input
-              ref={fileInputRef}
-              type="file"
-              multiple
-              hidden
-              onChange={(event) => handleUploadFiles(event.target.files)}
-            />
+          {activeLeftTab === "search" ? (
+            <div className="search-panel">
+              <div className="group-title">Поиск по чатам и проектам</div>
+              <input
+                className="sidebar-input"
+                placeholder="Ключевые слова..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+              />
 
-            <button type="button" className="ghost-button" onClick={() => setProjectPickerOpen(true)}>
-              <Search size={15} />
-              <span>Attach project file</span>
-            </button>
-          </div>
-
-          <div className="composer-box">
-            <textarea
-              value={message}
-              onChange={(event) => setMessage(event.target.value)}
-              placeholder="Напиши задачу обычным языком. Jarvis сам выберет chat / plan / code / analyze / research."
-              onKeyDown={(event) => {
-                if (event.key === "Enter" && !event.shiftKey) {
-                  event.preventDefault();
-                  sendMessage();
-                }
-              }}
-            />
-            <button type="button" className="send-button" onClick={sendMessage} disabled={busy || !message.trim()}>
-              {busy ? <LoaderCircle size={16} className="spin" /> : <Send size={16} />}
-            </button>
-          </div>
-        </section>
-      </main>
-
-      <aside className="inspector-panel">
-        <div className="inspector-card">
-          <div className="inspector-title">Plan</div>
-          {activeSession?.plan?.length ? (
-            activeSession.plan.map((item, index) => (
-              <div key={`${index}-${item}`} className="plan-line">
-                <span>{index + 1}.</span>
-                <span>{item}</span>
-              </div>
-            ))
-          ) : (
-            <div className="empty-text">No plan yet</div>
-          )}
-        </div>
-
-        <div className="inspector-card">
-          <div className="inspector-title">Patch preview</div>
-          <pre className="diff-box">{extractPreviewText(activeSession?.diffPreview) || "No patch suggestion yet"}</pre>
-          <div className="action-row">
-            <button type="button" className="ghost-button" onClick={applyPatch} disabled={!activeSession?.codeSuggestion || applyLoading}>
-              <Wand2 size={15} />
-              <span>{applyLoading ? "Applying..." : "Apply patch"}</span>
-            </button>
-            <button type="button" className="ghost-button" onClick={verifyPatch} disabled={!activeSession?.codeSuggestion || verifyLoading}>
-              <ShieldCheck size={15} />
-              <span>{verifyLoading ? "Verifying..." : "Verify"}</span>
-            </button>
-          </div>
-        </div>
-
-        <div className="inspector-card">
-          <div className="inspector-title">Web sources</div>
-          {activeSession?.webResults?.length ? (
-            activeSession.webResults.map((item) => (
-              <div key={item.url} className="web-card">
-                <div className="web-title">{item.title || item.url}</div>
-                <div className="web-url">{item.url}</div>
-                <div className="web-snippet">{item.snippet}</div>
-              </div>
-            ))
-          ) : (
-            <div className="empty-text">No web sources</div>
-          )}
-        </div>
-
-        <div className="inspector-card">
-          <div className="inspector-title">Rollback backups</div>
-          {backups.length ? (
-            backups.slice(0, 8).map((item) => (
-              <div key={item.backup_id || item.id} className="backup-row">
-                <div>
-                  <div className="backup-path">{item.file_path || item.path || "unknown file"}</div>
-                  <div className="backup-id">{item.backup_id || item.id}</div>
+              <div className="search-results">
+                <div className="search-block">
+                  <div className="search-title">Чаты</div>
+                  {searchData.chats.length ? (
+                    searchData.chats.map((item, index) => (
+                      <button
+                        key={`${getChatId(item) || "chat"}-${index}`}
+                        className="search-item"
+                        onClick={() => {
+                          const id = getChatId(item);
+                          if (id) {
+                            setActiveLeftTab("chats");
+                            setSelectedChatId(id);
+                          }
+                        }}
+                      >
+                        {getChatTitle(item)}
+                      </button>
+                    ))
+                  ) : (
+                    <div className="empty-hint">Нет совпадений по чатам.</div>
+                  )}
                 </div>
-                <button
-                  type="button"
-                  className="ghost-button compact"
-                  onClick={() => rollbackPatch(item.backup_id || item.id)}
-                  disabled={rollbackLoading}
-                >
-                  <Undo2 size={14} />
-                </button>
+
+                <div className="search-block">
+                  <div className="search-title">Проекты</div>
+                  {searchData.projects.length ? (
+                    searchData.projects.map((item, index) => (
+                      <div key={`project-${index}`} className="search-item static">
+                        {item?.name || item?.title || item?.path || "Проект"}
+                      </div>
+                    ))
+                  ) : (
+                    <div className="empty-hint">Нет совпадений по проектам.</div>
+                  )}
+                </div>
               </div>
-            ))
-          ) : (
-            <div className="empty-text">No backups</div>
-          )}
+            </div>
+          ) : null}
+
+          {activeLeftTab === "projects" ? (
+            <div className="placeholder-panel">
+              <div className="group-title">Проекты</div>
+              <div className="empty-hint">
+                Этот раздел оставлен под список проектов и контекст проекта.
+              </div>
+            </div>
+          ) : null}
+
+          {activeLeftTab === "settings" ? (
+            <div className="settings-panel">
+              <div className="group-title">Настройки</div>
+
+              <label className="settings-field">
+                <span>LLM</span>
+                <select
+                  className="sidebar-select"
+                  value={selectedModel}
+                  onChange={(e) => setSelectedModel(e.target.value)}
+                >
+                  {(models.length ? models : [{ name: "qwen3:8b" }]).map((model, index) => (
+                    <option key={`${model.name || model}-${index}`} value={model.name || model}>
+                      {model.name || model}
+                    </option>
+                  ))}
+                </select>
+              </label>
+
+              <label className="settings-field">
+                <span>Профиль агента</span>
+                <select
+                  className="sidebar-select"
+                  value={agentProfile}
+                  onChange={(e) => setAgentProfile(e.target.value)}
+                >
+                  <option>Сбалансированный</option>
+                  <option>Кодинг</option>
+                  <option>Исследование</option>
+                  <option>Мульти-агентный</option>
+                </select>
+              </label>
+            </div>
+          ) : null}
         </div>
       </aside>
 
-      {projectPickerOpen ? (
-        <div className="modal-overlay" onClick={() => setProjectPickerOpen(false)}>
-          <div className="modal-card" onClick={(event) => event.stopPropagation()}>
-            <div className="modal-header">
-              <div className="inspector-title">Attach project file</div>
-              <button type="button" className="ghost-button compact" onClick={() => setProjectPickerOpen(false)}>
-                <X size={14} />
+      <section className="main-panel">
+        <header className="top-bar">
+          <div className="brand-title">Jarvis Агент ИИ</div>
+
+          <div className="top-center">
+            <div className="jarvis-head">
+              <div className="logo-badge">J</div>
+
+              <select className="top-select" value={selectedModel} onChange={(e) => setSelectedModel(e.target.value)}>
+                {(models.length ? models : [{ name: "qwen3:8b" }]).map((model, index) => (
+                  <option key={`${model.name || model}-${index}`} value={model.name || model}>
+                    {model.name || model}
+                  </option>
+                ))}
+              </select>
+
+              <select className="top-select" value={agentProfile} onChange={(e) => setAgentProfile(e.target.value)}>
+                <option>Сбалансированный</option>
+                <option>Кодинг</option>
+                <option>Исследование</option>
+                <option>Мульти-агентный</option>
+              </select>
+
+              <div className="top-tabs">
+                {topTabs.map((tab) => (
+                  <button
+                    key={tab.key}
+                    className={`top-tab ${activeTopTab === tab.key ? "active" : ""}`}
+                    onClick={() => setActiveTopTab(tab.key)}
+                  >
+                    {tab.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+          </div>
+
+          <div className="top-right">
+            {selectedModel} • {agentProfile}
+          </div>
+        </header>
+
+        <div className="chat-area">
+          <div className="chat-area-header">
+            <div className="section-title">Чаты</div>
+            <div className="chat-memory-actions">
+              <button className="soft-btn" onClick={handleSaveCurrentChatToMemory} disabled={!selectedChat}>
+                Сохранить в памяти
+              </button>
+              <button
+                className="soft-btn"
+                onClick={() => selectedChat && handleTogglePin(selectedChat)}
+                disabled={!selectedChat}
+              >
+                {selectedChat && getChatPinned(selectedChat) ? "Открепить" : "Закрепить в памяти"}
               </button>
             </div>
-            <div className="search-box">
-              <Search size={14} />
-              <input value={projectFilter} onChange={(event) => setProjectFilter(event.target.value)} placeholder="Search project file..." />
+          </div>
+
+          <div className="messages">
+            {!selectedChat && !messages.length ? (
+              <div className="assistant-row">
+                <div className="assistant-avatar">✦</div>
+                <div className="assistant-bubble">
+                  Jarvis готов. <strong>Начни новый чат</strong> или напиши сообщение.
+                </div>
+              </div>
+            ) : null}
+
+            {loadingMessages ? <div className="empty-hint">Загрузка сообщений...</div> : null}
+
+            {messages.map((message, index) => {
+              const role = getMessageRole(message);
+              const content = getMessageContent(message);
+
+              return (
+                <div
+                  key={message?.id || `${role}-${index}`}
+                  className={`message-row ${role === "user" ? "user" : "assistant"}`}
+                >
+                  <div className={`message-avatar ${role === "user" ? "user" : "assistant"}`}>
+                    {role === "user" ? "Ты" : "J"}
+                  </div>
+                  <div className={`message-bubble ${role === "user" ? "user" : "assistant"}`}>
+                    {content}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+
+          {error ? <div className="error-banner">{error}</div> : null}
+
+          <div className="composer-wrap">
+            <div className="composer-toolbar">
+              <button className="attach-btn" title="Добавить">＋</button>
             </div>
-            <div className="project-file-list">
-              {filteredProjectFiles.map((item) => (
-                <button key={item.path} type="button" className="project-file-item" onClick={() => attachProjectFile(item.path)}>
-                  {item.path}
-                </button>
-              ))}
+
+            <textarea
+              className="composer"
+              value={composer}
+              onChange={(e) => setComposer(e.target.value)}
+              placeholder="Напиши задачу... Jarvis сам выберет режим"
+            />
+
+            <div className="composer-footer">
+              <div className="composer-meta">
+                {selectedModel} • {agentProfile}
+              </div>
+
+              <button className="send-btn" onClick={handleSend} disabled={sending || !composer.trim()}>
+                ➤
+              </button>
             </div>
           </div>
         </div>
-      ) : null}
-
-      <div className="status-bar">
-        <span>{statusLine}</span>
-        <span>{selectedModel ? `Ollama • ${selectedModel}` : "No model"}</span>
-      </div>
+      </section>
     </div>
   );
 }
