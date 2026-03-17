@@ -3,6 +3,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.api.routes.jarvis_state import router as jarvis_state_router
 from app.api.routes.project_brain import router as project_brain_router
+from app.api.routes.jarvis_execute import router as jarvis_execute_router
 
 app = FastAPI(title="Jarvis Work API")
 
@@ -16,6 +17,7 @@ app.add_middleware(
 
 app.include_router(jarvis_state_router)
 app.include_router(project_brain_router)
+app.include_router(jarvis_execute_router)
 
 @app.get("/health")
 def health():
