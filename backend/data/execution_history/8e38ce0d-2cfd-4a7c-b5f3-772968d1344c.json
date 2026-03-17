@@ -1,0 +1,153 @@
+{
+  "id": "8e38ce0d-2cfd-4a7c-b5f3-772968d1344c",
+  "goal": "добавь простой endpoint /hello который возвращает {\"message\": \"hello\"}",
+  "source": "autonomous_dev",
+  "status": "completed",
+  "created_at": 1773747178.4639,
+  "updated_at": 1773747178.472192,
+  "metadata": {
+    "source": "ide",
+    "file_path": null
+  },
+  "events": [
+    {
+      "name": "execution.started",
+      "timestamp": 1773747178.4649012,
+      "payload": {
+        "goal": "добавь простой endpoint /hello который возвращает {\"message\": \"hello\"}",
+        "mode": "autonomous_dev"
+      }
+    },
+    {
+      "name": "execution.completed",
+      "timestamp": 1773747178.470191,
+      "payload": {
+        "mode": "autonomous_dev"
+      }
+    }
+  ],
+  "artifacts": [
+    {
+      "title": "result",
+      "kind": "json",
+      "value": {
+        "id": "6ba6ab1d-8b46-4384-8c27-115ae46e03e1",
+        "goal": "добавь простой endpoint /hello который возвращает {\"message\": \"hello\"}",
+        "requested_by": "phase12",
+        "status": "completed",
+        "created_at": 1773747178.4649012,
+        "steps": [
+          {
+            "name": "scan_project",
+            "status": "completed",
+            "timestamp": 1773747178.4649012,
+            "result": {
+              "goal": "добавь простой endpoint /hello который возвращает {\"message\": \"hello\"}",
+              "note": "Project scan placeholder. Connect to tool_service or project_service."
+            }
+          },
+          {
+            "name": "analyze_architecture",
+            "status": "completed",
+            "timestamp": 1773747178.4649012,
+            "result": {
+              "analysis": "Architecture analysis placeholder",
+              "focus": [
+                "services",
+                "routes",
+                "tool routing",
+                "runtime",
+                "desktop"
+              ]
+            }
+          },
+          {
+            "name": "plan_refactor",
+            "status": "completed",
+            "timestamp": 1773747178.4649012,
+            "result": {
+              "plan": [
+                "Inspect impacted services",
+                "Propose minimal patch",
+                "Preview diff",
+                "Apply safely",
+                "Run checks"
+              ],
+              "goal": "добавь простой endpoint /hello который возвращает {\"message\": \"hello\"}"
+            }
+          },
+          {
+            "name": "generate_patch",
+            "status": "completed",
+            "timestamp": 1773747178.4649012,
+            "result": {
+              "preview": {
+                "mode": "placeholder",
+                "goal": "добавь простой endpoint /hello который возвращает {\"message\": \"hello\"}",
+                "message": "Connect to project_patch_service.preview_patch(...)"
+              }
+            }
+          },
+          {
+            "name": "apply_patch",
+            "status": "skipped",
+            "timestamp": 1773747178.4649012,
+            "result": {
+              "reason": "auto_apply=false"
+            }
+          },
+          {
+            "name": "run_verification",
+            "status": "skipped",
+            "timestamp": 1773747178.4649012,
+            "result": {
+              "reason": "run_checks=false"
+            }
+          },
+          {
+            "name": "commit_git",
+            "status": "skipped",
+            "timestamp": 1773747178.4649012,
+            "result": {
+              "reason": "commit_changes=false"
+            }
+          }
+        ],
+        "artifacts": [
+          {
+            "title": "refactor_plan",
+            "kind": "json",
+            "value": {
+              "plan": [
+                "Inspect impacted services",
+                "Propose minimal patch",
+                "Preview diff",
+                "Apply safely",
+                "Run checks"
+              ],
+              "goal": "добавь простой endpoint /hello который возвращает {\"message\": \"hello\"}"
+            }
+          },
+          {
+            "title": "patch_preview",
+            "kind": "json",
+            "value": {
+              "preview": {
+                "mode": "placeholder",
+                "goal": "добавь простой endpoint /hello который возвращает {\"message\": \"hello\"}",
+                "message": "Connect to project_patch_service.preview_patch(...)"
+              }
+            }
+          }
+        ],
+        "summary": "Autonomous dev flow completed for goal: добавь простой endpoint /hello который возвращает {\"message\": \"hello\"}",
+        "error": null,
+        "finished_at": 1773747178.4649012
+      },
+      "timestamp": 1773747178.4659007
+    }
+  ],
+  "summary": "Execution finished in mode: autonomous_dev",
+  "error": null,
+  "finished_at": 1773747178.472192
+}

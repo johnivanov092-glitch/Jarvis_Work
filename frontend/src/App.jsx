@@ -1,6 +1,6 @@
-import IdeWorkspaceShell from "./components/IdeWorkspaceShell";
+import JarvisChatShell from "./components/JarvisChatShell";
 import "./styles.css";
 
 export default function App() {
-  return <IdeWorkspaceShell />;
+  return <JarvisChatShell />;
 }
