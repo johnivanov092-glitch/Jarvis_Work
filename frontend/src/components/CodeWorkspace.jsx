@@ -10,6 +10,8 @@ import ProjectMapPanel from "./ProjectMapPanel";
 import PatchPlanPanel from "./PatchPlanPanel";
 import FileOpsPanel from "./FileOpsPanel";
 import TaskRunnerPanel from "./TaskRunnerPanel";
+import TaskHistoryPanel from "./TaskHistoryPanel";
+import SupervisorPanel from "./SupervisorPanel";
 
 export default function CodeWorkspace() {
   const [files, setFiles] = useState([]);
@@ -39,10 +41,21 @@ export default function CodeWorkspace() {
   const [taskGoal, setTaskGoal] = useState("Добавь безопасное улучшение в текущий файл и подготовь verify.");
   const [taskMode, setTaskMode] = useState("code");
   const [taskRun, setTaskRun] = useState(null);
+  const [taskHistoryItems, setTaskHistoryItems] = useState([]);
+  const [selectedTaskHistoryId, setSelectedTaskHistoryId] = useState(null);
+  const [selectedTaskHistoryItem, setSelectedTaskHistoryItem] = useState(null);
+  const [supervisorGoal, setSupervisorGoal] = useState("Построй полный supervisor pipeline для текущей задачи.");
+  const [supervisorMode, setSupervisorMode] = useState("code");
+  const [supervisorAutoApply, setSupervisorAutoApply] = useState(false);
+  const [supervisorRun, setSupervisorRun] = useState(null);
+  const [supervisorHistoryItems, setSupervisorHistoryItems] = useState([]);
+  const [selectedSupervisorHistoryId, setSelectedSupervisorHistoryId] = useState(null);
 
   useEffect(() => {
     loadFiles();
     loadProjectMap();
+    loadTaskHistory();
+    loadSupervisorHistory();
   }, []);
 
   useEffect(() => {
@@ -77,6 +90,24 @@ export default function CodeWorkspace() {
       appendLog(`Project Map загружен: ${result.count || 0} файлов.`);
     } catch (e) {
       appendLog(`Ошибка project map: ${e.message || "unknown error"}`);
+    }
+  }
+
+  async function loadTaskHistory() {
+    try {
+      const items = await api.listTaskHistory();
+      setTaskHistoryItems(items);
+    } catch (e) {
+      appendLog(`Ошибка task history: ${e.message || "unknown error"}`);
+    }
+  }
+
+  async function loadSupervisorHistory() {
+    try {
+      const items = await api.listSupervisorHistory();
+      setSupervisorHistoryItems(items);
+    } catch (e) {
+      appendLog(`Ошибка supervisor history: ${e.message || "unknown error"}`);
     }
   }
 
@@ -121,12 +152,11 @@ export default function CodeWorkspace() {
     setLogs((prev) => [
       `${new Date().toLocaleTimeString()}  ${message}`,
       ...prev,
-    ].slice(0, 180));
+    ].slice(0, 220));
   }
 
   async function buildDiff(original, updated) {
     if (!selectedPath) return;
-
     try {
       const result = await api.diffPatch({
         path: selectedPath,
@@ -145,23 +175,19 @@ export default function CodeWorkspace() {
       appendLog("Сначала выбери файл.");
       return;
     }
-
     try {
       setPreviewLoading(true);
       appendLog(`Preview patch: ${selectedPath}`);
-
       const payload = await api.previewPatch({
         path: selectedPath,
         instruction,
         content: editorValue,
       });
-
       const updated =
         payload?.updated_content ||
         payload?.content ||
         payload?.answer ||
         "";
-
       setPreviewValue(updated);
       await buildDiff(originalValue, updated);
       appendLog("Preview patch готов.");
@@ -177,7 +203,6 @@ export default function CodeWorkspace() {
       appendLog("Нет preview для применения.");
       return;
     }
-
     setEditorValue(previewValue);
     setVerifyResult(null);
     setStagedContents((prev) => ({
@@ -192,7 +217,6 @@ export default function CodeWorkspace() {
     setStagedPaths((prev) =>
       prev.includes(path) ? prev.filter((item) => item !== path) : [...prev, path]
     );
-
     setStagedContents((prev) => ({
       ...prev,
       [path]: path === selectedPath ? editorValue : (prev[path] ?? ""),
@@ -213,21 +237,17 @@ export default function CodeWorkspace() {
       appendLog("Нет выбранного файла.");
       return;
     }
-
     try {
       setApplyLoading(true);
       appendLog(`Apply patch to disk: ${selectedPath}`);
-
       const result = await api.applyPatch({
         path: selectedPath,
         content: editorValue,
       });
-
       setOriginalValue(editorValue);
       setPreviewValue("");
       setVerifyResult(null);
       await buildDiff(editorValue, editorValue);
-
       appendLog(`Patch применён: ${result.path}`);
       await loadHistory(selectedPath);
     } catch (e) {
@@ -242,27 +262,18 @@ export default function CodeWorkspace() {
       appendLog("Нет staged файлов.");
       return;
     }
-
     try {
       setBatchLoading(true);
-
       const items = stagedPaths.map((path) => ({
         path,
-        content:
-          path === selectedPath
-            ? editorValue
-            : (stagedContents[path] ?? ""),
+        content: path === selectedPath ? editorValue : (stagedContents[path] ?? ""),
       }));
-
       appendLog(`Batch apply: ${items.length} файлов`);
-
       const result = await api.applyPatchBatch(items);
       appendLog(`Batch apply завершён: ${result.count} файлов`);
-
       if (selectedPath && stagedPaths.includes(selectedPath)) {
         setOriginalValue(editorValue);
       }
-
       await loadHistory(selectedPath || "");
       await loadFiles();
     } catch (e) {
@@ -277,26 +288,20 @@ export default function CodeWorkspace() {
       appendLog("Нет выбранного файла.");
       return;
     }
-
     try {
       setRollbackLoading(true);
       appendLog(`Rollback from backup: ${selectedPath}`);
-
       await api.rollbackPatch({ path: selectedPath });
-
       const payload = await api.getProjectFile(selectedPath);
       const content = payload?.content || "";
-
       setEditorValue(content);
       setOriginalValue(content);
       setPreviewValue("");
       setVerifyResult(null);
-
       setStagedContents((prev) => ({
         ...prev,
         [selectedPath]: content,
       }));
-
       await buildDiff(content, content);
       appendLog("Rollback выполнен.");
       await loadHistory(selectedPath);
@@ -312,20 +317,16 @@ export default function CodeWorkspace() {
       appendLog("Нет выбранного файла.");
       return;
     }
-
     try {
       setVerifyLoading(true);
       appendLog(`Verify: ${selectedPath}`);
-
       const result = await api.verifyPatch({
         path: selectedPath,
         content: editorValue,
       });
-
       setVerifyResult(result);
       setDiffText(result?.diff_text || "");
       setDiffStats(result?.stats || null);
-
       appendLog("Verify завершён.");
     } catch (e) {
       appendLog(`Ошибка verify: ${e.message || "unknown error"}`);
@@ -339,23 +340,15 @@ export default function CodeWorkspace() {
       appendLog("Нет staged файлов для verify.");
       return;
     }
-
     try {
       setBatchLoading(true);
-
       const items = stagedPaths.map((path) => ({
         path,
-        content:
-          path === selectedPath
-            ? editorValue
-            : (stagedContents[path] ?? ""),
+        content: path === selectedPath ? editorValue : (stagedContents[path] ?? ""),
       }));
-
       appendLog(`Batch verify: ${items.length} файлов`);
-
       const result = await api.verifyPatchBatch(items);
       setBatchVerifyResult(result);
-
       appendLog(`Batch verify завершён: ${result.count} файлов`);
     } catch (e) {
       appendLog(`Ошибка batch verify: ${e.message || "unknown error"}`);
@@ -367,12 +360,10 @@ export default function CodeWorkspace() {
   async function handleSelectHistory(item) {
     try {
       setSelectedHistoryId(item.id);
-
       const full = await api.getPatchHistoryItem(item.id);
       setSelectedHistoryItem(full);
       setDiffText(full?.diff_text || "");
       setDiffStats(full?.stats || null);
-
       appendLog(`Открыта история патча #${item.id}`);
     } catch (e) {
       appendLog(`Ошибка открытия history item: ${e.message || "unknown error"}`);
@@ -404,8 +395,48 @@ export default function CodeWorkspace() {
       });
       setTaskRun(result);
       appendLog("Task Runner завершил планирование.");
+      await loadTaskHistory();
     } catch (e) {
       appendLog(`Ошибка task runner: ${e.message || "unknown error"}`);
+    }
+  }
+
+  async function handleSelectTaskHistory(item) {
+    try {
+      setSelectedTaskHistoryId(item.id);
+      const full = await api.getTaskHistoryItem(item.id);
+      setSelectedTaskHistoryItem(full);
+      appendLog(`Открыта история задачи #${item.id}`);
+    } catch (e) {
+      appendLog(`Ошибка открытия task history item: ${e.message || "unknown error"}`);
+    }
+  }
+
+  async function handleRunSupervisor() {
+    try {
+      const result = await api.runSupervisor({
+        goal: supervisorGoal,
+        mode: supervisorMode,
+        current_path: selectedPath,
+        staged_paths: stagedPaths,
+        auto_apply: supervisorAutoApply,
+      });
+      setSupervisorRun(result);
+      appendLog("Supervisor pipeline построен.");
+      await loadSupervisorHistory();
+    } catch (e) {
+      appendLog(`Ошибка supervisor: ${e.message || "unknown error"}`);
+    }
+  }
+
+  async function handleSelectSupervisorHistory(item) {
+    try {
+      setSelectedSupervisorHistoryId(item.id);
+      const full = await api.getSupervisorHistoryItem(item.id);
+      setSupervisorRun(full);
+      appendLog(`Открыта история supervisor #${item.id}`);
+    } catch (e) {
+      appendLog(`Ошибка supervisor history item: ${e.message || "unknown error"}`);
     }
   }
 
@@ -464,7 +495,7 @@ export default function CodeWorkspace() {
   const stagedCount = useMemo(() => stagedPaths.length, [stagedPaths]);
 
   return (
-    <div className="code-workspace-v6">
+    <div className="code-workspace-v8">
       <div className="code-left">
         <FileExplorer
           files={files}
@@ -493,60 +524,30 @@ export default function CodeWorkspace() {
           />
 
           <div className="patch-buttons">
-            <button
-              className="soft-btn"
-              onClick={handlePreviewPatch}
-              disabled={previewLoading || loadingFiles}
-            >
+            <button className="soft-btn" onClick={handlePreviewPatch} disabled={previewLoading || loadingFiles}>
               {previewLoading ? "Preview..." : "Preview Patch"}
             </button>
-
             <button className="soft-btn" onClick={handleApplyLocalPreview}>
               Apply to Editor
             </button>
-
-            <button
-              className="soft-btn"
-              onClick={handleApplyToDisk}
-              disabled={applyLoading}
-            >
+            <button className="soft-btn" onClick={handleApplyToDisk} disabled={applyLoading}>
               {applyLoading ? "Applying..." : "Apply Patch"}
             </button>
-
-            <button
-              className="soft-btn"
-              onClick={handleRollbackDisk}
-              disabled={rollbackLoading}
-            >
+            <button className="soft-btn" onClick={handleRollbackDisk} disabled={rollbackLoading}>
               {rollbackLoading ? "Rollback..." : "Rollback"}
             </button>
-
-            <button
-              className="soft-btn"
-              onClick={handleVerify}
-              disabled={verifyLoading}
-            >
+            <button className="soft-btn" onClick={handleVerify} disabled={verifyLoading}>
               {verifyLoading ? "Verify..." : "Verify"}
             </button>
           </div>
 
           <div className="batch-bar">
             <div className="batch-bar-meta">Staged: {stagedCount}</div>
-
             <div className="patch-buttons">
-              <button
-                className="soft-btn"
-                onClick={handleVerifyBatch}
-                disabled={batchLoading}
-              >
+              <button className="soft-btn" onClick={handleVerifyBatch} disabled={batchLoading}>
                 {batchLoading ? "Batch..." : "Verify Staged"}
               </button>
-
-              <button
-                className="soft-btn"
-                onClick={handleApplyBatch}
-                disabled={batchLoading}
-              >
+              <button className="soft-btn" onClick={handleApplyBatch} disabled={batchLoading}>
                 {batchLoading ? "Batch..." : "Apply Staged"}
               </button>
             </div>
@@ -561,13 +562,34 @@ export default function CodeWorkspace() {
       </div>
 
       <div className="code-right">
+        <SupervisorPanel
+          goal={supervisorGoal}
+          setGoal={setSupervisorGoal}
+          mode={supervisorMode}
+          setMode={setSupervisorMode}
+          autoApply={supervisorAutoApply}
+          setAutoApply={setSupervisorAutoApply}
+          runResult={supervisorRun}
+          historyItems={supervisorHistoryItems}
+          selectedHistoryId={selectedSupervisorHistoryId}
+          onRun={handleRunSupervisor}
+          onSelectHistory={handleSelectSupervisorHistory}
+        />
+
         <TaskRunnerPanel
           goal={taskGoal}
           setGoal={setTaskGoal}
           mode={taskMode}
           setMode={setTaskMode}
           taskRun={taskRun}
+          taskHistoryItem={selectedTaskHistoryItem}
           onRunTask={handleRunTask}
+        />
+
+        <TaskHistoryPanel
+          items={taskHistoryItems}
+          selectedId={selectedTaskHistoryId}
+          onSelect={handleSelectTaskHistory}
         />
 
         <PatchPlanPanel

@@ -139,4 +139,26 @@ export const api = {
       method: "POST",
       body: { goal, mode, current_path, staged_paths },
     }),
+
+  listTaskHistory: async () => {
+    const payload = await request("/api/jarvis/task/history/list");
+    return asArray(payload);
+  },
+
+  getTaskHistoryItem: (id) =>
+    request(`/api/jarvis/task/history/get?id=${encodeURIComponent(id)}`),
+
+  runSupervisor: ({ goal, mode, current_path, staged_paths, auto_apply }) =>
+    request("/api/jarvis/supervisor/run", {
+      method: "POST",
+      body: { goal, mode, current_path, staged_paths, auto_apply },
+    }),
+
+  listSupervisorHistory: async () => {
+    const payload = await request("/api/jarvis/supervisor/history/list");
+    return asArray(payload);
+  },
+
+  getSupervisorHistoryItem: (id) =>
+    request(`/api/jarvis/supervisor/history/get?id=${encodeURIComponent(id)}`),
 };
