@@ -14,6 +14,8 @@ import TaskHistoryPanel from "./TaskHistoryPanel";
 import SupervisorPanel from "./SupervisorPanel";
 import Phase19Panel from "./Phase19Panel";
 import Phase20Panel from "./Phase20Panel";
+import Phase21Panel from "./Phase21Panel";
+import StabilizationPreflightPanel from "./StabilizationPreflightPanel";
 
 export default function CodeWorkspace() {
   const [files, setFiles] = useState([]);
@@ -62,10 +64,16 @@ export default function CodeWorkspace() {
   const [selectedPhase20HistoryId, setSelectedPhase20HistoryId] = useState(null);
   const [phase20PreviewQueue, setPhase20PreviewQueue] = useState(null);
   const [phase20ExecutionState, setPhase20ExecutionState] = useState(null);
+  const [phase21Goal, setPhase21Goal] = useState("Запусти автономный execution controller для очереди и checkpoint state.");
+  const [phase21Run, setPhase21Run] = useState(null);
+  const [phase21HistoryItems, setPhase21HistoryItems] = useState([]);
+  const [selectedPhase21HistoryId, setSelectedPhase21HistoryId] = useState(null);
+  const [preflightResult, setPreflightResult] = useState(null);
 
   useEffect(() => {
-    loadFiles(); loadProjectMap(); loadTaskHistory(); loadSupervisorHistory(); loadPhase19History(); loadPhase20History();
+    loadFiles(); loadProjectMap(); loadTaskHistory(); loadSupervisorHistory(); loadPhase19History(); loadPhase20History(); loadPhase21History();
   }, []);
+
   useEffect(() => {
     if (selectedPath) loadHistory(selectedPath);
     else { setHistoryItems([]); setSelectedHistoryId(null); setSelectedHistoryItem(null); }
@@ -77,17 +85,13 @@ export default function CodeWorkspace() {
   async function loadSupervisorHistory() { try { setSupervisorHistoryItems(await api.listSupervisorHistory()); } catch {} }
   async function loadPhase19History() { try { setPhase19HistoryItems(await api.listPhase19History()); } catch {} }
   async function loadPhase20History() { try { setPhase20HistoryItems(await api.listPhase20History()); } catch {} }
+  async function loadPhase21History() { try { setPhase21HistoryItems(await api.listPhase21History()); } catch {} }
   async function loadHistory(path) { try { setHistoryItems(await api.listPatchHistory(path)); } catch {} }
 
   async function openFile(file) {
     const payload = await api.getProjectFile(file.path);
     const content = payload?.content || "";
-    setSelectedPath(file.path);
-    setEditorValue(content);
-    setOriginalValue(content);
-    setPreviewValue("");
-    setDiffText("");
-    setDiffStats(null);
+    setSelectedPath(file.path); setEditorValue(content); setOriginalValue(content); setPreviewValue(""); setDiffText(""); setDiffStats(null);
     setStagedContents((prev) => ({ ...prev, [file.path]: content }));
   }
 
@@ -100,18 +104,13 @@ export default function CodeWorkspace() {
       setPreviewLoading(true);
       const payload = await api.previewPatch({ path: selectedPath, instruction, content: editorValue });
       const updated = payload?.updated_content || payload?.content || payload?.answer || "";
-      setPreviewValue(updated);
-      await buildDiff(originalValue, updated);
-      appendLog("Preview patch готов.");
+      setPreviewValue(updated); await buildDiff(originalValue, updated); appendLog("Preview patch готов.");
     } finally { setPreviewLoading(false); }
   }
 
   async function handleApplyLocalPreview() {
     if (!previewValue) return appendLog("Нет preview для применения.");
-    setEditorValue(previewValue);
-    setVerifyResult(null);
-    setStagedContents((prev) => ({ ...prev, [selectedPath]: previewValue }));
-    await buildDiff(originalValue, previewValue);
+    setEditorValue(previewValue); setVerifyResult(null); setStagedContents((prev) => ({ ...prev, [selectedPath]: previewValue })); await buildDiff(originalValue, previewValue);
   }
 
   function toggleStage(path) {
@@ -128,16 +127,42 @@ export default function CodeWorkspace() {
 
   useEffect(() => { if (selectedPath) setStagedContents((prev) => ({ ...prev, [selectedPath]: editorValue })); }, [editorValue, selectedPath]);
 
+  async function runPreflight() {
+    const result = await api.runStabilizationPreflight({
+      phase20_queue_items: phase20PreviewQueue?.items || [],
+      phase20_execution_state: phase20ExecutionState || {},
+      phase21_run: phase21Run || {},
+      staged_paths: stagedPaths,
+    });
+    setPreflightResult(result);
+    appendLog(`Preflight: ${result.ready ? "ready" : "blocked"}`);
+    return result;
+  }
+
+  async function guardedApplyBatch() {
+    const result = await runPreflight();
+    if (!result?.ready) {
+      appendLog("Apply blocked by preflight.");
+      return;
+    }
+    await handleApplyBatch();
+  }
+
+  async function guardedVerifyBatch() {
+    const result = await runPreflight();
+    if (!result?.ready) {
+      appendLog("Verify blocked by preflight.");
+      return;
+    }
+    await handleVerifyBatch();
+  }
+
   async function handleApplyToDisk() {
     if (!selectedPath) return appendLog("Нет выбранного файла.");
     try {
       setApplyLoading(true);
       await api.applyPatch({ path: selectedPath, content: editorValue });
-      setOriginalValue(editorValue);
-      setPreviewValue("");
-      setVerifyResult(null);
-      await buildDiff(editorValue, editorValue);
-      await loadHistory(selectedPath);
+      setOriginalValue(editorValue); setPreviewValue(""); setVerifyResult(null); await buildDiff(editorValue, editorValue); await loadHistory(selectedPath);
     } finally { setApplyLoading(false); }
   }
 
@@ -148,9 +173,7 @@ export default function CodeWorkspace() {
       const items = stagedPaths.map((path) => ({ path, content: path === selectedPath ? editorValue : (stagedContents[path] ?? "") }));
       await api.applyPatchBatch(items);
       if (selectedPath && stagedPaths.includes(selectedPath)) setOriginalValue(editorValue);
-      await loadHistory(selectedPath || "");
-      await loadFiles();
-      appendLog(`Batch apply: ${items.length} файлов`);
+      await loadHistory(selectedPath || ""); await loadFiles(); appendLog(`Batch apply: ${items.length} файлов`);
     } finally { setBatchLoading(false); }
   }
 
@@ -162,9 +185,7 @@ export default function CodeWorkspace() {
       const payload = await api.getProjectFile(selectedPath);
       const content = payload?.content || "";
       setEditorValue(content); setOriginalValue(content); setPreviewValue(""); setVerifyResult(null);
-      setStagedContents((prev) => ({ ...prev, [selectedPath]: content }));
-      await buildDiff(content, content);
-      await loadHistory(selectedPath);
+      setStagedContents((prev) => ({ ...prev, [selectedPath]: content })); await buildDiff(content, content); await loadHistory(selectedPath);
     } finally { setRollbackLoading(false); }
   }
 
@@ -183,8 +204,7 @@ export default function CodeWorkspace() {
       setBatchLoading(true);
       const items = stagedPaths.map((path) => ({ path, content: path === selectedPath ? editorValue : (stagedContents[path] ?? "") }));
       const result = await api.verifyPatchBatch(items);
-      setBatchVerifyResult(result);
-      appendLog(`Batch verify: ${items.length} файлов`);
+      setBatchVerifyResult(result); appendLog(`Batch verify: ${items.length} файлов`);
     } finally { setBatchLoading(false); }
   }
 
@@ -204,38 +224,24 @@ export default function CodeWorkspace() {
   async function handleRunPhase19() { setPhase19Run(await api.runPhase19({ goal: phase19Goal, mode: "multi-file", selected_paths: stagedPaths })); await loadPhase19History(); }
   function handleAutoStagePhase19() { const paths = (phase19Run?.plan || []).filter((item) => item.action === "modify" || item.action === "create").map((item) => item.path); mergePathsIntoStage(paths); }
   async function handleSelectPhase19History(item) { setSelectedPhase19HistoryId(item.id); setPhase19Run(await api.getPhase19HistoryItem(item.id)); }
-
-  async function handleRunPhase20() {
-    const result = await api.runPhase20({ goal: phase20Goal, selected_paths: stagedPaths });
-    setPhase20Run(result); setPhase20PreviewQueue(null); setPhase20ExecutionState(null);
-    await loadPhase20History();
-  }
+  async function handleRunPhase20() { const result = await api.runPhase20({ goal: phase20Goal, selected_paths: stagedPaths }); setPhase20Run(result); setPhase20PreviewQueue(null); setPhase20ExecutionState(null); await loadPhase20History(); }
   function handleAutoStagePhase20() { const paths = (phase20Run?.planner?.items || []).filter((item) => item.action === "modify" || item.action === "create").map((item) => item.path); mergePathsIntoStage(paths); }
   async function handleBuildPreviewQueuePhase20() {
     const targets = phase20Run?.execution?.preview_targets || [];
     if (!targets.length) return appendLog("Phase20 queue: нет preview targets.");
     const queue = await api.buildPhase20PreviewQueue({ goal: phase20Goal, targets });
-    setPhase20PreviewQueue(queue);
-    appendLog(`Queue: ${queue.count || 0} файлов`);
+    setPhase20PreviewQueue(queue); appendLog(`Queue: ${queue.count || 0} файлов`);
   }
   async function handleBuildExecutionStatePhase20() {
     if (!phase20PreviewQueue?.items?.length) return appendLog("Phase20 state: сначала собери preview queue.");
-    const state = await api.buildPhase20ExecutionState({
-      goal: phase20Goal,
-      queue_items: phase20PreviewQueue.items,
-      staged_paths: stagedPaths,
-    });
-    setPhase20ExecutionState(state);
-    appendLog(`Execution state: ${state.state_id || "ok"}`);
+    const state = await api.buildPhase20ExecutionState({ goal: phase20Goal, queue_items: phase20PreviewQueue.items, staged_paths: stagedPaths });
+    setPhase20ExecutionState(state); appendLog(`Execution state: ${state.state_id || "ok"}`);
   }
   async function handlePreviewExecutionPhase20() {
     const targets = phase20PreviewQueue?.items?.filter((item) => item.status === "queued").map((item) => item.path) || phase20Run?.execution?.preview_targets || [];
     if (!targets.length) return appendLog("Phase20 preview: нет preview targets.");
     const firstTarget = targets[0];
-    if (firstTarget !== selectedPath) {
-      const file = files.find((item) => item.path === firstTarget);
-      if (file) await openFile(file);
-    }
+    if (firstTarget !== selectedPath) { const file = files.find((item) => item.path === firstTarget); if (file) await openFile(file); }
     const sourceContent = stagedContents[firstTarget] ?? editorValue ?? "";
     const payload = await api.previewPatch({ path: firstTarget, instruction: phase20Goal, content: sourceContent });
     const updated = payload?.updated_content || payload?.content || payload?.answer || "";
@@ -252,6 +258,12 @@ export default function CodeWorkspace() {
     appendLog(`Preview next: ${firstTarget}`);
   }
   async function handleSelectPhase20History(item) { setSelectedPhase20HistoryId(item.id); setPhase20Run(await api.getPhase20HistoryItem(item.id)); }
+  async function handleRunPhase21() {
+    if (!phase20PreviewQueue?.items?.length) return appendLog("Phase21: сначала собери preview queue.");
+    const result = await api.runPhase21({ goal: phase21Goal, queue_items: phase20PreviewQueue.items, execution_state: phase20ExecutionState || {} });
+    setPhase21Run(result); await loadPhase21History(); appendLog(`Phase21 controller: ${result.run_id || "ok"}`);
+  }
+  async function handleSelectPhase21History(item) { setSelectedPhase21HistoryId(item.id); setPhase21Run(await api.getPhase21HistoryItem(item.id)); }
   async function handleCreateFile(path, content) { await api.createFile({ path, content }); await loadFiles(); await loadProjectMap(); }
   async function handleRenameFile(oldPath, newPath) { if (!oldPath || !newPath) return; await api.renameFile({ old_path: oldPath, new_path: newPath }); await loadFiles(); await loadProjectMap(); }
   async function handleDeleteFile(path) { if (!path) return; await api.deleteFile({ path }); await loadFiles(); await loadProjectMap(); }
@@ -279,8 +291,8 @@ export default function CodeWorkspace() {
           <div className="batch-bar">
             <div className="batch-bar-meta">Staged: {stagedCount}</div>
             <div className="patch-buttons">
-              <button className="soft-btn" onClick={handleVerifyBatch} disabled={batchLoading}>{batchLoading ? "Batch..." : "Verify Staged"}</button>
-              <button className="soft-btn" onClick={handleApplyBatch} disabled={batchLoading}>{batchLoading ? "Batch..." : "Apply Staged"}</button>
+              <button className="soft-btn" onClick={guardedVerifyBatch} disabled={batchLoading}>{batchLoading ? "Batch..." : "Verify Staged"}</button>
+              <button className="soft-btn" onClick={guardedApplyBatch} disabled={batchLoading}>{batchLoading ? "Batch..." : "Apply Staged"}</button>
             </div>
           </div>
         </div>
@@ -288,6 +300,27 @@ export default function CodeWorkspace() {
       </div>
 
       <div className="code-right">
+        <StabilizationPreflightPanel
+          phase20Queue={phase20PreviewQueue}
+          phase20State={phase20ExecutionState}
+          phase21Run={phase21Run}
+          stagedPaths={stagedPaths}
+          result={preflightResult}
+          onRun={runPreflight}
+        />
+        <Phase21Panel
+          goal={phase21Goal}
+          setGoal={setPhase21Goal}
+          previewQueue={phase20PreviewQueue}
+          executionState={phase20ExecutionState}
+          runResult={phase21Run}
+          historyItems={phase21HistoryItems}
+          selectedHistoryId={selectedPhase21HistoryId}
+          onRun={handleRunPhase21}
+          onApplyController={guardedApplyBatch}
+          onVerifyController={guardedVerifyBatch}
+          onSelectHistory={handleSelectPhase21History}
+        />
         <Phase20Panel
           goal={phase20Goal}
           setGoal={setPhase20Goal}
@@ -302,8 +335,8 @@ export default function CodeWorkspace() {
           onBuildExecutionState={handleBuildExecutionStatePhase20}
           onPreviewExecution={handlePreviewExecutionPhase20}
           onAutoStageExecution={handleAutoStagePhase20}
-          onApplyExecution={handleApplyBatch}
-          onVerifyExecution={handleVerifyBatch}
+          onApplyExecution={guardedApplyBatch}
+          onVerifyExecution={guardedVerifyBatch}
           onSelectHistory={handleSelectPhase20History}
         />
         <Phase19Panel
@@ -315,8 +348,8 @@ export default function CodeWorkspace() {
           selectedHistoryId={selectedPhase19HistoryId}
           onRun={handleRunPhase19}
           onAutoStagePlan={handleAutoStagePhase19}
-          onApplyPlanned={handleApplyBatch}
-          onVerifyPlanned={handleVerifyBatch}
+          onApplyPlanned={guardedApplyBatch}
+          onVerifyPlanned={guardedVerifyBatch}
           onSelectHistory={handleSelectPhase19History}
         />
         <SupervisorPanel

@@ -10,6 +10,10 @@ from app.api.routes.jarvis_task_runner import router as jarvis_task_runner_route
 from app.api.routes.jarvis_supervisor import router as jarvis_supervisor_router
 from app.api.routes.jarvis_phase19 import router as jarvis_phase19_router
 from app.api.routes.jarvis_phase20 import router as jarvis_phase20_router
+from app.api.routes.jarvis_phase20_queue import router as jarvis_phase20_queue_router
+from app.api.routes.jarvis_phase20_state import router as jarvis_phase20_state_router
+from app.api.routes.jarvis_phase21 import router as jarvis_phase21_router
+from app.api.routes.jarvis_stabilization import router as jarvis_stabilization_router
 
 app = FastAPI(title="Jarvis Work API")
 
@@ -30,7 +34,11 @@ app.include_router(jarvis_task_runner_router)
 app.include_router(jarvis_supervisor_router)
 app.include_router(jarvis_phase19_router)
 app.include_router(jarvis_phase20_router)
+app.include_router(jarvis_phase20_queue_router)
+app.include_router(jarvis_phase20_state_router)
+app.include_router(jarvis_phase21_router)
+app.include_router(jarvis_stabilization_router)
 
 @app.get("/health")
 def health():
-    return {"status": "ok"}
+    return {"status": "ok", "service": "jarvis-work-api"}
