@@ -8,6 +8,7 @@ from app.api.routes.jarvis_patch import router as jarvis_patch_router
 from app.api.routes.jarvis_devtools import router as jarvis_devtools_router
 from app.api.routes.jarvis_task_runner import router as jarvis_task_runner_router
 from app.api.routes.jarvis_supervisor import router as jarvis_supervisor_router
+from app.api.routes.jarvis_phase19 import router as jarvis_phase19_router
 
 app = FastAPI(title="Jarvis Work API")
 
@@ -26,6 +27,7 @@ app.include_router(jarvis_patch_router)
 app.include_router(jarvis_devtools_router)
 app.include_router(jarvis_task_runner_router)
 app.include_router(jarvis_supervisor_router)
+app.include_router(jarvis_phase19_router)
 
 @app.get("/health")
 def health():

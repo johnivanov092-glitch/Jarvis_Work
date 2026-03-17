@@ -32,36 +32,6 @@ function asArray(payload) {
 }
 
 export const api = {
-  listChats: () => request("/api/jarvis/chats"),
-  createChat: (title = "Новый чат") =>
-    request("/api/jarvis/chats", { method: "POST", body: { title } }),
-  renameChat: (id, title) =>
-    request(`/api/jarvis/chats/${id}`, { method: "PATCH", body: { title } }),
-  deleteChat: (id) =>
-    request(`/api/jarvis/chats/${id}`, { method: "DELETE" }),
-  pinChat: (id, pinned) =>
-    request(`/api/jarvis/chats/${id}/pin`, {
-      method: "PATCH",
-      body: { pinned },
-    }),
-  getMessages: (id) => request(`/api/jarvis/chats/${id}/messages`),
-  addMessage: (payload) =>
-    request("/api/jarvis/messages", { method: "POST", body: payload }),
-  search: (q) =>
-    request(`/api/jarvis/search?q=${encodeURIComponent(q)}`),
-
-  execute: (payload) =>
-    request("/api/jarvis/execute", { method: "POST", body: payload }),
-
-  listMemory: async (q = "") => {
-    const payload = await request(`/api/jarvis/memory/list?q=${encodeURIComponent(q)}`);
-    return asArray(payload);
-  },
-  saveMemory: (payload) =>
-    request("/api/jarvis/memory/save", { method: "POST", body: payload }),
-  deleteMemory: (id) =>
-    request("/api/jarvis/memory/delete", { method: "POST", body: { id } }),
-
   getProjectSnapshot: () => request("/snapshot"),
   getProjectFile: (path) => request(`/file?path=${encodeURIComponent(path)}`),
 
@@ -128,6 +98,7 @@ export const api = {
     request("/api/jarvis/fs/delete", { method: "POST", body: { path } }),
   renameFile: ({ old_path, new_path }) =>
     request("/api/jarvis/fs/rename", { method: "POST", body: { old_path, new_path } }),
+
   patchPlan: ({ goal, current_path, current_content, staged_paths }) =>
     request("/api/jarvis/patch/plan", {
       method: "POST",
@@ -154,6 +125,12 @@ export const api = {
       body: { goal, mode, current_path, staged_paths, auto_apply },
     }),
 
+  executeSupervisor: ({ goal, current_path, current_content, auto_apply }) =>
+    request("/api/jarvis/supervisor/execute", {
+      method: "POST",
+      body: { goal, current_path, current_content, auto_apply },
+    }),
+
   listSupervisorHistory: async () => {
     const payload = await request("/api/jarvis/supervisor/history/list");
     return asArray(payload);
@@ -161,4 +138,18 @@ export const api = {
 
   getSupervisorHistoryItem: (id) =>
     request(`/api/jarvis/supervisor/history/get?id=${encodeURIComponent(id)}`),
+
+  runPhase19: ({ goal, mode, selected_paths }) =>
+    request("/api/jarvis/phase19/run", {
+      method: "POST",
+      body: { goal, mode, selected_paths },
+    }),
+
+  listPhase19History: async () => {
+    const payload = await request("/api/jarvis/phase19/history/list");
+    return asArray(payload);
+  },
+
+  getPhase19HistoryItem: (id) =>
+    request(`/api/jarvis/phase19/history/get?id=${encodeURIComponent(id)}`),
 };

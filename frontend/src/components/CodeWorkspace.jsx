@@ -12,6 +12,7 @@ import FileOpsPanel from "./FileOpsPanel";
 import TaskRunnerPanel from "./TaskRunnerPanel";
 import TaskHistoryPanel from "./TaskHistoryPanel";
 import SupervisorPanel from "./SupervisorPanel";
+import Phase19Panel from "./Phase19Panel";
 
 export default function CodeWorkspace() {
   const [files, setFiles] = useState([]);
@@ -50,12 +51,17 @@ export default function CodeWorkspace() {
   const [supervisorRun, setSupervisorRun] = useState(null);
   const [supervisorHistoryItems, setSupervisorHistoryItems] = useState([]);
   const [selectedSupervisorHistoryId, setSelectedSupervisorHistoryId] = useState(null);
+  const [phase19Goal, setPhase19Goal] = useState("Сделай multi-file reasoning и подготовь изменения по staged файлам.");
+  const [phase19Run, setPhase19Run] = useState(null);
+  const [phase19HistoryItems, setPhase19HistoryItems] = useState([]);
+  const [selectedPhase19HistoryId, setSelectedPhase19HistoryId] = useState(null);
 
   useEffect(() => {
     loadFiles();
     loadProjectMap();
     loadTaskHistory();
     loadSupervisorHistory();
+    loadPhase19History();
   }, []);
 
   useEffect(() => {
@@ -111,6 +117,15 @@ export default function CodeWorkspace() {
     }
   }
 
+  async function loadPhase19History() {
+    try {
+      const items = await api.listPhase19History();
+      setPhase19HistoryItems(items);
+    } catch (e) {
+      appendLog(`Ошибка phase19 history: ${e.message || "unknown error"}`);
+    }
+  }
+
   async function loadHistory(path) {
     try {
       const items = await api.listPatchHistory(path);
@@ -152,7 +167,7 @@ export default function CodeWorkspace() {
     setLogs((prev) => [
       `${new Date().toLocaleTimeString()}  ${message}`,
       ...prev,
-    ].slice(0, 220));
+    ].slice(0, 260));
   }
 
   async function buildDiff(original, updated) {
@@ -429,6 +444,31 @@ export default function CodeWorkspace() {
     }
   }
 
+  async function handleExecuteSupervisor() {
+    if (!selectedPath) {
+      appendLog("Для execute supervisor нужен выбранный файл.");
+      return;
+    }
+    try {
+      const result = await api.executeSupervisor({
+        goal: supervisorGoal,
+        current_path: selectedPath,
+        current_content: editorValue,
+        auto_apply: supervisorAutoApply,
+      });
+      setSupervisorRun(result);
+      setPreviewValue(result?.preview?.proposed_content || "");
+      setDiffText("");
+      if (result?.preview?.current_content !== undefined && result?.preview?.proposed_content !== undefined) {
+        await buildDiff(result.preview.current_content, result.preview.proposed_content);
+      }
+      appendLog("Supervisor execute flow выполнен.");
+      await loadSupervisorHistory();
+    } catch (e) {
+      appendLog(`Ошибка supervisor execute: ${e.message || "unknown error"}`);
+    }
+  }
+
   async function handleSelectSupervisorHistory(item) {
     try {
       setSelectedSupervisorHistoryId(item.id);
@@ -437,6 +477,77 @@ export default function CodeWorkspace() {
       appendLog(`Открыта история supervisor #${item.id}`);
     } catch (e) {
       appendLog(`Ошибка supervisor history item: ${e.message || "unknown error"}`);
+    }
+  }
+
+  async function handleRunPhase19() {
+    try {
+      const result = await api.runPhase19({
+        goal: phase19Goal,
+        mode: "multi-file",
+        selected_paths: stagedPaths,
+      });
+      setPhase19Run(result);
+      appendLog(`Phase 19 reasoning построен: ${result.plan?.length || 0} пунктов.`);
+      await loadPhase19History();
+    } catch (e) {
+      appendLog(`Ошибка phase19: ${e.message || "unknown error"}`);
+    }
+  }
+
+  async function handleApplyPlannedPhase19() {
+    if (!stagedPaths.length) {
+      appendLog("Phase19 apply: нет staged файлов.");
+      return;
+    }
+    try {
+      setBatchLoading(true);
+      const items = stagedPaths.map((path) => ({
+        path,
+        content: path === selectedPath ? editorValue : (stagedContents[path] ?? ""),
+      }));
+      appendLog(`Phase19 -> batch apply: ${items.length} файлов`);
+      const result = await api.applyPatchBatch(items);
+      appendLog(`Phase19 batch apply завершён: ${result.count} файлов`);
+      await loadHistory(selectedPath || "");
+      await loadFiles();
+    } catch (e) {
+      appendLog(`Ошибка Phase19 batch apply: ${e.message || "unknown error"}`);
+    } finally {
+      setBatchLoading(false);
+    }
+  }
+
+  async function handleVerifyPlannedPhase19() {
+    if (!stagedPaths.length) {
+      appendLog("Phase19 verify: нет staged файлов.");
+      return;
+    }
+    try {
+      setBatchLoading(true);
+      const items = stagedPaths.map((path) => ({
+        path,
+        content: path === selectedPath ? editorValue : (stagedContents[path] ?? ""),
+      }));
+      appendLog(`Phase19 -> batch verify: ${items.length} файлов`);
+      const result = await api.verifyPatchBatch(items);
+      setBatchVerifyResult(result);
+      appendLog(`Phase19 batch verify завершён: ${result.count} файлов`);
+    } catch (e) {
+      appendLog(`Ошибка Phase19 batch verify: ${e.message || "unknown error"}`);
+    } finally {
+      setBatchLoading(false);
+    }
+  }
+
+  async function handleSelectPhase19History(item) {
+    try {
+      setSelectedPhase19HistoryId(item.id);
+      const full = await api.getPhase19HistoryItem(item.id);
+      setPhase19Run(full);
+      appendLog(`Открыта история Phase19 #${item.id}`);
+    } catch (e) {
+      appendLog(`Ошибка открытия phase19 history: ${e.message || "unknown error"}`);
     }
   }
 
@@ -495,7 +606,7 @@ export default function CodeWorkspace() {
   const stagedCount = useMemo(() => stagedPaths.length, [stagedPaths]);
 
   return (
-    <div className="code-workspace-v8">
+    <div className="code-workspace-v9">
       <div className="code-left">
         <FileExplorer
           files={files}
@@ -562,6 +673,19 @@ export default function CodeWorkspace() {
       </div>
 
       <div className="code-right">
+        <Phase19Panel
+          goal={phase19Goal}
+          setGoal={setPhase19Goal}
+          selectedPaths={stagedPaths}
+          runResult={phase19Run}
+          historyItems={phase19HistoryItems}
+          selectedHistoryId={selectedPhase19HistoryId}
+          onRun={handleRunPhase19}
+          onApplyPlanned={handleApplyPlannedPhase19}
+          onVerifyPlanned={handleVerifyPlannedPhase19}
+          onSelectHistory={handleSelectPhase19History}
+        />
+
         <SupervisorPanel
           goal={supervisorGoal}
           setGoal={setSupervisorGoal}
@@ -573,6 +697,7 @@ export default function CodeWorkspace() {
           historyItems={supervisorHistoryItems}
           selectedHistoryId={selectedSupervisorHistoryId}
           onRun={handleRunSupervisor}
+          onExecute={handleExecuteSupervisor}
           onSelectHistory={handleSelectSupervisorHistory}
         />
 

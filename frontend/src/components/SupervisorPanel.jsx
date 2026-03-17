@@ -9,6 +9,7 @@ export default function SupervisorPanel({
   historyItems,
   selectedHistoryId,
   onRun,
+  onExecute,
   onSelectHistory,
 }) {
   const active = runResult;
@@ -52,28 +53,31 @@ export default function SupervisorPanel({
           <span>Auto apply hint</span>
         </label>
 
-        <button className="soft-btn" onClick={onRun}>Run Supervisor</button>
+        <div className="patch-buttons">
+          <button className="soft-btn" onClick={onRun}>Run Supervisor</button>
+          <button className="soft-btn" onClick={onExecute}>Execute Flow</button>
+        </div>
 
         {active ? (
           <div className="supervisor-result">
             <div className="task-run-header">
-              run #{active.run_id} • {active.mode}
+              run #{active.run_id || active.id} • {active.mode}
             </div>
 
             <div className="task-run-section">
               <div className="task-run-title">Pipeline</div>
-              {(active.steps || []).map((item, index) => (
+              {((active.steps) || []).map((item, index) => (
                 <div key={`${index}-${item.agent}`} className="task-run-row">
                   <div className="task-run-action">{item.agent}</div>
                   <div className="task-run-path">{item.status}</div>
-                  <div className="task-run-reason">{item.details}</div>
+                  <div className="task-run-reason">{item.details || item.description}</div>
                 </div>
               ))}
             </div>
 
             <div className="task-run-section">
               <div className="task-run-title">Plan</div>
-              {(active.plan || []).map((item, index) => (
+              {((active.plan) || []).map((item, index) => (
                 <div key={`${index}-${item.path}`} className="task-run-row">
                   <div className="task-run-action">{item.action}</div>
                   <div className="task-run-path">{item.path}</div>
@@ -84,7 +88,7 @@ export default function SupervisorPanel({
 
             <div className="task-run-section">
               <div className="task-run-title">Next Steps</div>
-              {(active.summary?.next_steps || []).map((item, index) => (
+              {((active.summary?.next_steps) || []).map((item, index) => (
                 <div key={`${index}-${item}`} className="task-run-log">• {item}</div>
               ))}
             </div>
