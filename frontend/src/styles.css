@@ -16,7 +16,7 @@ button, textarea, select, input {
 
 .jarvis-shell {
   display: grid;
-  grid-template-columns: 260px 1fr;
+  grid-template-columns: 250px 1fr;
   height: 100%;
   min-height: 0;
   background: linear-gradient(90deg, #121212 0%, #191919 100%);
@@ -32,7 +32,8 @@ button, textarea, select, input {
 .soft-btn,
 .topbar-select,
 .sidebar-search-input,
-.explorer-item {
+.explorer-item,
+.sidebar-nav-item {
   border: 1px solid rgba(255,255,255,0.10);
   background: rgba(255,255,255,0.04);
   color: #fff;
@@ -49,7 +50,7 @@ button, textarea, select, input {
 .sidebar-nav {
   display: grid;
   gap: 10px;
-  margin-bottom: 24px;
+  margin-bottom: 14px;
 }
 
 .sidebar-nav-item {
@@ -57,13 +58,18 @@ button, textarea, select, input {
   align-items: center;
   gap: 10px;
   padding: 12px 14px;
-  border-radius: 14px;
-  color: #f4f4f4;
-  background: transparent;
+  width: 100%;
+  cursor: pointer;
+  text-align: left;
 }
 
-.sidebar-nav-item.active {
+.sidebar-nav-item.active,
+.sidebar-nav-item:hover {
   background: rgba(255,255,255,0.08);
+}
+
+.search-shell {
+  margin-bottom: 22px;
 }
 
 .sidebar-search-input {
@@ -138,6 +144,10 @@ button, textarea, select, input {
   border-bottom: 1px solid rgba(255,255,255,0.08);
 }
 
+.jarvis-topbar.slim {
+  justify-content: space-between;
+}
+
 .jarvis-brand {
   min-width: 120px;
   font-size: 18px;
@@ -147,6 +157,10 @@ button, textarea, select, input {
 .topbar-select {
   padding: 10px 12px;
   min-width: 140px;
+}
+
+.topbar-select.full {
+  width: 100%;
 }
 
 .topbar-tabs {
@@ -192,13 +206,73 @@ button, textarea, select, input {
   gap: 10px;
 }
 
-.assistant-greeting {
+.assistant-greeting,
+.content-card {
   margin-top: 18px;
-  max-width: 520px;
+  max-width: 900px;
   padding: 16px 18px;
   border-radius: 18px;
   border: 1px solid rgba(255,255,255,0.08);
   background: rgba(255,255,255,0.03);
+}
+
+.content-card-button {
+  width: 100%;
+  text-align: left;
+  cursor: pointer;
+}
+
+.content-card-title {
+  font-size: 16px;
+  font-weight: 700;
+  margin-bottom: 8px;
+}
+
+.content-card-text {
+  color: #d9d9d9;
+  line-height: 1.45;
+}
+
+.settings-stack {
+  display: grid;
+  gap: 14px;
+}
+
+.settings-row {
+  display: grid;
+  gap: 8px;
+}
+
+.library-view {
+  display: grid;
+  gap: 16px;
+}
+
+.library-preview {
+  margin-top: 14px;
+  padding: 12px;
+  border-radius: 14px;
+  background: rgba(255,255,255,0.03);
+  border: 1px solid rgba(255,255,255,0.07);
+  white-space: pre-wrap;
+  word-break: break-word;
+  max-height: 360px;
+  overflow: auto;
+}
+
+.upload-dropzone {
+  margin-top: 18px;
+  padding: 22px;
+  border-radius: 18px;
+  border: 1px dashed rgba(255,255,255,0.24);
+  background: rgba(255,255,255,0.02);
+  color: #d8d8d8;
+  cursor: pointer;
+}
+
+.upload-dropzone.active {
+  background: rgba(255,255,255,0.07);
+  border-color: rgba(255,255,255,0.38);
 }
 
 .message-stream {
@@ -222,7 +296,7 @@ button, textarea, select, input {
 }
 
 .message-bubble {
-  max-width: min(820px, 80%);
+  max-width: min(860px, 82%);
   padding: 14px 16px;
   border-radius: 18px;
   border: 1px solid rgba(255,255,255,0.08);
@@ -253,6 +327,11 @@ button, textarea, select, input {
 
 .chat-input-shell.smaller {
   min-height: 150px;
+}
+
+.chat-input-shell.drag-active {
+  border-color: rgba(255,255,255,0.3);
+  background: rgba(255,255,255,0.04);
 }
 
 .input-plus-btn,
@@ -384,7 +463,7 @@ button, textarea, select, input {
   .jarvis-sidebar {
     border-right: none;
     border-bottom: 1px solid rgba(255,255,255,0.08);
-    max-height: 320px;
+    max-height: 360px;
   }
 
   .ide-grid {

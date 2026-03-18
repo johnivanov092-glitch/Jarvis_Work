@@ -40,19 +40,19 @@ function uid(prefix = "id") {
 }
 
 function getChatsLocal() {
-  return loadLocal("jarvis_repo_fix_chats", []);
+  return loadLocal("jarvis_launch_fix_chats", []);
 }
 
 function saveChatsLocal(chats) {
-  saveLocal("jarvis_repo_fix_chats", chats);
+  saveLocal("jarvis_launch_fix_chats", chats);
 }
 
 function getMessagesLocal(chatId) {
-  return loadLocal(`jarvis_repo_fix_messages_${chatId}`, []);
+  return loadLocal(`jarvis_launch_fix_messages_${chatId}`, []);
 }
 
 function saveMessagesLocal(chatId, messages) {
-  saveLocal(`jarvis_repo_fix_messages_${chatId}`, messages);
+  saveLocal(`jarvis_launch_fix_messages_${chatId}`, messages);
 }
 
 async function safeRequest(url, options, fallback) {
@@ -63,146 +63,134 @@ async function safeRequest(url, options, fallback) {
   }
 }
 
+function asArray(payload) {
+  if (Array.isArray(payload)) return payload;
+  if (Array.isArray(payload?.items)) return payload.items;
+  if (Array.isArray(payload?.results)) return payload.results;
+  if (Array.isArray(payload?.data)) return payload.data;
+  return [];
+}
+
 export const api = {
   health: () => request("/health"),
 
-  // ---- chat shim ----
+  // chat runtime
   listChats: async () =>
-    safeRequest("/api/jarvis/chats/list", {}, () => getChatsLocal()),
+    safeRequest("/api/jarvis/chats/list", {}, async () => getChatsLocal()),
 
   createChat: async ({ title = "Новый чат" } = {}) =>
-    safeRequest(
-      "/api/jarvis/chats/create",
-      { method: "POST", body: { title } },
-      () => {
-        const chats = getChatsLocal();
-        const chat = {
-          id: uid("chat"),
-          title,
-          pinned: false,
-          memory_saved: false,
-          created_at: new Date().toISOString(),
-          updated_at: new Date().toISOString(),
-        };
-        chats.unshift(chat);
-        saveChatsLocal(chats);
-        saveMessagesLocal(chat.id, [
-          {
-            id: uid("msg"),
-            role: "assistant",
-            content: "Jarvis готов. Начни новый чат или напиши сообщение.",
-            created_at: new Date().toISOString(),
-          },
-        ]);
-        return chat;
-      }
-    ),
-
-  deleteChat: async ({ id }) =>
-    safeRequest(
-      "/api/jarvis/chats/delete",
-      { method: "POST", body: { id } },
-      () => {
-        const chats = getChatsLocal().filter((item) => item.id !== id);
-        saveChatsLocal(chats);
-        localStorage.removeItem(`jarvis_repo_fix_messages_${id}`);
-        return { ok: true };
-      }
-    ),
+    safeRequest("/api/jarvis/chats/create", { method: "POST", body: { title } }, async () => {
+      const chats = getChatsLocal();
+      const chat = {
+        id: uid("chat"),
+        title,
+        pinned: false,
+        memory_saved: false,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      };
+      chats.unshift(chat);
+      saveChatsLocal(chats);
+      saveMessagesLocal(chat.id, []);
+      return chat;
+    }),
 
   renameChat: async ({ id, title }) =>
-    safeRequest(
-      "/api/jarvis/chats/rename",
-      { method: "POST", body: { id, title } },
-      () => {
-        const chats = getChatsLocal().map((item) =>
-          item.id === id ? { ...item, title, updated_at: new Date().toISOString() } : item
-        );
-        saveChatsLocal(chats);
-        return { ok: true };
-      }
-    ),
+    safeRequest("/api/jarvis/chats/rename", { method: "POST", body: { id, title } }, async () => {
+      const chats = getChatsLocal().map((item) =>
+        item.id === id ? { ...item, title, updated_at: new Date().toISOString() } : item
+      );
+      saveChatsLocal(chats);
+      return { ok: true };
+    }),
 
-  pinChat: async ({ id, pinned = true }) =>
-    safeRequest(
-      "/api/jarvis/chats/pin",
-      { method: "POST", body: { id, pinned } },
-      () => {
-        const chats = getChatsLocal().map((item) =>
-          item.id === id ? { ...item, pinned, updated_at: new Date().toISOString() } : item
-        );
-        saveChatsLocal(chats);
-        return { ok: true };
-      }
-    ),
+  deleteChat: async ({ id }) =>
+    safeRequest("/api/jarvis/chats/delete", { method: "POST", body: { id } }, async () => {
+      const chats = getChatsLocal().filter((item) => item.id !== id);
+      saveChatsLocal(chats);
+      localStorage.removeItem(`jarvis_launch_fix_messages_${id}`);
+      return { ok: true };
+    }),
 
-  saveChatToMemory: async ({ id, saved = true }) =>
-    safeRequest(
-      "/api/jarvis/chats/save-memory",
-      { method: "POST", body: { id, saved } },
-      () => {
-        const chats = getChatsLocal().map((item) =>
-          item.id === id ? { ...item, memory_saved: saved, updated_at: new Date().toISOString() } : item
-        );
-        saveChatsLocal(chats);
-        return { ok: true };
-      }
-    ),
+  pinChat: async ({ id, pinned }) =>
+    safeRequest("/api/jarvis/chats/pin", { method: "POST", body: { id, pinned } }, async () => {
+      const chats = getChatsLocal().map((item) =>
+        item.id === id ? { ...item, pinned, updated_at: new Date().toISOString() } : item
+      );
+      saveChatsLocal(chats);
+      return { ok: true };
+    }),
 
-  searchChats: async ({ q = "" } = {}) =>
-    safeRequest(
-      `/api/jarvis/chats/search?q=${encodeURIComponent(q)}`,
-      {},
-      () => {
-        const text = q.toLowerCase().trim();
-        return getChatsLocal().filter((item) => item.title.toLowerCase().includes(text));
-      }
-    ),
+  saveChatToMemory: async ({ id, saved }) =>
+    safeRequest("/api/jarvis/chats/save-memory", { method: "POST", body: { id, saved } }, async () => {
+      const chats = getChatsLocal().map((item) =>
+        item.id === id ? { ...item, memory_saved: saved, updated_at: new Date().toISOString() } : item
+      );
+      saveChatsLocal(chats);
+      return { ok: true };
+    }),
 
   getMessages: async ({ chatId }) =>
-    safeRequest(
-      `/api/jarvis/chats/messages?chat_id=${encodeURIComponent(chatId)}`,
-      {},
-      () => getMessagesLocal(chatId)
-    ),
+    safeRequest(`/api/jarvis/chats/messages?chat_id=${encodeURIComponent(chatId)}`, {}, async () => {
+      return getMessagesLocal(chatId);
+    }),
 
   addMessage: async ({ chatId, role, content }) =>
-    safeRequest(
-      "/api/jarvis/chats/messages/add",
-      { method: "POST", body: { chat_id: chatId, role, content } },
-      () => {
-        const messages = getMessagesLocal(chatId);
-        const item = {
-          id: uid("msg"),
-          role,
-          content,
-          created_at: new Date().toISOString(),
-        };
-        messages.push(item);
-        saveMessagesLocal(chatId, messages);
-        return item;
-      }
-    ),
+    safeRequest("/api/jarvis/chats/messages/add", { method: "POST", body: { chat_id: chatId, role, content } }, async () => {
+      const messages = getMessagesLocal(chatId);
+      const item = {
+        id: uid("msg"),
+        role,
+        content,
+        created_at: new Date().toISOString(),
+      };
+      messages.push(item);
+      saveMessagesLocal(chatId, messages);
+      return item;
+    }),
 
   execute: async ({ chatId, message, mode = "chat", model = "qwen3:8b" }) =>
-    safeRequest(
-      "/api/chat/send",
-      { method: "POST", body: { chat_id: chatId, message, mode, model } },
-      async () => {
-        const reply = {
+    safeRequest("/api/chat/send", {
+      method: "POST",
+      body: {
+        model_name: model,
+        profile_name: "default",
+        user_input: message,
+        history: getMessagesLocal(chatId).map((m) => ({ role: m.role, content: m.content })),
+        use_memory: true,
+        use_library: true,
+      },
+    }, async () => {
+      const reply = {
+        id: uid("msg"),
+        role: "assistant",
+        content: `Echo (${mode}, ${model}): ${message}`,
+        created_at: new Date().toISOString(),
+      };
+      const messages = getMessagesLocal(chatId);
+      messages.push(reply);
+      saveMessagesLocal(chatId, messages);
+      return reply;
+    }).then((payload) => {
+      if (payload?.assistant_content) {
+        return {
           id: uid("msg"),
           role: "assistant",
-          content: `Echo (${mode}, ${model}): ${message}`,
+          content: payload.assistant_content,
           created_at: new Date().toISOString(),
         };
-        const messages = getMessagesLocal(chatId);
-        messages.push(reply);
-        saveMessagesLocal(chatId, messages);
-        return reply;
       }
-    ),
+      if (payload?.answer) {
+        return {
+          id: uid("msg"),
+          role: "assistant",
+          content: payload.answer,
+          created_at: new Date().toISOString(),
+        };
+      }
+      return payload;
+    }),
 
-  // ---- models / settings ----
   listOllamaModels: async () =>
     safeRequest("/api/models", {}, async () => [
       { name: "qwen3:8b", context_window: 32768 },
@@ -211,15 +199,11 @@ export const api = {
       { name: "deepseek-r1:8b", context_window: 32768 },
     ]),
 
-  listContextWindows: async () => [
-    4096, 8192, 16384, 32768, 65536, 131072, 262144,
-  ],
+  listContextWindows: async () => [4096, 8192, 16384, 32768, 65536, 131072, 262144],
 
-  // ---- code workspace / existing endpoints ----
-  getProjectSnapshot: () =>
-    safeRequest("/snapshot", {}, async () => ({ files: [] })),
-  getProjectFile: (path) =>
-    request(`/file?path=${encodeURIComponent(path)}`),
+  // code workspace
+  getProjectSnapshot: () => safeRequest("/snapshot", {}, async () => ({ files: [] })),
+  getProjectFile: (path) => request(`/file?path=${encodeURIComponent(path)}`),
 
   previewPatch: ({ path, instruction, content }) =>
     request("/agent/ollama/run", {
@@ -246,20 +230,18 @@ export const api = {
   verifyPatchBatch: (items) =>
     request("/api/jarvis/patch/verify-batch", { method: "POST", body: { items } }),
   listPatchHistory: async (path = "") =>
-    safeRequest(`/api/jarvis/patch/history/list?path=${encodeURIComponent(path)}`, {}, async () => []),
+    asArray(await safeRequest(`/api/jarvis/patch/history/list?path=${encodeURIComponent(path)}`, {}, async () => [])),
   getPatchHistoryItem: (id) =>
     request(`/api/jarvis/patch/history/get?id=${encodeURIComponent(id)}`),
 
   getProjectMap: () =>
     safeRequest("/api/jarvis/project/map", {}, async () => ({ items: [], count: 0 })),
-
   createFile: ({ path, content }) =>
     request("/api/jarvis/fs/create", { method: "POST", body: { path, content } }),
   deleteFile: ({ path }) =>
     request("/api/jarvis/fs/delete", { method: "POST", body: { path } }),
   renameFile: ({ old_path, new_path }) =>
     request("/api/jarvis/fs/rename", { method: "POST", body: { old_path, new_path } }),
-
   patchPlan: ({ goal, current_path, current_content, staged_paths }) =>
     request("/api/jarvis/patch/plan", {
       method: "POST",
@@ -269,7 +251,7 @@ export const api = {
   runTask: ({ goal, mode, current_path, staged_paths }) =>
     safeRequest("/api/jarvis/task/run", { method: "POST", body: { goal, mode, current_path, staged_paths } }, async () => ({ ok: true })),
   listTaskHistory: async () =>
-    safeRequest("/api/jarvis/task/history/list", {}, async () => []),
+    asArray(await safeRequest("/api/jarvis/task/history/list", {}, async () => [])),
   getTaskHistoryItem: (id) =>
     request(`/api/jarvis/task/history/get?id=${encodeURIComponent(id)}`),
 
@@ -278,14 +260,14 @@ export const api = {
   executeSupervisor: ({ goal, current_path, current_content, auto_apply }) =>
     safeRequest("/api/jarvis/supervisor/execute", { method: "POST", body: { goal, current_path, current_content, auto_apply } }, async () => ({ ok: true })),
   listSupervisorHistory: async () =>
-    safeRequest("/api/jarvis/supervisor/history/list", {}, async () => []),
+    asArray(await safeRequest("/api/jarvis/supervisor/history/list", {}, async () => [])),
   getSupervisorHistoryItem: (id) =>
     request(`/api/jarvis/supervisor/history/get?id=${encodeURIComponent(id)}`),
 
   runPhase19: ({ goal, mode, selected_paths }) =>
     safeRequest("/api/jarvis/phase19/run", { method: "POST", body: { goal, mode, selected_paths } }, async () => ({ ok: true })),
   listPhase19History: async () =>
-    safeRequest("/api/jarvis/phase19/history/list", {}, async () => []),
+    asArray(await safeRequest("/api/jarvis/phase19/history/list", {}, async () => [])),
   getPhase19HistoryItem: (id) =>
     request(`/api/jarvis/phase19/history/get?id=${encodeURIComponent(id)}`),
 
@@ -296,14 +278,14 @@ export const api = {
   buildPhase20ExecutionState: ({ goal, queue_items, staged_paths }) =>
     safeRequest("/api/jarvis/phase20/execution-state", { method: "POST", body: { goal, queue_items, staged_paths } }, async () => ({ checkpoints: [] })),
   listPhase20History: async () =>
-    safeRequest("/api/jarvis/phase20/history/list", {}, async () => []),
+    asArray(await safeRequest("/api/jarvis/phase20/history/list", {}, async () => [])),
   getPhase20HistoryItem: (id) =>
     request(`/api/jarvis/phase20/history/get?id=${encodeURIComponent(id)}`),
 
   runPhase21: ({ goal, queue_items, execution_state }) =>
     safeRequest("/api/jarvis/phase21/run", { method: "POST", body: { goal, queue_items, execution_state } }, async () => ({ ok: true })),
   listPhase21History: async () =>
-    safeRequest("/api/jarvis/phase21/history/list", {}, async () => []),
+    asArray(await safeRequest("/api/jarvis/phase21/history/list", {}, async () => [])),
   getPhase21HistoryItem: (id) =>
     request(`/api/jarvis/phase21/history/get?id=${encodeURIComponent(id)}`),
 
