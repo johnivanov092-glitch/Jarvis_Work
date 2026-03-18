@@ -62,13 +62,13 @@ function normalizeArray(payload) {
 
 function normalizeChat(item = {}) {
   return {
+    ...item,
     id: item.id ?? item.chat_id ?? item.uuid ?? "",
     title: item.title ?? item.name ?? "Новый чат",
     pinned: Boolean(item.pinned),
     memory_saved: Boolean(item.memory_saved ?? item.saved_to_memory ?? item.saved),
     created_at: item.created_at ?? item.createdAt ?? "",
     updated_at: item.updated_at ?? item.updatedAt ?? "",
-    ...item,
   };
 }
 
@@ -82,12 +82,11 @@ function normalizeMessage(item = {}) {
     "";
 
   return {
+    ...item,
     id: item.id ?? item.message_id ?? item.uuid ?? `${item.role || "msg"}-${Date.now()}`,
     role: item.role ?? item.sender ?? "assistant",
     content: typeof content === "string" ? content : String(content ?? ""),
     created_at: item.created_at ?? item.createdAt ?? "",
-    ...item,
-    content: typeof content === "string" ? content : String(content ?? ""),
   };
 }
 
@@ -98,6 +97,27 @@ function unwrapItem(payload) {
   if (payload.message && typeof payload.message === "object") return payload.message;
   if (payload.data && typeof payload.data === "object" && !Array.isArray(payload.data)) return payload.data;
   return payload;
+}
+
+function extractAgentError(payload) {
+  if (!payload || typeof payload !== "object") return "";
+  if (payload.ok === false) {
+    if (typeof payload?.meta?.error === "string" && payload.meta.error.trim()) {
+      return payload.meta.error;
+    }
+    if (Array.isArray(payload.timeline)) {
+      const details = payload.timeline
+        .map((item) => item?.detail || item?.title || "")
+        .filter(Boolean)
+        .join(" | ");
+      if (details) return details;
+    }
+    if (typeof payload.answer === "string" && payload.answer.trim()) {
+      return "";
+    }
+    return "run_agent вернул ошибку";
+  }
+  return "";
 }
 
 export async function listChats() {
@@ -160,10 +180,10 @@ export async function addMessage(body = {}) {
     method: "POST",
     body: {
       ...body,
-      content:
-        typeof body.content === "string"
-          ? body.content
-          : String(body.content ?? ""),
+      chatId: body.chatId ?? body.chat_id ?? "",
+      chat_id: body.chat_id ?? body.chatId ?? "",
+      content: typeof body.content === "string" ? body.content : String(body.content ?? ""),
+      text: typeof body.content === "string" ? body.content : String(body.content ?? ""),
     },
   });
   return normalizeMessage(unwrapItem(payload));
@@ -195,12 +215,21 @@ export async function execute(body = {}) {
     },
   });
 
+  const routeError = extractAgentError(response);
+  if (routeError) {
+    throw new Error(routeError);
+  }
+
   const content =
     response?.content ??
     response?.answer ??
     response?.response ??
     response?.message ??
     "";
+
+  if (!String(content || "").trim()) {
+    throw new Error("Пустой ответ от /api/chat/send");
+  }
 
   return {
     ...response,
