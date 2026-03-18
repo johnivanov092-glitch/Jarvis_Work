@@ -119,26 +119,27 @@ export async function sendMessage(body = {}) {
   return request("/api/jarvis/messages", { method: "POST", body });
 }
 
+// REAL FIX FOR CURRENT GIT BACKEND:
+// /api/chat/send expects:
+// model_name, profile_name, user_input, history, use_memory, use_library
 export async function execute(body = {}) {
-  const text =
-    body.message ??
-    body.prompt ??
-    body.text ??
-    body.query ??
-    "";
+  const userInput =
+    String(
+      body.user_input ??
+      body.message ??
+      body.prompt ??
+      body.text ??
+      body.query ??
+      ""
+    ).trim();
 
   const payload = {
-    ...body,
-    message: text,
-    prompt: text,
-    text,
-    query: text,
-    chatId: body.chatId ?? body.chat_id ?? "",
-    chat_id: body.chat_id ?? body.chatId ?? "",
-    profile_name: body.profile_name ?? body.profile ?? "",
-    profile: body.profile ?? body.profile_name ?? "",
-    mode: body.mode ?? "chat",
-    model: body.model ?? "qwen3:8b",
+    model_name: body.model_name ?? body.model ?? "qwen3:8b",
+    profile_name: body.profile_name ?? body.profile ?? "default",
+    user_input: userInput,
+    history: Array.isArray(body.history) ? body.history : [],
+    use_memory: body.use_memory ?? true,
+    use_library: body.use_library ?? true,
   };
 
   const response = await request("/api/chat/send", {
