@@ -1,7 +1,6 @@
-# В backend/app/main.py добавь:
+# Добавь в backend/app/main.py
 
-from app.api.routes.jarvis_run_history import router as jarvis_run_history_router
+from app.api.routes.agent_runtime import router as agent_runtime_router
 
-# И в секцию include_router(...):
-
-app.include_router(jarvis_run_history_router)
+# И рядом с другими include_router(...)
+app.include_router(agent_runtime_router)

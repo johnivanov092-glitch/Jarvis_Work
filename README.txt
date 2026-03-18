@@ -1,21 +1,37 @@
-PHASE 17 — REAL DIFF + STRUCTURED HISTORY PACK
+PHASE 18 — ISOLATED AGENT RUNTIME PACK
 
-Что внутри:
-- frontend/src/components/DiffViewer.jsx
-- frontend/src/components/AutoCodingPanel.jsx
-- frontend/src/components/CodeWorkspace.jsx
-- frontend/src/api/ide.js
-- backend/app/api/routes/jarvis_run_history.py
-- backend/app/main.py.patch.txt
+Это безопасное расширение.
+Оно НЕ трогает текущий визуал агента и НЕ лезет в JarvisChatShell.
+Оно добавляет отдельный backend runtime endpoint и отдельный frontend api helper.
+
+Структура для копирования:
+
+backend/
+  app/
+    services/
+      agent_task_planner.py
+      agent_runtime_service.py
+    api/
+      routes/
+        agent_runtime.py
+    main.py   <- подключить router из backend/app/main.py.patch.txt
+
+frontend/
+  src/
+    api/
+      agentRuntime.js
 
 Что дает:
-- нормальный diff preview
-- apply только после preview
-- rollback по run_id
-- structured run history
-- trace/events для UI
+- отдельный endpoint /api/agent-runtime/run
+- построение простого плана
+- список runtime events
+- отдельный answer
+- изоляцию от текущего chat UI
 
-Важно:
-- визуал агента не трогает
-- Tauri не трогает
-- это safe pack для встраивания в текущий shell
+Как проверить:
+POST http://127.0.0.1:8000/api/agent-runtime/run
+
+Body:
+{
+  "user_input": "проанализируй код и предложи план"
+}
