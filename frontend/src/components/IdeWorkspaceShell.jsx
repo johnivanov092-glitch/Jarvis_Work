@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { api } from "../api/ide";
+import * as api from "../api/ide";
 import FileExplorerPanel from "./FileExplorerPanel";
 
 function pushLog(setLogs, line) {
