@@ -1,16 +1,5 @@
 const API_BASE = import.meta.env.VITE_API_BASE_URL || "http://127.0.0.1:8000";
 
-function normalizeArray(payload) {
-  if (Array.isArray(payload)) return payload;
-  if (Array.isArray(payload?.items)) return payload.items;
-  if (Array.isArray(payload?.data)) return payload.data;
-  if (Array.isArray(payload?.results)) return payload.results;
-  if (Array.isArray(payload?.chats)) return payload.chats;
-  if (Array.isArray(payload?.messages)) return payload.messages;
-  if (Array.isArray(payload?.files)) return payload.files;
-  return [];
-}
-
 function normalizeError(payload, status) {
   if (typeof payload === "string") return payload;
   if (Array.isArray(payload)) {
@@ -60,34 +49,88 @@ async function safeRequest(path, options = {}, fallback = null) {
   }
 }
 
+function normalizeArray(payload) {
+  if (Array.isArray(payload)) return payload;
+  if (Array.isArray(payload?.items)) return payload.items;
+  if (Array.isArray(payload?.data)) return payload.data;
+  if (Array.isArray(payload?.results)) return payload.results;
+  if (Array.isArray(payload?.chats)) return payload.chats;
+  if (Array.isArray(payload?.messages)) return payload.messages;
+  if (Array.isArray(payload?.files)) return payload.files;
+  return [];
+}
+
+function normalizeChat(item = {}) {
+  return {
+    id: item.id ?? item.chat_id ?? item.uuid ?? "",
+    title: item.title ?? item.name ?? "Новый чат",
+    pinned: Boolean(item.pinned),
+    memory_saved: Boolean(item.memory_saved ?? item.saved_to_memory ?? item.saved),
+    created_at: item.created_at ?? item.createdAt ?? "",
+    updated_at: item.updated_at ?? item.updatedAt ?? "",
+    ...item,
+  };
+}
+
+function normalizeMessage(item = {}) {
+  const content =
+    item.content ??
+    item.answer ??
+    item.response ??
+    item.message ??
+    item.text ??
+    "";
+
+  return {
+    id: item.id ?? item.message_id ?? item.uuid ?? `${item.role || "msg"}-${Date.now()}`,
+    role: item.role ?? item.sender ?? "assistant",
+    content: typeof content === "string" ? content : String(content ?? ""),
+    created_at: item.created_at ?? item.createdAt ?? "",
+    ...item,
+    content: typeof content === "string" ? content : String(content ?? ""),
+  };
+}
+
+function unwrapItem(payload) {
+  if (!payload || typeof payload !== "object") return payload;
+  if (payload.item && typeof payload.item === "object") return payload.item;
+  if (payload.chat && typeof payload.chat === "object") return payload.chat;
+  if (payload.message && typeof payload.message === "object") return payload.message;
+  if (payload.data && typeof payload.data === "object" && !Array.isArray(payload.data)) return payload.data;
+  return payload;
+}
+
 export async function listChats() {
   const payload = await safeRequest("/api/jarvis/chats", {}, []);
-  return normalizeArray(payload);
+  return normalizeArray(payload).map(normalizeChat);
 }
 
 export async function createChat(body = {}) {
-  return request("/api/jarvis/chats", { method: "POST", body });
+  const payload = await request("/api/jarvis/chats", { method: "POST", body });
+  return normalizeChat(unwrapItem(payload));
 }
 
 export async function renameChat(arg1, arg2) {
   const params = typeof arg1 === "object" && arg1 !== null ? arg1 : { id: arg1, title: arg2 };
-  return request(`/api/jarvis/chats/${encodeURIComponent(params.id)}`, {
+  const payload = await request(`/api/jarvis/chats/${encodeURIComponent(params.id)}`, {
     method: "PATCH",
     body: { title: params.title },
   });
+  return normalizeChat(unwrapItem(payload));
 }
 
 export async function pinChat(arg1, arg2) {
   const params = typeof arg1 === "object" && arg1 !== null ? arg1 : { id: arg1, pinned: arg2 };
-  return request(`/api/jarvis/chats/${encodeURIComponent(params.id)}/pin`, {
+  const payload = await request(`/api/jarvis/chats/${encodeURIComponent(params.id)}/pin`, {
     method: "PATCH",
     body: { pinned: Boolean(params.pinned) },
   });
+  return normalizeChat(unwrapItem(payload));
 }
 
 export async function saveChatToMemory(arg1, arg2) {
   const params = typeof arg1 === "object" && arg1 !== null ? arg1 : { id: arg1, saved: arg2 };
-  return safeRequest(
+  const payload = await safeRequest(
     `/api/jarvis/chats/${encodeURIComponent(params.id)}/memory`,
     { method: "PATCH", body: { saved: Boolean(params.saved) } },
     () =>
@@ -96,6 +139,7 @@ export async function saveChatToMemory(arg1, arg2) {
         body: { memory_saved: Boolean(params.saved) },
       })
   );
+  return normalizeChat(unwrapItem(payload));
 }
 
 export async function deleteChat(arg) {
@@ -108,43 +152,47 @@ export async function deleteChat(arg) {
 export async function getMessages(arg) {
   const chatId = typeof arg === "object" && arg !== null ? arg.chatId : arg;
   const payload = await safeRequest(`/api/jarvis/chats/${encodeURIComponent(chatId)}/messages`, {}, []);
-  return normalizeArray(payload);
+  return normalizeArray(payload).map(normalizeMessage);
 }
 
 export async function addMessage(body = {}) {
-  return request("/api/jarvis/messages", { method: "POST", body });
+  const payload = await request("/api/jarvis/messages", {
+    method: "POST",
+    body: {
+      ...body,
+      content:
+        typeof body.content === "string"
+          ? body.content
+          : String(body.content ?? ""),
+    },
+  });
+  return normalizeMessage(unwrapItem(payload));
 }
 
 export async function sendMessage(body = {}) {
-  return request("/api/jarvis/messages", { method: "POST", body });
+  return addMessage(body);
 }
 
-// REAL FIX FOR CURRENT GIT BACKEND:
-// /api/chat/send expects:
-// model_name, profile_name, user_input, history, use_memory, use_library
 export async function execute(body = {}) {
-  const userInput =
-    String(
-      body.user_input ??
+  const userInput = String(
+    body.user_input ??
       body.message ??
       body.prompt ??
       body.text ??
       body.query ??
       ""
-    ).trim();
-
-  const payload = {
-    model_name: body.model_name ?? body.model ?? "qwen3:8b",
-    profile_name: body.profile_name ?? body.profile ?? "default",
-    user_input: userInput,
-    history: Array.isArray(body.history) ? body.history : [],
-    use_memory: body.use_memory ?? true,
-    use_library: body.use_library ?? true,
-  };
+  ).trim();
 
   const response = await request("/api/chat/send", {
     method: "POST",
-    body: payload,
+    body: {
+      model_name: body.model_name ?? body.model ?? "qwen3:8b",
+      profile_name: body.profile_name ?? body.profile ?? "default",
+      user_input: userInput,
+      history: Array.isArray(body.history) ? body.history : [],
+      use_memory: body.use_memory ?? true,
+      use_library: body.use_library ?? true,
+    },
   });
 
   const content =
@@ -156,7 +204,7 @@ export async function execute(body = {}) {
 
   return {
     ...response,
-    content,
+    content: typeof content === "string" ? content : String(content ?? ""),
   };
 }
 
