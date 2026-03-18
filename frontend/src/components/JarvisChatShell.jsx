@@ -53,6 +53,43 @@ function deriveChatTitle(text) {
   return clean.length > 28 ? `${clean.slice(0, 28)}…` : clean;
 }
 
+function extractAssistantContent(payload) {
+  if (!payload) return "";
+  if (typeof payload === "string") return payload;
+  if (typeof payload?.content === "string" && payload.content.trim()) return payload.content;
+  if (typeof payload?.answer === "string" && payload.answer.trim()) return payload.answer;
+  if (typeof payload?.message === "string" && payload.message.trim()) return payload.message;
+  if (typeof payload?.data?.content === "string" && payload.data.content.trim()) return payload.data.content;
+  if (typeof payload?.data?.answer === "string" && payload.data.answer.trim()) return payload.data.answer;
+  return "";
+}
+
+function normalizeErrorMessage(error, fallback = "Произошла ошибка") {
+  const value = error?.message ?? error?.detail ?? error;
+  if (!value) return fallback;
+  if (typeof value === "string") return value;
+  if (Array.isArray(value)) {
+    return value
+      .map((item) => normalizeErrorMessage(item, ""))
+      .filter(Boolean)
+      .join(" | ") || fallback;
+  }
+  if (typeof value === "object") {
+    if (typeof value.message === "string" && value.message.trim()) return value.message;
+    if (typeof value.msg === "string" && value.msg.trim()) return value.msg;
+    if (typeof value.detail === "string" && value.detail.trim()) return value.detail;
+    if (Array.isArray(value.loc) && typeof value.msg === "string") {
+      return `${value.loc.join(".")}: ${value.msg}`;
+    }
+    try {
+      return JSON.stringify(value, null, 2);
+    } catch {
+      return fallback;
+    }
+  }
+  return String(value);
+}
+
 async function fileToLibraryRecord(file) {
   let textPreview = "";
   const isTextLike =
@@ -164,7 +201,7 @@ export default function JarvisChatShell() {
         if (created?.id) setMessages([]);
       }
     } catch (e) {
-      setErrorText(e.message || "Ошибка инициализации");
+      setErrorText(normalizeErrorMessage(e, "Ошибка инициализации"));
     }
   }
 
@@ -188,7 +225,7 @@ export default function JarvisChatShell() {
       if (!silent) setErrorText("");
       return created;
     } catch (e) {
-      setErrorText(e.message || "Ошибка создания чата");
+      setErrorText(normalizeErrorMessage(e, "Ошибка создания чата"));
       return null;
     }
   }
@@ -203,7 +240,7 @@ export default function JarvisChatShell() {
       setRenameMode(false);
       setRenameValue("");
     } catch (e) {
-      setErrorText(e.message || "Ошибка открытия чата");
+      setErrorText(normalizeErrorMessage(e, "Ошибка открытия чата"));
     }
   }
 
@@ -216,7 +253,7 @@ export default function JarvisChatShell() {
       setRenameMode(false);
       setRenameValue("");
     } catch (e) {
-      setErrorText(e.message || "Ошибка переименования чата");
+      setErrorText(normalizeErrorMessage(e, "Ошибка переименования чата"));
     }
   }
 
@@ -270,12 +307,12 @@ export default function JarvisChatShell() {
       const persistedAssistant = await api.addMessage({
         chatId: activeChatId,
         role: "assistant",
-        content: assistantMsg?.content || "",
+        content: extractAssistantContent(assistantMsg),
       });
 
       setMessages((prev) => [...prev, persistedAssistant]);
     } catch (e) {
-      setErrorText(e.message || "Ошибка отправки сообщения");
+      setErrorText(normalizeErrorMessage(e, "Ошибка отправки сообщения"));
     } finally {
       setIsAgentWorking(false);
     }
@@ -295,7 +332,7 @@ export default function JarvisChatShell() {
         }
       }
     } catch (e) {
-      setErrorText(e.message || "Ошибка удаления чата");
+      setErrorText(normalizeErrorMessage(e, "Ошибка удаления чата"));
     }
   }
 
@@ -304,7 +341,7 @@ export default function JarvisChatShell() {
       await api.pinChat({ id, pinned: !pinned });
       await loadChats(activeChatId);
     } catch (e) {
-      setErrorText(e.message || "Ошибка закрепления");
+      setErrorText(normalizeErrorMessage(e, "Ошибка закрепления"));
     }
   }
 
@@ -313,7 +350,7 @@ export default function JarvisChatShell() {
       await api.saveChatToMemory({ id, saved: !saved });
       await loadChats(activeChatId);
     } catch (e) {
-      setErrorText(e.message || "Ошибка памяти");
+      setErrorText(normalizeErrorMessage(e, "Ошибка памяти"));
     }
   }
 

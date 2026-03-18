@@ -1,5 +1,27 @@
 const API_BASE = import.meta.env.VITE_API_BASE_URL || "http://127.0.0.1:8000";
 
+function normalizeArray(payload) {
+  if (Array.isArray(payload)) return payload;
+  if (Array.isArray(payload?.items)) return payload.items;
+  if (Array.isArray(payload?.data)) return payload.data;
+  if (Array.isArray(payload?.results)) return payload.results;
+  if (Array.isArray(payload?.chats)) return payload.chats;
+  if (Array.isArray(payload?.messages)) return payload.messages;
+  if (Array.isArray(payload?.files)) return payload.files;
+  return [];
+}
+
+function normalizeError(payload, status) {
+  if (typeof payload === "string") return payload;
+  if (Array.isArray(payload)) {
+    return payload.map((item) => item?.msg || JSON.stringify(item)).join("; ");
+  }
+  if (Array.isArray(payload?.detail)) {
+    return payload.detail.map((item) => item?.msg || JSON.stringify(item)).join("; ");
+  }
+  return payload?.detail || payload?.message || `Request failed: ${status}`;
+}
+
 async function parseResponse(res) {
   const contentType = res.headers.get("content-type") || "";
   if (contentType.includes("application/json")) {
@@ -21,11 +43,7 @@ async function request(path, options = {}) {
   const payload = await parseResponse(res);
 
   if (!res.ok) {
-    const detail =
-      typeof payload === "string"
-        ? payload
-        : payload?.detail || payload?.message || `Request failed: ${res.status}`;
-    throw new Error(detail);
+    throw new Error(normalizeError(payload, res.status));
   }
 
   return payload;
@@ -42,23 +60,9 @@ async function safeRequest(path, options = {}, fallback = null) {
   }
 }
 
-function normalizeArrayPayload(payload) {
-  if (Array.isArray(payload)) return payload;
-  if (Array.isArray(payload?.items)) return payload.items;
-  if (Array.isArray(payload?.data)) return payload.data;
-  if (Array.isArray(payload?.results)) return payload.results;
-  if (Array.isArray(payload?.chats)) return payload.chats;
-  if (Array.isArray(payload?.messages)) return payload.messages;
-  if (Array.isArray(payload?.files)) return payload.files;
-  return [];
-}
-
-// ------------------------------
-// Chat / shell API
-// ------------------------------
 export async function listChats() {
   const payload = await safeRequest("/api/jarvis/chats", {}, []);
-  return normalizeArrayPayload(payload);
+  return normalizeArray(payload);
 }
 
 export async function createChat(body = {}) {
@@ -66,10 +70,7 @@ export async function createChat(body = {}) {
 }
 
 export async function renameChat(arg1, arg2) {
-  const params =
-    typeof arg1 === "object" && arg1 !== null
-      ? arg1
-      : { id: arg1, title: arg2 };
+  const params = typeof arg1 === "object" && arg1 !== null ? arg1 : { id: arg1, title: arg2 };
   return request(`/api/jarvis/chats/${encodeURIComponent(params.id)}`, {
     method: "PATCH",
     body: { title: params.title },
@@ -77,10 +78,7 @@ export async function renameChat(arg1, arg2) {
 }
 
 export async function pinChat(arg1, arg2) {
-  const params =
-    typeof arg1 === "object" && arg1 !== null
-      ? arg1
-      : { id: arg1, pinned: arg2 };
+  const params = typeof arg1 === "object" && arg1 !== null ? arg1 : { id: arg1, pinned: arg2 };
   return request(`/api/jarvis/chats/${encodeURIComponent(params.id)}/pin`, {
     method: "PATCH",
     body: { pinned: Boolean(params.pinned) },
@@ -88,18 +86,10 @@ export async function pinChat(arg1, arg2) {
 }
 
 export async function saveChatToMemory(arg1, arg2) {
-  const params =
-    typeof arg1 === "object" && arg1 !== null
-      ? arg1
-      : { id: arg1, saved: arg2 };
-
-  // Try a dedicated route first; fall back to generic chat patch if needed.
+  const params = typeof arg1 === "object" && arg1 !== null ? arg1 : { id: arg1, saved: arg2 };
   return safeRequest(
     `/api/jarvis/chats/${encodeURIComponent(params.id)}/memory`,
-    {
-      method: "PATCH",
-      body: { saved: Boolean(params.saved) },
-    },
+    { method: "PATCH", body: { saved: Boolean(params.saved) } },
     () =>
       request(`/api/jarvis/chats/${encodeURIComponent(params.id)}`, {
         method: "PATCH",
@@ -117,12 +107,8 @@ export async function deleteChat(arg) {
 
 export async function getMessages(arg) {
   const chatId = typeof arg === "object" && arg !== null ? arg.chatId : arg;
-  const payload = await safeRequest(
-    `/api/jarvis/chats/${encodeURIComponent(chatId)}/messages`,
-    {},
-    []
-  );
-  return normalizeArrayPayload(payload);
+  const payload = await safeRequest(`/api/jarvis/chats/${encodeURIComponent(chatId)}/messages`, {}, []);
+  return normalizeArray(payload);
 }
 
 export async function addMessage(body = {}) {
@@ -134,7 +120,43 @@ export async function sendMessage(body = {}) {
 }
 
 export async function execute(body = {}) {
-  return request("/api/chat/send", { method: "POST", body });
+  const text =
+    body.message ??
+    body.prompt ??
+    body.text ??
+    body.query ??
+    "";
+
+  const payload = {
+    ...body,
+    message: text,
+    prompt: text,
+    text,
+    query: text,
+    chatId: body.chatId ?? body.chat_id ?? "",
+    chat_id: body.chat_id ?? body.chatId ?? "",
+    profile_name: body.profile_name ?? body.profile ?? "",
+    profile: body.profile ?? body.profile_name ?? "",
+    mode: body.mode ?? "chat",
+    model: body.model ?? "qwen3:8b",
+  };
+
+  const response = await request("/api/chat/send", {
+    method: "POST",
+    body: payload,
+  });
+
+  const content =
+    response?.content ??
+    response?.answer ??
+    response?.response ??
+    response?.message ??
+    "";
+
+  return {
+    ...response,
+    content,
+  };
 }
 
 export async function listOllamaModels() {
@@ -154,31 +176,20 @@ export async function updateSettings(body = {}) {
 }
 
 export async function searchJarvis(query = "") {
-  const payload = await safeRequest(
-    `/api/jarvis/search?q=${encodeURIComponent(query)}`,
-    {},
-    []
-  );
-  return normalizeArrayPayload(payload);
+  const payload = await safeRequest(`/api/jarvis/search?q=${encodeURIComponent(query)}`, {}, []);
+  return normalizeArray(payload);
 }
 
 export async function listProjects() {
   const payload = await safeRequest("/api/jarvis/projects", {}, []);
-  return normalizeArrayPayload(payload);
+  return normalizeArray(payload);
 }
 
-// ------------------------------
-// IDE / project brain API
-// ------------------------------
 export async function getProjectSnapshot() {
   const payload = await request("/api/project-brain/snapshot");
   return {
     ...payload,
-    files: normalizeArrayPayload(payload?.files ? payload : { files: [] }).length
-      ? payload.files
-      : Array.isArray(payload?.files)
-      ? payload.files
-      : [],
+    files: Array.isArray(payload?.files) ? payload.files : [],
   };
 }
 
@@ -194,13 +205,12 @@ export async function listPatchHistory({ path = "", limit = 20 } = {}) {
   const query = new URLSearchParams();
   if (path) query.set("path", path);
   if (limit) query.set("limit", String(limit));
-
   const payload = await safeRequest(
     `/api/jarvis/patch/history/list${query.toString() ? `?${query.toString()}` : ""}`,
     {},
     { items: [] }
   );
-  return { ...payload, items: normalizeArrayPayload(payload) };
+  return { ...payload, items: normalizeArray(payload) };
 }
 
 export async function previewPatch(body = {}) {
@@ -221,7 +231,7 @@ export async function verifyPatch(body = {}) {
 
 export async function listRunHistory() {
   const payload = await safeRequest("/api/jarvis/run-history/list", {}, { items: [] });
-  return { ...payload, items: normalizeArrayPayload(payload) };
+  return { ...payload, items: normalizeArray(payload) };
 }
 
 export async function autocodeSuggest(body = {}) {
@@ -232,9 +242,6 @@ export async function autocodeLoop(body = {}) {
   return request("/api/jarvis/autocode/loop", { method: "POST", body });
 }
 
-// ------------------------------
-// Backward-compatible object export
-// ------------------------------
 export const api = {
   listChats,
   createChat,
