@@ -67,7 +67,8 @@ async function fileToLibraryRecord(file) {
   return { id: makeId("lib"), name: file.name, size: file.size, type: file.type || "unknown", uploaded_at: new Date().toISOString(), preview, use_in_context: true, source: "upload" };
 }
 
-function getCtxFiles(chatId, lib) { if (!chatId) return []; const ids = (loadChatContextMap()[chatId]) || []; return lib.filter(i => ids.includes(i.id)); }
+/** All library files with use_in_context AND preview go to LLM context */
+function getActiveLibFiles(lib) { return lib.filter(i => i.use_in_context && i.preview); }
 function buildHistory(msgs) { if (!msgs?.length) return []; const p = msgs.filter(m => m.role === "user" || m.role === "assistant").map(m => ({ role: m.role, content: m.content || "" })); return p.length > MAX_HISTORY_PAIRS * 2 ? p.slice(-MAX_HISTORY_PAIRS * 2) : p; }
 
 
@@ -137,8 +138,8 @@ export default function JarvisChatShell() {
       const userMsg = await api.addMessage({ chatId, role: "user", content: text });
       setMessages(prev => [...prev, userMsg]); setInput(""); await autoRename(text);
       const history = buildHistory(messages);
-      const cf = getCtxFiles(chatId, libraryFiles).filter(f => f.use_in_context);
-      const cp = cf.length ? "\n\nКонтекст из библиотеки:\n" + cf.map(f => `- ${f.name}${f.preview ? `: ${f.preview.slice(0, 1200)}` : ""}`).join("\n") : "";
+      const cf = getActiveLibFiles(libraryFiles);
+      const cp = cf.length ? "\n\nФайлы пользователя (используй в ответе):\n" + cf.map(f => `=== ${f.name} ===\n${f.preview.slice(0, 1500)}`).join("\n\n") : "";
 
       let fullText = "";
       const ctrl = executeStream(
@@ -178,6 +179,20 @@ export default function JarvisChatShell() {
   function removeLib(id) { const n = libraryFiles.filter(i => i.id !== id); setLibraryFiles(n); saveLibraryFiles(n); const m = loadChatContextMap(); saveChatContextMap(Object.fromEntries(Object.entries(m).map(([k,v]) => [k,(v||[]).filter(x=>x!==id)]))); if (selLibId === id) setSelLibId(n[0]?.id || ""); }
   function toggleCtx(id, on) { const n = libraryFiles.map(i => i.id === id ? {...i, use_in_context: on} : i); setLibraryFiles(n); saveLibraryFiles(n); if (!chatId) return; const m = loadChatContextMap(); const s = new Set(m[chatId]||[]); on ? s.add(id) : s.delete(id); m[chatId] = Array.from(s); saveChatContextMap(m); }
   function toggleSkill(id) { setSkills(p => p.includes(id) ? p.filter(s => s !== id) : [...p, id]); }
+  function handleStop() {
+    if (streamRef.current) { streamRef.current.abort(); streamRef.current = null; }
+    if (streamText) {
+      setMessages(prev => [...prev, { id: `a-${Date.now()}`, role: "assistant", content: streamText + "\n\n*[остановлено]*" }]);
+      api.addMessage({ chatId, role: "assistant", content: streamText + "\n\n*[остановлено]*" }).catch(() => {});
+    }
+    setStreamText(""); setStreaming(false); setWorking(false); setPhase("");
+  }
+
+  function selectAllLib(on) {
+    const next = libraryFiles.map(i => ({ ...i, use_in_context: on }));
+    setLibraryFiles(next); saveLibraryFiles(next);
+  }
+
   function handleKeyDown(e) { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); handleSend(); } }
 
   const fChats = useMemo(() => { const q = sideSearch.trim().toLowerCase(); return q ? chats.filter(c => (c.title||"").toLowerCase().includes(q)) : chats; }, [sideSearch, chats]);
@@ -186,7 +201,7 @@ export default function JarvisChatShell() {
   const memChats = useMemo(() => chats.filter(c => c.memory_saved), [chats]);
   const fLib = useMemo(() => { const q = libSearch.trim().toLowerCase(); return q ? libraryFiles.filter(i => `${i.name} ${i.preview||""}`.toLowerCase().includes(q)) : libraryFiles; }, [libSearch, libraryFiles]);
   const selLib = useMemo(() => libraryFiles.find(i => i.id === selLibId) || libraryFiles[0] || null, [libraryFiles, selLibId]);
-  const ctxF = useMemo(() => chatId ? getCtxFiles(chatId, libraryFiles).filter(f => f.use_in_context) : [], [chatId, libraryFiles]);
+  const ctxF = useMemo(() => getActiveLibFiles(libraryFiles), [libraryFiles]);
 
   if (mainTab === "code") return <IdeWorkspaceShell messages={messages} libraryFiles={libraryFiles} setLibraryFiles={setLibraryFiles} onBackToChat={() => setMainTab("chat")} />;
 
@@ -255,7 +270,12 @@ export default function JarvisChatShell() {
           ) : sideTab === "library" ? (
             <div className="library-table-view">
               <div className={`upload-dropzone ${drag?"active":""}`} onDragOver={onDragOver} onDragLeave={onDragLeave} onDrop={onDrop} onClick={()=>fileRef.current?.click()}>Перетащи файлы (PDF, код, текст)</div>
-              <div className="library-search-row"><span className="library-search-icon">⌕</span><input value={libSearch} onChange={e=>setLibSearch(e.target.value)} placeholder="Поиск" className="library-search-input"/></div>
+              <div style={{display:"flex",gap:8,alignItems:"center",flexWrap:"wrap"}}>
+                <div className="library-search-row" style={{flex:1}}><span className="library-search-icon">⌕</span><input value={libSearch} onChange={e=>setLibSearch(e.target.value)} placeholder="Поиск" className="library-search-input"/></div>
+                <button className="soft-btn" style={{fontSize:11,padding:"4px 10px",border:"1px solid var(--border)"}} onClick={()=>selectAllLib(true)}>✓ Все в контекст</button>
+                <button className="soft-btn" style={{fontSize:11,padding:"4px 10px",border:"1px solid var(--border)"}} onClick={()=>selectAllLib(false)}>✕ Убрать все</button>
+                <span style={{fontSize:10,color:"var(--text-muted)"}}>{ctxF.length} из {libraryFiles.length} в контексте</span>
+              </div>
               <input ref={fileRef} type="file" multiple hidden onChange={e=>handleFiles(e.target.files)}/>
               <div className="library-table">
                 <div className="library-table-row header"><div>Имя</div><div>Тип</div><div>Размер</div><div>Контекст</div><div></div></div>
@@ -267,7 +287,7 @@ export default function JarvisChatShell() {
             <div style={{padding:16,overflow:"auto",flex:1}}>{memChats.length ? memChats.map(c=><button key={c.id} className="content-card content-card-button" style={{marginBottom:8,display:"block"}} onClick={()=>openChat(c.id)}><div className="content-card-title">{c.title}</div></button>) : <div className="sidebar-empty">Нет</div>}</div>
           ) : (
             <>
-              {ctxF.length > 0 && <div className="context-bar"><div className="context-bar-title">В контексте</div><div className="context-tags">{ctxF.map(f=><span key={f.id} className="context-tag">{f.name}</span>)}</div></div>}
+              {ctxF.length > 0 && <div className="context-bar"><div className="context-bar-title">📎 {ctxF.length} файлов в контексте</div><div className="context-tags">{ctxF.map(f=><span key={f.id} className="context-tag">{f.name}</span>)}</div></div>}
               {messages.length === 0 && !streaming && <div style={{flex:1,display:"flex",alignItems:"center",justifyContent:"center"}}><div style={{textAlign:"center",color:"var(--text-muted)"}}><div style={{fontSize:28,marginBottom:8,opacity:0.2}}>✺</div><div style={{fontSize:14}}>Чем могу помочь?</div></div></div>}
 
               <div className="message-stream compact-stream" ref={msgRef}>
@@ -286,7 +306,7 @@ export default function JarvisChatShell() {
                 <div className={`chat-input-shell ${drag?"drag-active":""}`}>
                   <button className="input-plus-btn" onClick={()=>fileRef.current?.click()}>+</button>
                   <textarea ref={taRef} value={input} onChange={e=>setInput(e.target.value)} onKeyDown={handleKeyDown} placeholder="Напиши сообщение..." className="chat-textarea"/>
-                  <button className="send-btn" onClick={handleSend} disabled={working}>{working?"⏳":"➤"}</button>
+                  <button className="send-btn" onClick={working ? handleStop : handleSend} style={working ? {background:"rgba(255,70,70,0.15)",borderColor:"rgba(255,70,70,0.3)",color:"#ff9090"} : undefined}>{working?"■":"➤"}</button>
                   <input ref={fileRef} type="file" multiple hidden onChange={e=>handleFiles(e.target.files)}/>
                 </div>
                 <div className="composer-selectors">
