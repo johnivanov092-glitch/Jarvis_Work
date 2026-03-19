@@ -49,6 +49,10 @@ export default function ArtifactPanel({ messages, streamingCode, onClose }) {
   const [analysis, setAnalysis] = useState(null);
   const [copied, setCopied] = useState(false);
   const [tab, setTab] = useState("code"); // "code" | "output" | "analysis"
+  const [saving, setSaving] = useState(false);
+  const [savePath, setSavePath] = useState("");
+  const [saveResult, setSaveResult] = useState(null);
+  const [showSaveDialog, setShowSaveDialog] = useState(false);
 
   const blocks = useMemo(() => {
     const fromMessages = extractCodeBlocks(messages);
@@ -131,6 +135,41 @@ export default function ArtifactPanel({ messages, streamingCode, onClose }) {
     }
   }
 
+  function openSaveDialog() {
+    if (!current) return;
+    setSavePath(current.name || "file.txt");
+    setSaveResult(null);
+    setShowSaveDialog(true);
+  }
+
+  async function handleSaveToFile() {
+    if (!current || !savePath.trim()) return;
+    setSaving(true);
+    setSaveResult(null);
+    try {
+      // Preview diff first
+      const diffResp = await fetch(`${API}/api/file-ops/diff`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ path: savePath.trim(), new_content: current.code }),
+      });
+      const diffData = await diffResp.json();
+
+      // Write file
+      const resp = await fetch(`${API}/api/file-ops/write`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ path: savePath.trim(), content: current.code, create_dirs: true }),
+      });
+      const data = await resp.json();
+      setSaveResult({ ...data, diff: diffData.diff, stats: diffData.stats });
+    } catch (e) {
+      setSaveResult({ ok: false, error: e.message });
+    } finally {
+      setSaving(false);
+    }
+  }
+
   if (!blocks.length) return null;
 
   return (
@@ -160,6 +199,7 @@ export default function ArtifactPanel({ messages, streamingCode, onClose }) {
             </button>
           )}
           <button onClick={handleAnalyze} style={btnStyle()}>📊</button>
+          <button onClick={openSaveDialog} style={btnStyle("#2d4a5a", "#4ac4de")} title="Сохранить в файл">💾</button>
           <button onClick={handleCopy} style={btnStyle()}>
             {copied ? "✓" : "⧉"}
           </button>
@@ -196,14 +236,14 @@ export default function ArtifactPanel({ messages, streamingCode, onClose }) {
         display: "flex", gap: 2, padding: "4px 8px",
         borderBottom: "1px solid var(--border)",
       }}>
-        {["code", "output", "analysis"].map(t => (
+        {["code", "output", "analysis", "save"].map(t => (
           <button key={t} onClick={() => setTab(t)} style={{
             padding: "3px 10px", borderRadius: 6, border: "none",
             fontSize: 10, cursor: "pointer", textTransform: "capitalize",
             background: tab === t ? "var(--bg-surface-active)" : "transparent",
             color: tab === t ? "var(--text-primary)" : "var(--text-muted)",
           }}>
-            {t === "code" ? "Код" : t === "output" ? "Вывод" : "Анализ"}
+            {t === "code" ? "Код" : t === "output" ? "Вывод" : t === "analysis" ? "Анализ" : "💾 Файл"}
           </button>
         ))}
       </div>
@@ -332,6 +372,56 @@ export default function ArtifactPanel({ messages, streamingCode, onClose }) {
           )}
         </div>
       )}
+
+      {/* Save tab */}
+      {tab === "save" && (
+        <div style={{ flex: 1, overflow: "auto", padding: 12 }}>
+          <div style={{ marginBottom: 12 }}>
+            <div style={{ fontSize: 11, color: "var(--text-muted)", marginBottom: 6 }}>Путь файла (в workspace):</div>
+            <div style={{ display: "flex", gap: 6 }}>
+              <input
+                value={savePath}
+                onChange={e => setSavePath(e.target.value)}
+                onKeyDown={e => e.key === "Enter" && handleSaveToFile()}
+                placeholder="например: scripts/sort.py"
+                style={{ flex: 1, padding: "6px 10px", borderRadius: 8, fontSize: 12, border: "1px solid var(--border)", background: "var(--bg-input)", color: "var(--text-primary)", outline: "none" }}
+              />
+              <button onClick={handleSaveToFile} disabled={saving || !savePath.trim()} style={{ ...saveBtnStyle, opacity: saving ? 0.5 : 1 }}>
+                {saving ? "⏳" : "💾"} Сохранить
+              </button>
+            </div>
+          </div>
+
+          {saveResult && (
+            <div style={{ marginTop: 12 }}>
+              {saveResult.ok ? (
+                <div>
+                  <div style={{ color: "#4ade80", fontSize: 12, marginBottom: 8 }}>
+                    ✓ Файл {saveResult.action === "created" ? "создан" : "обновлён"}: {saveResult.path} ({saveResult.size} байт)
+                  </div>
+                  {saveResult.diff && (
+                    <div>
+                      <div style={{ fontSize: 10, color: "var(--text-muted)", marginBottom: 4 }}>
+                        DIFF: +{saveResult.stats?.added || 0} / -{saveResult.stats?.removed || 0}
+                      </div>
+                      <pre style={{ margin: 0, fontFamily: "var(--font-mono)", fontSize: 10, lineHeight: 1.45, whiteSpace: "pre-wrap", wordBreak: "break-word", color: "var(--text-secondary)", maxHeight: 200, overflow: "auto", padding: 8, borderRadius: 6, background: "rgba(0,0,0,0.2)" }}>
+                        {saveResult.diff}
+                      </pre>
+                    </div>
+                  )}
+                </div>
+              ) : (
+                <div style={{ color: "#ff6b6b", fontSize: 12 }}>✕ {saveResult.error}</div>
+              )}
+            </div>
+          )}
+
+          <div style={{ marginTop: 16, fontSize: 11, color: "var(--text-muted)", lineHeight: 1.5 }}>
+            Файлы сохраняются в <code style={{ background: "rgba(255,255,255,0.06)", padding: "1px 4px", borderRadius: 3 }}>data/workspace/</code>
+            <br/>Можно указать подпапки: <code style={{ background: "rgba(255,255,255,0.06)", padding: "1px 4px", borderRadius: 3 }}>src/utils/helper.py</code>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -352,4 +442,11 @@ const outputPre = {
 const statRow = {
   display: "flex", justifyContent: "space-between", padding: "4px 0",
   borderBottom: "1px solid var(--border-light)", color: "var(--text-secondary)",
+};
+
+const saveBtnStyle = {
+  padding: "6px 14px", borderRadius: 8, fontSize: 11,
+  border: "1px solid rgba(74,196,222,0.3)", background: "rgba(74,196,222,0.12)",
+  color: "#4ac4de", cursor: "pointer", whiteSpace: "nowrap",
+  display: "flex", alignItems: "center", gap: 4,
 };
