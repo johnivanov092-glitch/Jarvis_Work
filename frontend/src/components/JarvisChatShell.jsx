@@ -39,6 +39,7 @@ const SKILLS = [
   { id: "reflection", label: "🪞 Рефлексия", desc: "Двойная проверка ответов" },
 ];
 
+// Tauri window controls
 function loadJson(k, f) { try { return JSON.parse(localStorage.getItem(k) || JSON.stringify(f)); } catch { return f; } }
 function saveJson(k, v) { localStorage.setItem(k, JSON.stringify(v)); }
 function loadLibraryFiles() { return loadJson(LIBRARY_KEY, []); }
@@ -59,14 +60,24 @@ function normalizeErrorMessage(e, fb = "Ошибка") {
 
 async function fileToLibraryRecord(file) {
   let preview = "";
-  const isText = file.type.startsWith("text/") || file.name.match(/\.(txt|md|json|js|jsx|ts|tsx|py|css|html|yml|yaml|xml|csv|log|ini|toml)$/i);
+  const name = file.name || "";
+  const ext = name.split(".").pop().toLowerCase();
+  const API_URL = import.meta.env.VITE_API_BASE_URL || "http://127.0.0.1:8000";
+
+  // Текстовые файлы — читаем на клиенте
+  const textExts = ["txt","md","json","js","jsx","ts","tsx","py","css","html","htm","yml","yaml","xml","csv","log","ini","toml","bas","vbs","vba","cls","frm","rsc","bat","cmd","ps1","sh","sql","rb","php","java","c","cpp","h","hpp","cs","go","rs","swift","kt","r","m","lua","pl","tcl","asm","cfg","conf","env"];
+  const isText = file.type.startsWith("text/") || textExts.includes(ext);
   if (isText) try { preview = (await file.text()).slice(0, 12000); } catch {}
-  if (file.name.match(/\.pdf$/i)) try {
+
+  // Бинарные файлы — отправляем на бекенд
+  const binaryExts = ["pdf","docx","doc","xlsx","xls","xlsm","zip"];
+  if (binaryExts.includes(ext)) try {
     const fd = new FormData(); fd.append("file", file);
-    const r = await fetch(`${import.meta.env.VITE_API_BASE_URL || "http://127.0.0.1:8000"}/api/files/extract-text`, { method: "POST", body: fd });
+    const r = await fetch(`${API_URL}/api/files/extract-text`, { method: "POST", body: fd });
     if (r.ok) { const d = await r.json(); preview = (d.text || "").slice(0, 12000); }
   } catch {}
-  return { id: makeId("lib"), name: file.name, size: file.size, type: file.type || "unknown", uploaded_at: new Date().toISOString(), preview, use_in_context: true, source: "upload" };
+
+  return { id: makeId("lib"), name: file.name, size: file.size, type: file.type || ext || "unknown", uploaded_at: new Date().toISOString(), preview, use_in_context: true, source: "upload" };
 }
 
 /** All library files with use_in_context AND preview go to LLM context */

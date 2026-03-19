@@ -1,8 +1,8 @@
 {
   "$schema": "../node_modules/@tauri-apps/cli/schema.json",
   "package": {
-    "productName": "Jarvis Work",
-    "version": "0.1.0"
+    "productName": "Jarvis",
+    "version": "0.2.0"
   },
   "build": {
     "beforeDevCommand": "npm --prefix frontend run dev",
@@ -13,20 +13,21 @@
   "tauri": {
     "bundle": {
       "active": true,
-      "targets": [
-        "nsis"
-      ],
-      "identifier": "com.jarvis.work",
+      "targets": ["nsis"],
+      "identifier": "com.jarvis.ai",
+      "icon": ["icons/icon.ico"],
       "windows": {
         "digestAlgorithm": "sha256"
       }
     },
     "windows": [
       {
-        "title": "Jarvis Work",
+        "title": "Jarvis",
         "width": 1440,
         "height": 960,
-        "resizable": true
+        "resizable": true,
+        "decorations": true,
+        "theme": "Dark"
       }
     ]
   }
