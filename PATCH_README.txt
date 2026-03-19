@@ -1,1 +1,0 @@
-Apply patch manually as described

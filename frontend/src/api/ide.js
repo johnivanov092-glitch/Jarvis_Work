@@ -1,3 +1,12 @@
+/**
+ * ide.js — API-слой Jarvis.
+ *
+ * Изменения:
+ *   • executeStream() — SSE-стриминг через fetch + ReadableStream
+ *   • execute() — передаёт history
+ *   • Всё остальное без изменений
+ */
+
 const API_BASE = import.meta.env.VITE_API_BASE_URL || "http://127.0.0.1:8000";
 
 function normalizeError(payload, status) {
@@ -150,6 +159,111 @@ export async function execute(body = {}) {
   return { ...response, content: String(content) };
 }
 
+
+// ═══════════════════════════════════════════════════════════════
+// SSE-СТРИМИНГ
+// ═══════════════════════════════════════════════════════════════
+
+/**
+ * Стриминг ответа через SSE.
+ *
+ * @param {Object}   body         — параметры запроса
+ * @param {Function} onToken      — вызывается для каждого токена: onToken(token: string)
+ * @param {Function} onDone       — вызывается по завершении: onDone({ full_text, meta, timeline })
+ * @param {Function} onError      — вызывается при ошибке: onError(errorMessage: string)
+ * @param {Function} [onPhase]    — опционально: вызывается при смене фазы (tools_done, reflection)
+ * @returns {AbortController}     — для отмены запроса
+ */
+export function executeStream(body = {}, { onToken, onDone, onError, onPhase } = {}) {
+  const controller = new AbortController();
+
+  const payload = {
+    model_name: body.model_name ?? body.model ?? "qwen3:8b",
+    profile_name: body.profile_name ?? body.profile ?? "default",
+    user_input: String(body.user_input ?? body.message ?? "").trim(),
+    history: Array.isArray(body.history) ? body.history : [],
+    use_memory: body.use_memory ?? true,
+    use_library: body.use_library ?? true,
+  };
+
+  fetch(`${API_BASE}/api/chat/stream`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+    signal: controller.signal,
+  })
+    .then(async (response) => {
+      if (!response.ok) {
+        const text = await response.text();
+        throw new Error(text || `HTTP ${response.status}`);
+      }
+
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = "";
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        buffer += decoder.decode(value, { stream: true });
+
+        // Парсим SSE-события из буфера
+        const lines = buffer.split("\n");
+        buffer = lines.pop() || ""; // Неполная строка остаётся в буфере
+
+        for (const line of lines) {
+          const trimmed = line.trim();
+          if (!trimmed || !trimmed.startsWith("data: ")) continue;
+
+          try {
+            const event = JSON.parse(trimmed.slice(6));
+
+            if (event.error) {
+              onError?.(event.error);
+              return;
+            }
+
+            if (event.phase && onPhase) {
+              onPhase(event);
+            }
+
+            // Reflection заменяет весь текст
+            if (event.phase === "reflection_replace" && event.full_text) {
+              onPhase?.(event);
+              continue;
+            }
+
+            if (event.token) {
+              onToken?.(event.token);
+            }
+
+            if (event.done) {
+              onDone?.({
+                full_text: event.full_text || "",
+                meta: event.meta || {},
+                timeline: event.timeline || [],
+              });
+              return;
+            }
+          } catch {
+            // Пропускаем битые строки
+          }
+        }
+      }
+
+      // Если стрим закончился без done-пакета
+      onDone?.({ full_text: "", meta: {}, timeline: [] });
+    })
+    .catch((err) => {
+      if (err.name === "AbortError") return;
+      onError?.(err.message || "Stream error");
+    });
+
+  return controller;
+}
+
+
 export async function listOllamaModels() {
   const payload = await safeRequest("/api/jarvis/models", {}, []);
   if (Array.isArray(payload?.models)) return { models: payload.models };
@@ -190,7 +304,7 @@ export async function autocodeLoop(body = {}) { return request("/api/jarvis/auto
 
 export const api = {
   listChats, createChat, renameChat, pinChat, saveChatToMemory, deleteChat,
-  getMessages, addMessage, sendMessage, execute, listOllamaModels,
+  getMessages, addMessage, sendMessage, execute, executeStream, listOllamaModels,
   getSettings, updateSettings, searchJarvis, listProjects,
   getProjectSnapshot, getProjectFile, getProjectBrainStatus,
   listPatchHistory, previewPatch, applyPatch, rollbackPatch, verifyPatch,

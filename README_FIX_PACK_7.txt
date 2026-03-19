@@ -1,1 +1,0 @@
-Replace frontend/src/components/JarvisChatShell.jsx, frontend/src/api/ide.js, frontend/src/styles.css

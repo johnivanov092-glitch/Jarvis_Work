@@ -1,11 +1,15 @@
+"""
+chat.py — чат-роуты: обычный /send + SSE-стриминг /stream
+"""
+import json
 from typing import Any
 
 from fastapi import APIRouter
 from fastapi.encoders import jsonable_encoder
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, StreamingResponse
 from pydantic import BaseModel, Field
 
-from app.services.agents_service import run_agent
+from app.services.agents_service import run_agent, run_agent_stream
 
 router = APIRouter(prefix="/api/chat", tags=["chat"])
 
@@ -19,6 +23,7 @@ class ChatRequest(BaseModel):
     use_library: bool = True
 
 
+# ── обычный запрос (без стриминга) ──────────────────────────────
 @router.post("/send")
 def chat_send(payload: ChatRequest):
     try:
@@ -56,3 +61,42 @@ def chat_send(payload: ChatRequest):
             content=jsonable_encoder(fallback),
             media_type="application/json; charset=utf-8",
         )
+
+
+# ── SSE-стриминг ────────────────────────────────────────────────
+@router.post("/stream")
+def chat_stream(payload: ChatRequest):
+    """
+    Server-Sent Events: каждый токен отправляется как `data: {...}\n\n`.
+    Финальный пакет содержит `"done": true` и полные метаданные.
+    """
+
+    def event_generator():
+        try:
+            for event in run_agent_stream(
+                model_name=payload.model_name,
+                profile_name=payload.profile_name,
+                user_input=payload.user_input,
+                use_memory=payload.use_memory,
+                use_library=payload.use_library,
+                history=payload.history,
+            ):
+                yield f"data: {json.dumps(event, ensure_ascii=False)}\n\n"
+        except Exception as exc:
+            error_event = {
+                "done": True,
+                "error": str(exc),
+                "token": "",
+                "full_text": "",
+            }
+            yield f"data: {json.dumps(error_event, ensure_ascii=False)}\n\n"
+
+    return StreamingResponse(
+        event_generator(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no",
+        },
+    )

@@ -1,433 +1,166 @@
-import { useEffect, useMemo, useState } from "react";
-import * as api from "../api/ide";
-import FileExplorerPanel from "./FileExplorerPanel";
+/**
+ * IdeWorkspaceShell.jsx — v2
+ *
+ * Drag-and-drop файловая панель вместо проектного браузера.
+ * Синхронизируется с библиотекой (libraryFiles prop).
+ * Поддержка PDF: показывает превью извлечённого текста.
+ */
 
-function pushLog(setLogs, line) {
-  setLogs((prev) => [
-    `${new Date().toLocaleTimeString()} · ${line}`,
-    ...prev,
-  ].slice(0, 120));
+import { useMemo, useRef, useState } from "react";
+
+const LIBRARY_KEY = "jarvis_library_files_v7";
+const API_BASE = import.meta.env.VITE_API_BASE_URL || "http://127.0.0.1:8000";
+
+function makeId(p = "id") {
+  return `${p}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 }
 
-export default function IdeWorkspaceShell({ onBackToChat }) {
-  const [files, setFiles] = useState([]);
-  const [selectedPath, setSelectedPath] = useState("");
-  const [originalContent, setOriginalContent] = useState("");
-  const [content, setContent] = useState("");
-  const [diffText, setDiffText] = useState("");
-  const [diffStats, setDiffStats] = useState(null);
-  const [verifyResult, setVerifyResult] = useState(null);
-  const [historyItems, setHistoryItems] = useState([]);
-  const [logs, setLogs] = useState([]);
-  const [busy, setBusy] = useState(false);
-  const [loadingFile, setLoadingFile] = useState(false);
-  const [error, setError] = useState("");
+function loadJson(key, fb) { try { return JSON.parse(localStorage.getItem(key) || JSON.stringify(fb)); } catch { return fb; } }
+function saveJson(key, v) { localStorage.setItem(key, JSON.stringify(v)); }
 
-  useEffect(() => {
-    loadSnapshot();
-  }, []);
+async function fileToRecord(file) {
+  let textPreview = "";
+  const isText = file.type.startsWith("text/") || file.name.match(/\.(txt|md|json|js|jsx|ts|tsx|py|css|html|yml|yaml|xml|csv|log|ini|toml|rs|go|java|c|cpp|h|rb|sh|bat)$/i);
+  const isPdf = file.name.match(/\.pdf$/i);
 
-  const isDirty = useMemo(() => content !== originalContent, [content, originalContent]);
-
-  async function loadSnapshot() {
+  if (isText) {
+    try { textPreview = (await file.text()).slice(0, 12000); } catch {}
+  } else if (isPdf) {
     try {
-      setError("");
-      const payload = await api.getProjectSnapshot();
-      const nextFiles = Array.isArray(payload?.files) ? payload.files : [];
-      setFiles(nextFiles);
-      pushLog(setLogs, `Загружен snapshot: ${nextFiles.length} файлов`);
-    } catch (e) {
-      setError(e.message || "Ошибка snapshot");
-      pushLog(setLogs, `Ошибка snapshot: ${e.message}`);
-    }
+      const fd = new FormData(); fd.append("file", file);
+      const r = await fetch(`${API_BASE}/api/files/extract-text`, { method: "POST", body: fd });
+      if (r.ok) { const d = await r.json(); textPreview = (d.text || "").slice(0, 12000); }
+    } catch {}
   }
 
-  async function openFile(path) {
-    try {
-      setLoadingFile(true);
-      setError("");
-      const payload = await api.getProjectFile(path);
-      const text = payload?.content || "";
-      setSelectedPath(path);
-      setOriginalContent(text);
-      setContent(text);
-      setDiffText("");
-      setDiffStats(null);
-      setVerifyResult(null);
-      await loadHistory(path);
-      pushLog(setLogs, `Открыт файл: ${path}`);
-    } catch (e) {
-      setError(e.message || "Ошибка чтения файла");
-      pushLog(setLogs, `Ошибка файла: ${e.message}`);
-    } finally {
-      setLoadingFile(false);
-    }
+  return {
+    id: makeId("lib"),
+    name: file.name,
+    size: file.size,
+    type: file.type || "unknown",
+    uploaded_at: new Date().toISOString(),
+    preview: textPreview,
+    use_in_context: true,
+    source: "code-upload",
+  };
+}
+
+
+export default function IdeWorkspaceShell({ libraryFiles: propFiles, setLibraryFiles: propSetFiles, onBackToChat }) {
+  const fileInputRef = useRef(null);
+  const [dragActive, setDragActive] = useState(false);
+  const [selectedId, setSelectedId] = useState("");
+
+  // Sync with parent or local
+  const libraryFiles = propFiles || loadJson(LIBRARY_KEY, []);
+  function setLibraryFiles(next) {
+    if (propSetFiles) propSetFiles(next);
+    saveJson(LIBRARY_KEY, next);
   }
 
-  async function loadHistory(path = selectedPath) {
-    if (!path) {
-      setHistoryItems([]);
-      return;
-    }
-    try {
-      const payload = await api.listPatchHistory({ path, limit: 20 });
-      setHistoryItems(Array.isArray(payload?.items) ? payload.items : []);
-    } catch (e) {
-      pushLog(setLogs, `История недоступна: ${e.message}`);
-    }
+  const selectedFile = useMemo(() => libraryFiles.find(f => f.id === selectedId) || null, [libraryFiles, selectedId]);
+
+  async function handleFiles(fileList) {
+    const files = Array.from(fileList || []);
+    if (!files.length) return;
+    const records = [];
+    for (const f of files) records.push(await fileToRecord(f));
+    const next = [...records, ...libraryFiles];
+    setLibraryFiles(next);
+    setSelectedId(records[0]?.id || "");
   }
 
-  async function handlePreviewPatch() {
-    if (!selectedPath) return;
-    try {
-      setBusy(true);
-      setError("");
-      const payload = await api.previewPatch({
-        path: selectedPath,
-        original: originalContent,
-        updated: content,
-      });
-      setDiffText(payload?.diff_text || "");
-      setDiffStats(payload?.stats || null);
-      pushLog(setLogs, `Preview patch: ${selectedPath}`);
-    } catch (e) {
-      setError(e.message || "Ошибка preview patch");
-      pushLog(setLogs, `Ошибка preview: ${e.message}`);
-    } finally {
-      setBusy(false);
-    }
+  function removeFile(id) {
+    const next = libraryFiles.filter(f => f.id !== id);
+    setLibraryFiles(next);
+    if (selectedId === id) setSelectedId(next[0]?.id || "");
   }
 
-  async function handleApplyPatch() {
-    if (!selectedPath) return;
-    try {
-      setBusy(true);
-      setError("");
-      await api.applyPatch({ path: selectedPath, content });
-      setOriginalContent(content);
-      await loadHistory(selectedPath);
-      await handleVerifyPatch();
-      pushLog(setLogs, `Patch применён: ${selectedPath}`);
-    } catch (e) {
-      setError(e.message || "Ошибка apply patch");
-      pushLog(setLogs, `Ошибка apply: ${e.message}`);
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  async function handleRollbackPatch() {
-    if (!selectedPath) return;
-    try {
-      setBusy(true);
-      setError("");
-      await api.rollbackPatch({ path: selectedPath });
-      await openFile(selectedPath);
-      pushLog(setLogs, `Rollback выполнен: ${selectedPath}`);
-    } catch (e) {
-      setError(e.message || "Ошибка rollback");
-      pushLog(setLogs, `Ошибка rollback: ${e.message}`);
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  async function handleVerifyPatch() {
-    if (!selectedPath) return;
-    try {
-      setBusy(true);
-      setError("");
-      const payload = await api.verifyPatch({ path: selectedPath, content });
-      setVerifyResult(payload || null);
-      if (!diffText && payload?.diff_text) {
-        setDiffText(payload.diff_text);
-        setDiffStats(payload.stats || null);
-      }
-      pushLog(setLogs, `Verify выполнен: ${selectedPath}`);
-    } catch (e) {
-      setError(e.message || "Ошибка verify");
-      pushLog(setLogs, `Ошибка verify: ${e.message}`);
-    } finally {
-      setBusy(false);
-    }
-  }
+  function onDrop(e) { e.preventDefault(); e.stopPropagation(); setDragActive(false); handleFiles(e.dataTransfer.files); }
+  function onDragOver(e) { e.preventDefault(); e.stopPropagation(); setDragActive(true); }
+  function onDragLeave(e) { e.preventDefault(); e.stopPropagation(); setDragActive(false); }
 
   return (
-    <div
-      className="ide-shell"
-      style={{
-        display: "grid",
-        gridTemplateRows: "auto auto 1fr",
-        gap: 14,
-        height: "100%",
-        minHeight: 0,
-        padding: 16,
-        boxSizing: "border-box",
-      }}
-    >
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
-        <button
-          type="button"
-          onClick={onBackToChat}
-          style={{
-            borderRadius: 10,
-            border: "1px solid rgba(255,255,255,0.12)",
-            background: "rgba(255,255,255,0.04)",
-            color: "inherit",
-            padding: "10px 14px",
-            cursor: "pointer",
-          }}
-        >
-          ← Chat
-        </button>
-
-        <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
-          <button type="button" onClick={loadSnapshot} disabled={busy} style={actionBtn()}>
-            Refresh Snapshot
-          </button>
-          <button type="button" onClick={handlePreviewPatch} disabled={busy || !selectedPath} style={actionBtn()}>
-            Preview Patch
-          </button>
-          <button type="button" onClick={handleApplyPatch} disabled={busy || !selectedPath || !isDirty} style={actionBtn(true)}>
-            Apply Patch
-          </button>
-          <button type="button" onClick={handleRollbackPatch} disabled={busy || !selectedPath} style={actionBtn()}>
-            Rollback
-          </button>
-          <button type="button" onClick={handleVerifyPatch} disabled={busy || !selectedPath} style={actionBtn()}>
-            Verify
-          </button>
-        </div>
+    <div className="ide-shell">
+      {/* Toolbar */}
+      <div className="ide-toolbar">
+        <button onClick={onBackToChat} className="soft-btn" style={{border:"1px solid var(--border)"}}>← Chat</button>
+        <div style={{fontSize:14,fontWeight:600}}>Code · Файлы</div>
+        <div style={{marginLeft:"auto",fontSize:11,color:"var(--text-muted)"}}>{libraryFiles.length} файлов в библиотеке</div>
       </div>
 
-      <div
-        style={{
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "space-between",
-          gap: 16,
-          borderRadius: 12,
-          padding: "12px 14px",
-          background: "rgba(255,255,255,0.03)",
-          border: "1px solid rgba(255,255,255,0.06)",
-        }}
-      >
-        <div style={{ minWidth: 0 }}>
-          <div style={{ fontSize: 13, fontWeight: 700 }}>Code Workspace</div>
-          <div style={{ fontSize: 12, opacity: 0.72, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-            {selectedPath || "Файл не выбран"}
-          </div>
-        </div>
-        <div style={{ fontSize: 12, opacity: 0.72 }}>
-          {loadingFile ? "Открытие файла..." : busy ? "Выполнение..." : isDirty ? "Есть несохранённые изменения" : "Синхронизировано"}
-        </div>
-      </div>
-
-      <div
-        style={{
-          display: "grid",
-          gridTemplateColumns: "320px minmax(0, 1fr) 360px",
-          gap: 14,
-          minHeight: 0,
-        }}
-      >
-        <FileExplorerPanel files={files} selectedPath={selectedPath} onOpen={openFile} />
-
-        <div
-          style={{
-            minHeight: 0,
-            display: "grid",
-            gridTemplateRows: "1fr auto auto",
-            gap: 12,
-          }}
-        >
+      {/* Grid: drop zone + file list | preview */}
+      <div className="ide-grid">
+        <div style={{display:"flex",flexDirection:"column",gap:12,minHeight:0}}>
+          {/* Drop zone */}
           <div
-            style={{
-              minHeight: 0,
-              borderRadius: 14,
-              border: "1px solid rgba(255,255,255,0.08)",
-              background: "rgba(255,255,255,0.03)",
-              padding: 12,
-              display: "flex",
-              flexDirection: "column",
-              gap: 10,
-            }}
+            className={`drop-panel ${dragActive ? "active" : ""}`}
+            onDragOver={onDragOver}
+            onDragLeave={onDragLeave}
+            onDrop={onDrop}
+            onClick={() => fileInputRef.current?.click()}
+            style={{minHeight: libraryFiles.length ? 100 : 200}}
           >
-            <div style={{ fontSize: 12, opacity: 0.72 }}>Editor</div>
-            <textarea
-              value={content}
-              onChange={(e) => setContent(e.target.value)}
-              className="editor-textarea"
-              placeholder="Открой файл слева"
-              spellCheck={false}
-              style={{
-                flex: 1,
-                minHeight: 0,
-                width: "100%",
-                resize: "none",
-                borderRadius: 12,
-                border: "1px solid rgba(255,255,255,0.08)",
-                background: "rgba(0,0,0,0.18)",
-                color: "inherit",
-                padding: 14,
-                boxSizing: "border-box",
-                fontFamily: "ui-monospace, SFMono-Regular, Menlo, Consolas, monospace",
-                fontSize: 13,
-                lineHeight: 1.55,
-                outline: "none",
-              }}
-            />
+            <div className="drop-panel-icon">📂</div>
+            <div className="drop-panel-text">
+              Перетащи файлы сюда<br/>
+              <span style={{fontSize:10,opacity:0.6}}>PDF, код, текст, конфиги</span>
+            </div>
           </div>
 
-          <div
-            style={{
-              borderRadius: 14,
-              border: "1px solid rgba(255,255,255,0.08)",
-              background: "rgba(255,255,255,0.03)",
-              padding: 12,
-              display: "flex",
-              flexDirection: "column",
-              gap: 8,
-              maxHeight: 220,
-              overflow: "auto",
-            }}
-          >
-            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
-              <div style={{ fontSize: 12, opacity: 0.72 }}>Diff Preview</div>
-              {diffStats ? (
-                <div style={{ fontSize: 11, opacity: 0.72 }}>
-                  +{diffStats.added ?? 0} / -{diffStats.removed ?? 0}
+          <input
+            ref={fileInputRef}
+            type="file"
+            multiple
+            hidden
+            accept=".txt,.md,.json,.js,.jsx,.ts,.tsx,.py,.css,.html,.yml,.yaml,.xml,.csv,.log,.pdf,.toml,.ini,.rs,.go,.java,.c,.cpp,.h,.rb,.sh,.bat"
+            onChange={e => handleFiles(e.target.files)}
+          />
+
+          {/* File list */}
+          <div className="file-list-panel" style={{flex:1}}>
+            <div className="file-list-header">Файлы ({libraryFiles.length})</div>
+            <div className="file-list-body">
+              {libraryFiles.length ? libraryFiles.map(f => (
+                <div
+                  key={f.id}
+                  className="file-list-item"
+                  style={{background: selectedId === f.id ? "var(--bg-surface-active)" : undefined, cursor:"pointer"}}
+                  onClick={() => setSelectedId(f.id)}
+                >
+                  <span style={{marginRight:6,fontSize:13}}>
+                    {f.name.match(/\.pdf$/i) ? "📑" : f.name.match(/\.(js|jsx|ts|tsx|py|rs|go|java|c|cpp|h|rb)$/i) ? "📄" : "📝"}
+                  </span>
+                  <span className="file-list-name">{f.name}</span>
+                  <span className="file-list-size">{Math.round(f.size/1024)||0}K</span>
+                  <button className="file-list-remove" onClick={e => { e.stopPropagation(); removeFile(f.id); }} title="Удалить">✕</button>
                 </div>
-              ) : null}
+              )) : (
+                <div style={{padding:12,fontSize:11,color:"var(--text-muted)",textAlign:"center"}}>
+                  Загрузи файлы через drag-and-drop
+                </div>
+              )}
             </div>
-            <pre
-              style={{
-                margin: 0,
-                whiteSpace: "pre-wrap",
-                wordBreak: "break-word",
-                fontFamily: "ui-monospace, SFMono-Regular, Menlo, Consolas, monospace",
-                fontSize: 12,
-                lineHeight: 1.45,
-                opacity: diffText ? 0.96 : 0.65,
-              }}
-            >
-              {diffText || "Сначала нажми Preview Patch."}
-            </pre>
           </div>
-
-          {error ? (
-            <div
-              style={{
-                borderRadius: 12,
-                padding: "10px 12px",
-                background: "rgba(255,80,80,0.12)",
-                border: "1px solid rgba(255,80,80,0.25)",
-                color: "#ffb6b6",
-                fontSize: 12,
-              }}
-            >
-              {error}
-            </div>
-          ) : null}
         </div>
 
-        <div
-          style={{
-            minHeight: 0,
-            display: "grid",
-            gridTemplateRows: "auto auto 1fr",
-            gap: 12,
-          }}
-        >
-          <div panel style={panelStyle()}>
-            <div style={{ fontSize: 12, opacity: 0.72 }}>Verify</div>
-            {verifyResult ? (
+        {/* Preview */}
+        <div className="file-preview-panel">
+          <div className="file-preview-header">
+            {selectedFile ? (
               <>
-                <div style={{ fontSize: 12 }}>
-                  changed_vs_disk: {String(Boolean(verifyResult.changed_vs_disk))}
-                </div>
-                <div style={{ fontSize: 11, opacity: 0.72 }}>
-                  +{verifyResult?.stats?.added ?? 0} / -{verifyResult?.stats?.removed ?? 0}
-                </div>
-                <ul style={{ margin: 0, paddingLeft: 18, fontSize: 12, lineHeight: 1.45 }}>
-                  {(verifyResult.checks || []).map((item, idx) => (
-                    <li key={`${item}-${idx}`}>{item}</li>
-                  ))}
-                </ul>
+                <span>{selectedFile.name}</span>
+                <span style={{marginLeft:8,fontSize:10,opacity:0.5}}>{selectedFile.type} · {Math.round(selectedFile.size/1024)||0} KB</span>
               </>
-            ) : (
-              <div style={{ fontSize: 12, opacity: 0.65 }}>Пока пусто.</div>
+            ) : "Выбери файл слева"}
+          </div>
+          <div className="file-preview-body">
+            {selectedFile?.preview ? selectedFile.preview : (
+              selectedFile ? "Превью недоступно для этого типа файла" : "←  Нажми на файл для просмотра"
             )}
-          </div>
-
-          <div style={panelStyle()}>
-            <div style={{ fontSize: 12, opacity: 0.72 }}>Patch History</div>
-            <div style={{ display: "flex", flexDirection: "column", gap: 6, maxHeight: 180, overflow: "auto" }}>
-              {historyItems.length ? historyItems.map((item) => (
-                <div
-                  key={item.id}
-                  style={{
-                    borderRadius: 10,
-                    padding: "8px 10px",
-                    background: "rgba(255,255,255,0.04)",
-                    border: "1px solid rgba(255,255,255,0.06)",
-                  }}
-                >
-                  <div style={{ fontSize: 12 }}>{item.action || "action"}</div>
-                  <div style={{ fontSize: 11, opacity: 0.65 }}>{item.created_at || ""}</div>
-                </div>
-              )) : <div style={{ fontSize: 12, opacity: 0.65 }}>История по файлу пока пуста.</div>}
-            </div>
-          </div>
-
-          <div style={panelStyle({ minHeight: 0 })}>
-            <div style={{ fontSize: 12, opacity: 0.72 }}>Логи</div>
-            <div style={{ display: "flex", flexDirection: "column", gap: 6, overflow: "auto", minHeight: 0 }}>
-              {logs.length ? logs.map((line, idx) => (
-                <div
-                  key={`${line}-${idx}`}
-                  style={{
-                    fontFamily: "ui-monospace, SFMono-Regular, Menlo, Consolas, monospace",
-                    fontSize: 11,
-                    lineHeight: 1.45,
-                    opacity: 0.85,
-                    whiteSpace: "pre-wrap",
-                    wordBreak: "break-word",
-                  }}
-                >
-                  {line}
-                </div>
-              )) : <div style={{ fontSize: 12, opacity: 0.65 }}>Пока пусто.</div>}
-            </div>
           </div>
         </div>
       </div>
     </div>
   );
-}
-
-function actionBtn(primary = false) {
-  return {
-    borderRadius: 10,
-    border: primary
-      ? "1px solid rgba(120,180,255,0.45)"
-      : "1px solid rgba(255,255,255,0.12)",
-    background: primary ? "rgba(120,180,255,0.18)" : "rgba(255,255,255,0.04)",
-    color: "inherit",
-    padding: "10px 14px",
-    cursor: "pointer",
-  };
-}
-
-function panelStyle(extra = {}) {
-  return {
-    borderRadius: 14,
-    border: "1px solid rgba(255,255,255,0.08)",
-    background: "rgba(255,255,255,0.03)",
-    padding: 12,
-    display: "flex",
-    flexDirection: "column",
-    gap: 8,
-    ...extra,
-  };
 }

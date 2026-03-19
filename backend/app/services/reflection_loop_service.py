@@ -1,3 +1,8 @@
+"""
+reflection_loop_service.py — рефлексия: улучшение черновика через второй проход LLM.
+
+Вызывается только для маршрутов code/project/research (экономия на обычном чате).
+"""
 from __future__ import annotations
 
 from typing import Any
@@ -14,16 +19,17 @@ def run_reflection_loop(
     context: str | None = None,
 ) -> dict[str, Any]:
     """
-    Improved reflection stage:
-    - merges draft + reviewer feedback
-    - can use optional context bundle
-    - returns normalized metadata
+    Reflection stage:
+    - Объединяет черновик + замечания reviewer
+    - Использует опциональный контекст
+    - Возвращает улучшённый ответ
     """
     prompt_parts = [
         "Ты reflection agent Jarvis.",
         "Твоя задача: улучшить черновик с учётом замечаний reviewer и собрать финальный ответ.",
         "Пиши по существу, без воды.",
         "Если задача про код — укажи конкретные файлы, изменения и следующий шаг.",
+        "Форматируй ответ с помощью Markdown.",
         "",
         f"Запрос пользователя:\n{user_input}",
         "",

@@ -21,6 +21,7 @@ from app.api.routes.memory import router as memory_router
 from app.api.routes.library import router as library_router
 from app.api.routes.profiles import router as profiles_router
 from app.api.routes.agents import router as agents_router
+from app.api.routes.files import router as files_router
 
 app = FastAPI(title="Jarvis Work API")
 
@@ -52,6 +53,7 @@ app.include_router(memory_router)
 app.include_router(library_router)
 app.include_router(profiles_router)
 app.include_router(agents_router)
+app.include_router(files_router)
 
 @app.get("/health")
 def health():
