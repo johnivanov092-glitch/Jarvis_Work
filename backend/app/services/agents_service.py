@@ -32,12 +32,42 @@ _QUERY_NOISE = [
 
 
 def _clean_query(query):
+    """Очищает и УЛУЧШАЕТ запрос для поисковика."""
+    from datetime import datetime
     q = query.strip()
     for p in _QUERY_NOISE:
         q = re.sub(p, "", q, flags=re.IGNORECASE).strip()
-    if any(m in q.lower() for m in ["курс", "цена", "стоимость", "погода", "новости"]):
+
+    ql = q.lower()
+
+    # Определяем тип запроса
+    is_news = any(w in ql for w in ["новости", "новость", "события", "произошло", "случилось", "происшеств"])
+    is_price = any(w in ql for w in ["курс", "цена", "стоимость"])
+    is_weather = "погода" in ql
+
+    # Добавляем год если нет
+    if (is_news or is_price or is_weather):
         if not any(y in q for y in ["2024", "2025", "2026"]):
-            q += " 2025"
+            q += " " + str(datetime.now().year)
+
+    # Раскрываем короткие даты: "19.03" → "19 марта 2025"
+    date_match = re.search(r"(\d{1,2})\.(\d{2})(?:\.\d{2,4})?", q)
+    if date_match and is_news:
+        day = date_match.group(1)
+        month_num = int(date_match.group(2))
+        months = {1:"января",2:"февраля",3:"марта",4:"апреля",5:"мая",6:"июня",
+                  7:"июля",8:"августа",9:"сентября",10:"октября",11:"ноября",12:"декабря"}
+        month_name = months.get(month_num, "")
+        if month_name:
+            q = re.sub(r"\d{1,2}\.\d{2}(?:\.\d{2,4})?", f"{day} {month_name}", q)
+
+    # Добавляем "Казахстан" для новостей без указания страны
+    if is_news and not any(w in ql for w in ["россия", "украина", "сша", "мир", "казахстан", "кз"]):
+        # Если есть город КЗ — добавляем "Казахстан"
+        kz_cities = ["алматы", "астана", "шымкент", "караганд", "актау", "атырау", "павлодар", "семей", "тараз"]
+        if any(c in ql for c in kz_cities):
+            q += " Казахстан"
+
     return q or query
 
 
@@ -78,36 +108,70 @@ def _build_prompt(user_input, context_bundle):
 # ГЛУБОКИЙ ВЕБ-ПОИСК: поиск → заход на сайты → извлечение текста
 # ═══════════════════════════════════════════════════════════════
 
-def _fetch_page_text(url, max_chars=3000):
-    """Заходит на сайт и извлекает основной текст."""
+def _fetch_page_text(url, max_chars=4000):
+    """Заходит на сайт и извлекает основной текст. Улучшенная версия."""
     try:
         import requests
         from bs4 import BeautifulSoup
 
-        headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"}
-        resp = requests.get(url, headers=headers, timeout=8, allow_redirects=True)
+        headers = {
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+            "Accept-Language": "ru,en;q=0.9",
+        }
+        resp = requests.get(url, headers=headers, timeout=10, allow_redirects=True)
         if resp.status_code != 200:
             return ""
 
+        # Пробуем определить кодировку
+        if resp.encoding and resp.encoding.lower() != "utf-8":
+            resp.encoding = resp.apparent_encoding or "utf-8"
+
         soup = BeautifulSoup(resp.text, "html.parser")
 
-        # Удаляем навигацию, скрипты, стили
-        for tag in soup(["script", "style", "nav", "header", "footer", "aside", "form", "button", "iframe", "noscript"]):
+        # Удаляем мусор
+        for tag in soup(["script", "style", "nav", "header", "footer", "aside",
+                         "form", "button", "iframe", "noscript", "svg", "img",
+                         "menu", "advertisement", "ad", "banner"]):
             tag.decompose()
 
-        # Ищем основной контент
-        main = soup.select_one("main, article, .content, .article, .post, #content, #main")
-        if main:
-            text = main.get_text(separator="\n", strip=True)
+        # Удаляем элементы с рекламными классами
+        for el in soup.select("[class*='advert'], [class*='banner'], [class*='cookie'], [class*='popup'], [class*='modal'], [id*='advert'], [id*='banner']"):
+            el.decompose()
+
+        # Ищем основной контент (приоритет по порядку)
+        content_selectors = [
+            "article", "main", "[role='main']",
+            ".article-body", ".article-content", ".post-content", ".entry-content",
+            ".news-body", ".story-body", ".text-content",
+            ".content", "#content", "#main-content",
+        ]
+        main_el = None
+        for sel in content_selectors:
+            main_el = soup.select_one(sel)
+            if main_el and len(main_el.get_text(strip=True)) > 100:
+                break
+            main_el = None
+
+        if main_el:
+            text = main_el.get_text(separator="\n", strip=True)
         else:
-            text = soup.get_text(separator="\n", strip=True)
+            # Fallback: берём body, но убираем короткие строки (навигация)
+            body = soup.find("body")
+            if body:
+                text = body.get_text(separator="\n", strip=True)
+            else:
+                text = soup.get_text(separator="\n", strip=True)
 
-        # Убираем пустые строки
-        lines = [line.strip() for line in text.split("\n") if line.strip()]
+        # Убираем пустые и слишком короткие строки (навигация, кнопки)
+        lines = []
+        for line in text.split("\n"):
+            line = line.strip()
+            if len(line) > 20:  # Пропускаем "Главная", "Меню", "Войти" и т.д.
+                lines.append(line)
+
         text = "\n".join(lines)
-
-        return text[:max_chars]
-    except Exception:
+        return text[:max_chars] if text else ""
+    except Exception as e:
         return ""
 
 
@@ -180,20 +244,22 @@ def _do_web_search(query, timeline, tool_results):
     # Шаг 2: заходим на топ-3 сайта и вытаскиваем контент
     deep_content = []
     fetched_count = 0
-    for item in search_results[:3]:
+    skip_domains = ["youtube.com", "youtu.be", "facebook.com", "instagram.com",
+                    "tiktok.com", "twitter.com", "x.com", "vk.com", "t.me",
+                    "pinterest.com", "wikipedia.org"]  # wiki даёт слишком общую инфу
+    for item in search_results[:5]:  # Пробуем 5, берём 3
         url = item["url"]
-        # Пропускаем YouTube, соцсети
-        if any(d in url for d in ["youtube.com", "youtu.be", "facebook.com", "instagram.com", "tiktok.com"]):
+        if any(d in url for d in skip_domains):
             continue
-        page_text = _fetch_page_text(url, max_chars=2000)
-        if page_text and len(page_text) > 50:
+        page_text = _fetch_page_text(url, max_chars=3000)
+        if page_text and len(page_text) > 100:
             deep_content.append(
                 "--- " + item["title"] + " ---\n"
                 "URL: " + url + "\n"
                 + page_text
             )
             fetched_count += 1
-        if fetched_count >= 2:
+        if fetched_count >= 3:
             break
 
     # Шаг 3: формируем контекст
