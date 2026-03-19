@@ -12,6 +12,7 @@ import { api, executeStream } from "../api/ide";
 import IdeWorkspaceShell from "./IdeWorkspaceShell";
 import MarkdownRenderer from "./MarkdownRenderer";
 import ArtifactPanel from "./ArtifactPanel";
+import MemoryPanel from "./MemoryPanel";
 import "../styles/markdown.css";
 
 const LIBRARY_KEY = "jarvis_library_files_v7";
@@ -122,8 +123,9 @@ export default function JarvisChatShell() {
       setModelOpts(ml);
       const pref = ml.find(i => (i.name || i) === "qwen3:8b");
       setModel(pref ? (pref.name || pref) : ml.length ? (ml[0].name || ml[0]) : "qwen3:8b");
-      if (c?.length) { setChats(c); setChatId(c[0].id); setMessages(await api.getMessages({ chatId: c[0].id }) || []); }
-      else { const n = await newChat(true); if (n?.id) setMessages([]); }
+      if (c?.length) { setChats(c); }
+      // Всегда новый чат при запуске
+      const n = await newChat(true); if (n?.id) setMessages([]);
     } catch (e) { setError(normalizeErrorMessage(e)); }
   }
 
@@ -303,7 +305,7 @@ export default function JarvisChatShell() {
               {selLib && <div className="content-card"><div className="content-card-title">{selLib.name}</div><div className="content-card-text">{selLib.type} · {Math.round(selLib.size/1024)||0} KB</div>{selLib.preview ? <pre className="library-preview">{selLib.preview}</pre> : <div className="content-card-text" style={{marginTop:6}}>Превью недоступно</div>}</div>}
             </div>
           ) : sideTab === "memory" ? (
-            <div style={{padding:16,overflow:"auto",flex:1}}>{memChats.length ? memChats.map(c=><button key={c.id} className="content-card content-card-button" style={{marginBottom:8,display:"block"}} onClick={()=>openChat(c.id)}><div className="content-card-title">{c.title}</div></button>) : <div className="sidebar-empty">Нет</div>}</div>
+            <MemoryPanel />
           ) : (
             <>
               {ctxF.length > 0 && <div className="context-bar"><div className="context-bar-title">📎 {ctxF.length} файлов доступно (упомяни «файл» или «документ»)</div><div className="context-tags">{ctxF.map(f=><span key={f.id} className="context-tag">{f.name}</span>)}</div></div>}

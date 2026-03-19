@@ -17,6 +17,7 @@ from app.services.planner_v2_service import PlannerV2Service
 from app.services.reflection_loop_service import run_reflection_loop
 from app.services.run_history_service import RunHistoryService
 from app.services.tool_service import run_tool
+from app.services.smart_memory import extract_and_save, get_relevant_context
 
 logger = logging.getLogger(__name__)
 
@@ -277,9 +278,27 @@ def run_agent(*, model_name, profile_name, user_input, use_memory=True, use_libr
         _HISTORY.add_event(run["run_id"], "planner", plan)
         route = plan.get("route", "chat")
         selected = [t for t in plan.get("tools", []) if not (t == "memory_search" and not use_memory) and not (t == "library_context" and not use_library)]
+
+        # Умная память: извлекаем факты из сообщения
+        try:
+            saved = extract_and_save(user_input)
+            if saved:
+                _tl(timeline, "memory_save", "Память", "done", "Сохранено: " + str(len(saved)))
+        except Exception:
+            pass
+
         ctx = _collect_context(profile_name=profile_name, user_input=user_input, tools=selected, tool_results=tool_results, timeline=timeline, use_reflection=use_reflection)
+
+        # Умная память: добавляем релевантные воспоминания
+        try:
+            mem_ctx = get_relevant_context(user_input, max_items=5)
+            if mem_ctx:
+                ctx = mem_ctx + "\n\n" + ctx if ctx else mem_ctx
+                _tl(timeline, "memory_recall", "Память", "done", "Найдены воспоминания")
+        except Exception:
+            pass
+
         prompt = _build_prompt(user_input, ctx)
-        draft = run_chat(model_name=model_name, profile_name=profile_name, user_input=prompt, history=history)
         if not draft.get("ok"):
             raise RuntimeError("; ".join(draft.get("warnings", [])) or "LLM failed")
         answer = draft.get("answer", "")
@@ -314,12 +333,27 @@ def run_agent_stream(*, model_name, profile_name, user_input, use_memory=True, u
         route = plan.get("route", "chat")
         selected = [t for t in plan.get("tools", []) if not (t == "memory_search" and not use_memory) and not (t == "library_context" and not use_library)]
 
+        # Умная память: извлекаем факты
+        try:
+            extract_and_save(user_input)
+        except Exception:
+            pass
+
         if "web_search" in selected:
             yield {"token": "", "done": False, "phase": "searching", "message": "Ищу в интернете и загружаю страницы..."}
         elif selected:
             yield {"token": "", "done": False, "phase": "tools", "message": "Подготовка..."}
 
         ctx = _collect_context(profile_name=profile_name, user_input=user_input, tools=selected, tool_results=tool_results, timeline=timeline, use_reflection=use_reflection)
+
+        # Умная память: добавляем воспоминания
+        try:
+            mem_ctx = get_relevant_context(user_input, max_items=5)
+            if mem_ctx:
+                ctx = mem_ctx + "\n\n" + ctx if ctx else mem_ctx
+        except Exception:
+            pass
+
         yield {"token": "", "done": False, "phase": "thinking", "message": "Генерирую ответ..."}
 
         prompt = _build_prompt(user_input, ctx)
