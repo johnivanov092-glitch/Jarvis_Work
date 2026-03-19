@@ -38,6 +38,18 @@ const SKILLS = [
   { id: "project_patch", label: "🔧 Патчинг", desc: "Изменение файлов проекта" },
   { id: "pdf_reader", label: "📑 PDF", desc: "Извлечение текста из PDF" },
   { id: "reflection", label: "🪞 Рефлексия", desc: "Двойная проверка ответов" },
+  { id: "http_api", label: "🌐 HTTP/API", desc: "GET/POST запросы к API" },
+  { id: "sql_query", label: "🗄 SQL", desc: "Запросы к базе данных" },
+  { id: "file_gen", label: "📝 Word/Excel", desc: "Генерация документов" },
+  { id: "screenshot", label: "🖼 Скриншот", desc: "Снимок веб-страницы" },
+  { id: "encrypt", label: "🔐 Шифрование", desc: "AES шифрование заметок" },
+  { id: "archiver", label: "📦 Архиватор", desc: "ZIP создание/распаковка" },
+  { id: "converter", label: "🔄 Конвертер", desc: "CSV→XLSX, MD→DOCX, JSON→CSV" },
+  { id: "regex", label: "📐 Regex", desc: "Тестирование регулярок" },
+  { id: "translator", label: "🌍 Переводчик", desc: "Перевод через LLM" },
+  { id: "csv_analysis", label: "📈 CSV анализ", desc: "Статистика и агрегации" },
+  { id: "webhook", label: "📡 Webhook", desc: "Приём входящих вебхуков" },
+  { id: "plugins", label: "🔌 Плагины", desc: "Пользовательские .py скрипты" },
 ];
 
 // Tauri window controls

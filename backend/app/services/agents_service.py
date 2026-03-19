@@ -127,12 +127,89 @@ def _maybe_auto_exec_python(user_input, answer, timeline):
         return answer
 
 
+def _run_auto_skills(user_input: str) -> str:
+    """Авто-детект скиллов по ключевым словам. Возвращает результат для контекста."""
+    import re as _re
+    ql = user_input.lower()
+    parts = []
+
+    # HTTP/API: "GET https://...", "запрос к API ...", "fetch url ..."
+    url_match = _re.search(r"(https?://\S+)", user_input)
+    http_triggers = ["запрос к api", "api запрос", "fetch", "http запрос", "вызови api", "get запрос", "post запрос"]
+    if url_match and any(t in ql for t in http_triggers + ["покажи сайт", "загрузи url", "открой ссылку"]):
+        try:
+            from app.services.skills_service import http_request
+            method = "POST" if "post" in ql else "GET"
+            result = http_request(url_match.group(1), method=method, timeout=10)
+            if result.get("ok"):
+                body = result.get("body", "")
+                body_str = json.dumps(body, ensure_ascii=False, indent=2)[:3000] if isinstance(body, (dict, list)) else str(body)[:3000]
+                parts.append(f"HTTP {method} {url_match.group(1)} → статус {result.get('status')} ({result.get('elapsed_ms')}ms):\n{body_str}")
+            else:
+                parts.append(f"HTTP ошибка: {result.get('error')}")
+        except Exception as e:
+            parts.append(f"HTTP ошибка: {e}")
+
+    # SQL: "покажи таблицы", "запрос к базе", "SELECT ..."
+    sql_triggers = ["покажи таблиц", "запрос к базе", "sql запрос", "база данных", "покажи базу", "select ", "покажи записи"]
+    if any(t in ql for t in sql_triggers):
+        try:
+            from app.services.skills_service import list_databases, describe_db, run_sql
+            # Если есть SELECT — выполняем
+            sql_match = _re.search(r"(SELECT\s+.+)", user_input, _re.IGNORECASE)
+            if sql_match:
+                dbs = list_databases()
+                if dbs.get("databases"):
+                    db_path = dbs["databases"][0]["path"]
+                    result = run_sql(db_path, sql_match.group(1), max_rows=20)
+                    if result.get("ok"):
+                        parts.append(f"SQL результат ({result.get('count',0)} строк):\n{json.dumps(result.get('rows',[]), ensure_ascii=False, indent=2)[:3000]}")
+            else:
+                # Показываем список баз и таблиц
+                dbs = list_databases()
+                if dbs.get("databases"):
+                    lines = ["Доступные базы данных:"]
+                    for db in dbs["databases"]:
+                        desc = describe_db(db["path"])
+                        tables = desc.get("tables", {})
+                        lines.append(f"\n📁 {db['name']} ({db['size']} байт):")
+                        for tbl, info in tables.items():
+                            cols = ", ".join(c["name"] for c in info["columns"])
+                            lines.append(f"  • {tbl} ({info['rows']} строк): {cols}")
+                    parts.append("\n".join(lines))
+        except Exception as e:
+            parts.append(f"SQL ошибка: {e}")
+
+    # Скриншот: "скриншот сайта ...", "покажи как выглядит ..."
+    screenshot_triggers = ["скриншот", "screenshot", "покажи как выглядит", "сделай снимок"]
+    if url_match and any(t in ql for t in screenshot_triggers):
+        try:
+            from app.services.skills_service import screenshot_url
+            result = screenshot_url(url_match.group(1))
+            if result.get("ok"):
+                parts.append(f"Скриншот {result.get('title','')}: {result.get('view_url','')}")
+            else:
+                parts.append(f"Скриншот ошибка: {result.get('error')}")
+        except Exception as e:
+            parts.append(f"Скриншот ошибка: {e}")
+
+    return "\n\n".join(parts)
+
+
+import json
+
+
 def _build_prompt(user_input, context_bundle):
     from datetime import datetime
     days_ru = {"Monday": "понедельник", "Tuesday": "вторник", "Wednesday": "среда", "Thursday": "четверг", "Friday": "пятница", "Saturday": "суббота", "Sunday": "воскресенье"}
     now = datetime.now()
     day_name = days_ru.get(now.strftime("%A"), now.strftime("%A"))
     time_line = f"Сейчас: {now.strftime('%d.%m.%Y, %H:%M')}, {day_name}."
+
+    # Авто-скиллы: добавляем результат если триггер сработал
+    skill_results = _run_auto_skills(user_input)
+    if skill_results:
+        context_bundle = (context_bundle + "\n\n" + skill_results) if context_bundle.strip() else skill_results
 
     if not context_bundle.strip():
         return f"{time_line}\n\n{user_input}"

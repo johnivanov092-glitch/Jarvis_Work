@@ -27,21 +27,46 @@ TEXT_EXTS = {
 }
 
 
-def _extract_pdf(data: bytes, max_chars: int = 30000) -> str:
+def _extract_pdf(data: bytes, max_chars: int = 50000) -> str:
+    """Умное извлечение: pypdf → pdfplumber → OCR."""
     try:
-        from pypdf import PdfReader
-        reader = PdfReader(io.BytesIO(data))
-        parts, total = [], 0
-        for page in reader.pages:
-            text = page.extract_text() or ""
-            if total + len(text) > max_chars:
-                parts.append(text[:max_chars - total])
-                break
-            parts.append(text)
-            total += len(text)
-        return "\n\n".join(parts)
+        from app.services.pdf_pro import extract_pdf_smart
+        result = extract_pdf_smart(data, max_chars)
+        text = result.get("text", "")
+        # Добавляем таблицы в текст
+        tables = result.get("tables", [])
+        if tables:
+            table_lines = ["\n\n=== ТАБЛИЦЫ ==="]
+            for t in tables[:5]:
+                headers = t.get("headers", [])
+                rows = t.get("rows", [])
+                table_lines.append(f"\nТаблица (стр. {t.get('page', '?')}):")
+                if headers:
+                    table_lines.append(" | ".join(str(h or "") for h in headers))
+                    table_lines.append("-" * 40)
+                for row in rows[:20]:
+                    table_lines.append(" | ".join(str(c or "") for c in row))
+            text += "\n".join(table_lines)
+        method = result.get("method", "")
+        if result.get("ocr_used"):
+            text = f"[OCR распознавание]\n{text}"
+        return text[:max_chars]
     except ImportError:
-        return "[pypdf не установлен: pip install pypdf]"
+        # Fallback на простой pypdf
+        try:
+            from pypdf import PdfReader
+            reader = PdfReader(io.BytesIO(data))
+            parts, total = [], 0
+            for page in reader.pages:
+                t = page.extract_text() or ""
+                if total + len(t) > max_chars:
+                    parts.append(t[:max_chars - total])
+                    break
+                parts.append(t)
+                total += len(t)
+            return "\n\n".join(parts)
+        except ImportError:
+            return "[pypdf не установлен: pip install pypdf]"
     except Exception as e:
         return f"[PDF ошибка: {e}]"
 
