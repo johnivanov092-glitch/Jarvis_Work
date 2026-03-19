@@ -11,6 +11,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { api, executeStream } from "../api/ide";
 import IdeWorkspaceShell from "./IdeWorkspaceShell";
 import MarkdownRenderer from "./MarkdownRenderer";
+import ArtifactPanel from "./ArtifactPanel";
 import "../styles/markdown.css";
 
 const LIBRARY_KEY = "jarvis_library_files_v7";
@@ -68,7 +69,7 @@ async function fileToLibraryRecord(file) {
 }
 
 /** All library files with use_in_context AND preview go to LLM context */
-function getActiveLibFiles(lib) { return lib.filter(i => i.use_in_context && i.preview); }
+function getActiveLibFiles(lib) { return lib.filter(i => (i.use_in_context !== false) && i.preview); }
 function buildHistory(msgs) { if (!msgs?.length) return []; const p = msgs.filter(m => m.role === "user" || m.role === "assistant").map(m => ({ role: m.role, content: m.content || "" })); return p.length > MAX_HISTORY_PAIRS * 2 ? p.slice(-MAX_HISTORY_PAIRS * 2) : p; }
 
 
@@ -100,10 +101,19 @@ export default function JarvisChatShell() {
   const [selLibId, setSelLibId] = useState("");
   const [renaming, setRenaming] = useState(false);
   const [renameVal, setRenameVal] = useState("");
+  const [showPanel, setShowPanel] = useState(false);
 
   useEffect(() => { init(); }, []);
   useEffect(() => { msgRef.current && (msgRef.current.scrollTop = msgRef.current.scrollHeight); }, [messages, chatId, streamText]);
   useEffect(() => { if (!taRef.current) return; taRef.current.style.height = "36px"; taRef.current.style.height = `${Math.min(120, taRef.current.scrollHeight)}px`; }, [input]);
+
+  // Auto-open right panel when code blocks appear
+  useEffect(() => {
+    const lastMsg = messages[messages.length - 1];
+    if (lastMsg?.role === "assistant" && /```\w*\n[\s\S]{20,}?```/.test(lastMsg.content || "")) {
+      setShowPanel(true);
+    }
+  }, [messages]);
 
   async function init() {
     try {
@@ -139,11 +149,19 @@ export default function JarvisChatShell() {
       setMessages(prev => [...prev, userMsg]); setInput(""); await autoRename(text);
       const history = buildHistory(messages);
       const cf = getActiveLibFiles(libraryFiles);
-      const cp = cf.length ? "\n\nФайлы пользователя (используй в ответе):\n" + cf.map(f => `=== ${f.name} ===\n${f.preview.slice(0, 1500)}`).join("\n\n") : "";
+      const tl = text.toLowerCase();
+      const wantsFiles = cf.length > 0 && (
+        tl.includes("файл") || tl.includes("документ") || tl.includes("библиотек") ||
+        tl.includes("загруженн") || tl.includes("прочитай") || tl.includes("опиши") ||
+        tl.includes("file") || tl.includes("document") || tl.includes("pdf") ||
+        tl.includes("резюме") || tl.includes("отчёт") || tl.includes("отчет") ||
+        tl.includes("что в ") || tl.includes("покажи содержимое") || tl.includes("проанализируй")
+      );
+      const cp = wantsFiles ? "\n\nФайлы пользователя:\n" + cf.map(f => `=== ${f.name} ===\n${f.preview.slice(0, 1500)}`).join("\n\n") : "";
 
       let fullText = "";
       const ctrl = executeStream(
-        { model_name: model, profile_name: profile, user_input: `${text}${cp}`, history, use_memory: skills.includes("memory"), use_library: skills.includes("file_context") },
+        { model_name: model, profile_name: profile, user_input: `${text}${cp}`, history, use_memory: skills.includes("memory"), use_library: skills.includes("file_context"), use_reflection: skills.includes("reflection") },
         {
           onToken(t) { fullText += t; setStreamText(fullText); setPhase(""); },
           onPhase(ev) {
@@ -206,7 +224,7 @@ export default function JarvisChatShell() {
   if (mainTab === "code") return <IdeWorkspaceShell messages={messages} libraryFiles={libraryFiles} setLibraryFiles={setLibraryFiles} onBackToChat={() => setMainTab("chat")} />;
 
   return (
-    <div className="jarvis-shell">
+    <div className="jarvis-shell" style={showPanel && sideTab === "chats" ? {gridTemplateColumns: "200px 1fr auto"} : undefined}>
       <aside className="jarvis-sidebar">
         <button className="sidebar-newchat-btn" onClick={() => newChat(false)}>+ Новый чат</button>
         <div className="sidebar-nav">
@@ -238,6 +256,7 @@ export default function JarvisChatShell() {
           <div className="topbar-tabs">
             <button className={`soft-btn ${mainTab==="chat"?"active":""}`} onClick={() => setMainTab("chat")}>Chat</button>
             <button className={`soft-btn ${mainTab==="code"?"active":""}`} onClick={() => setMainTab("code")}>Code</button>
+            <button className={`soft-btn ${showPanel?"active":""}`} onClick={() => setShowPanel(p => !p)} title="Панель кода">◇</button>
           </div>
         </div>
 
@@ -279,7 +298,7 @@ export default function JarvisChatShell() {
               <input ref={fileRef} type="file" multiple hidden onChange={e=>handleFiles(e.target.files)}/>
               <div className="library-table">
                 <div className="library-table-row header"><div>Имя</div><div>Тип</div><div>Размер</div><div>Контекст</div><div></div></div>
-                {fLib.length ? fLib.map(i => <div key={i.id} className={`library-table-row ${selLibId===i.id?"active":""}`} onClick={()=>setSelLibId(i.id)}><div className="table-name">{i.name}</div><div>{i.type.split("/").pop()}</div><div>{Math.round(i.size/1024)||0}K</div><div><input type="checkbox" checked={!!i.use_in_context} onChange={e=>{e.stopPropagation();toggleCtx(i.id,e.target.checked);}}/></div><div><button className="mini-icon-btn" onClick={e=>{e.stopPropagation();removeLib(i.id);}}>✕</button></div></div>) : <div className="sidebar-empty" style={{padding:10}}>Нет файлов</div>}
+                {fLib.length ? fLib.map(i => <div key={i.id} className={`library-table-row ${selLibId===i.id?"active":""}`} onClick={()=>setSelLibId(i.id)}><div className="table-name">{i.name}</div><div>{i.type.split("/").pop()}</div><div>{Math.round(i.size/1024)||0}K</div><div><input type="checkbox" checked={i.use_in_context !== false} onChange={e=>{e.stopPropagation();toggleCtx(i.id,e.target.checked);}}/></div><div><button className="mini-icon-btn" onClick={e=>{e.stopPropagation();removeLib(i.id);}}>✕</button></div></div>) : <div className="sidebar-empty" style={{padding:10}}>Нет файлов</div>}
               </div>
               {selLib && <div className="content-card"><div className="content-card-title">{selLib.name}</div><div className="content-card-text">{selLib.type} · {Math.round(selLib.size/1024)||0} KB</div>{selLib.preview ? <pre className="library-preview">{selLib.preview}</pre> : <div className="content-card-text" style={{marginTop:6}}>Превью недоступно</div>}</div>}
             </div>
@@ -287,7 +306,7 @@ export default function JarvisChatShell() {
             <div style={{padding:16,overflow:"auto",flex:1}}>{memChats.length ? memChats.map(c=><button key={c.id} className="content-card content-card-button" style={{marginBottom:8,display:"block"}} onClick={()=>openChat(c.id)}><div className="content-card-title">{c.title}</div></button>) : <div className="sidebar-empty">Нет</div>}</div>
           ) : (
             <>
-              {ctxF.length > 0 && <div className="context-bar"><div className="context-bar-title">📎 {ctxF.length} файлов в контексте</div><div className="context-tags">{ctxF.map(f=><span key={f.id} className="context-tag">{f.name}</span>)}</div></div>}
+              {ctxF.length > 0 && <div className="context-bar"><div className="context-bar-title">📎 {ctxF.length} файлов доступно (упомяни «файл» или «документ»)</div><div className="context-tags">{ctxF.map(f=><span key={f.id} className="context-tag">{f.name}</span>)}</div></div>}
               {messages.length === 0 && !streaming && <div style={{flex:1,display:"flex",alignItems:"center",justifyContent:"center"}}><div style={{textAlign:"center",color:"var(--text-muted)"}}><div style={{fontSize:28,marginBottom:8,opacity:0.2}}>✺</div><div style={{fontSize:14}}>Чем могу помочь?</div></div></div>}
 
               <div className="message-stream compact-stream" ref={msgRef}>
@@ -318,6 +337,15 @@ export default function JarvisChatShell() {
           )}
         </div>
       </main>
+
+      {/* Right panel - artifacts / code viewer */}
+      {showPanel && sideTab === "chats" && (
+        <ArtifactPanel
+          messages={messages}
+          streamingCode={streamText}
+          onClose={() => setShowPanel(false)}
+        />
+      )}
     </div>
   );
 }

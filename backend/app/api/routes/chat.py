@@ -21,6 +21,7 @@ class ChatRequest(BaseModel):
     history: list[dict[str, Any]] = Field(default_factory=list)
     use_memory: bool = True
     use_library: bool = True
+    use_reflection: bool = False
 
 
 # ── обычный запрос (без стриминга) ──────────────────────────────
@@ -33,6 +34,7 @@ def chat_send(payload: ChatRequest):
             user_input=payload.user_input,
             use_memory=payload.use_memory,
             use_library=payload.use_library,
+            use_reflection=payload.use_reflection,
             history=payload.history,
         )
         return JSONResponse(
@@ -79,6 +81,7 @@ def chat_stream(payload: ChatRequest):
                 user_input=payload.user_input,
                 use_memory=payload.use_memory,
                 use_library=payload.use_library,
+                use_reflection=payload.use_reflection,
                 history=payload.history,
             ):
                 yield f"data: {json.dumps(event, ensure_ascii=False)}\n\n"

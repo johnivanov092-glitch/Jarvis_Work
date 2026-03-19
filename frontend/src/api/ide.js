@@ -150,6 +150,7 @@ export async function execute(body = {}) {
       history: Array.isArray(body.history) ? body.history : [],
       use_memory: body.use_memory ?? true,
       use_library: body.use_library ?? true,
+      use_reflection: body.use_reflection ?? false,
     },
   });
   const routeError = extractAgentError(response);
@@ -184,6 +185,7 @@ export function executeStream(body = {}, { onToken, onDone, onError, onPhase } =
     history: Array.isArray(body.history) ? body.history : [],
     use_memory: body.use_memory ?? true,
     use_library: body.use_library ?? true,
+    use_reflection: body.use_reflection ?? false,
   };
 
   fetch(`${API_BASE}/api/chat/stream`, {
