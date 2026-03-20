@@ -193,8 +193,9 @@ export default function JarvisChatShell() {
     try {
       setWorking(true); setStreaming(true); setStreamText(""); setError(""); setPhase("");
       const userMsg = await api.addMessage({ chatId, role: "user", content: text });
-      setMessages(prev => [...prev, userMsg]); setInput(""); await autoRename(text);
-      const history = buildHistory(messages);
+      const nextMessages = [...messages, userMsg];
+      setMessages(nextMessages); setInput(""); await autoRename(text);
+      const history = buildHistory(nextMessages);
 
       // Файлы библиотеки
       const cf = getActiveLibFiles(libraryFiles);
@@ -208,17 +209,29 @@ export default function JarvisChatShell() {
       );
       let cp = wantsFiles ? "\n\nФайлы пользователя:\n" + cf.map(f => `=== ${f.name} ===\n${f.preview.slice(0, 1500)}`).join("\n\n") : "";
 
-      // Контекст проекта (если открыт)
-      try {
-        const projInfo = await fetch(`${API_URL}/api/advanced/project/info`).then(r => r.json());
-        if (projInfo.ok) {
-          const projTree = await fetch(`${API_URL}/api/advanced/project/tree?max_depth=2&max_items=50`).then(r => r.json());
-          if (projTree.ok && projTree.items?.length) {
-            const fileList = projTree.items.filter(i => i.type === "file").map(i => i.path).join(", ");
-            cp += `\n\nОткрыт проект: ${projInfo.name} (${projTree.count} файлов)\nФайлы: ${fileList.slice(0, 800)}`;
+      const wantsProjectContext = (
+        tl.includes("проект") || tl.includes("project") ||
+        tl.includes("repo") || tl.includes("repository") || tl.includes("репозитор") ||
+        tl.includes("код") || tl.includes("codebase") ||
+        tl.includes("backend") || tl.includes("frontend") ||
+        tl.includes("структур") || tl.includes("tree") ||
+        tl.includes("директор") || tl.includes("каталог") || tl.includes("папк") ||
+        tl.includes("readme") || tl.includes("модул") || tl.includes("компонент")
+      );
+
+      // Контекст проекта — только для запросов про код/репозиторий
+      if (wantsProjectContext) {
+        try {
+          const projInfo = await fetch(`${API_URL}/api/advanced/project/info`).then(r => r.json());
+          if (projInfo.ok) {
+            const projTree = await fetch(`${API_URL}/api/advanced/project/tree?max_depth=2&max_items=50`).then(r => r.json());
+            if (projTree.ok && projTree.items?.length) {
+              const fileList = projTree.items.filter(i => i.type === "file").map(i => i.path).join(", ");
+              cp += `\n\nОткрыт проект: ${projInfo.name} (${projTree.count} файлов)\nФайлы: ${fileList.slice(0, 800)}`;
+            }
           }
-        }
-      } catch {}
+        } catch {}
+      }
 
       // Multi-agent режим
       if (multiAgent) {

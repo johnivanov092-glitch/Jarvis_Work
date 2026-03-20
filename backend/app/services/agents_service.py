@@ -92,6 +92,20 @@ def _trim_history(h, max_pairs=_MAX_HISTORY_PAIRS):
     return list(h[-limit:]) if len(h) > limit else list(h)
 
 
+def _strip_frontend_project_context(user_input: str) -> str:
+    """Убирает project-context, который фронт может дописывать к запросу.
+
+    Секцию "Файлы пользователя" не трогаем, чтобы не ломать анализ
+    загруженных файлов и библиотечный контекст.
+    """
+    text = user_input or ""
+    marker = "\n\nОткрыт проект:"
+    pos = text.find(marker)
+    if pos >= 0:
+        return text[:pos].rstrip()
+    return text
+
+
 _EXEC_TRIGGERS = ["запусти", "посчитай", "вычисли", "выполни", "рассчитай", "run", "execute", "calculate", "compute"]
 
 
@@ -562,7 +576,28 @@ def _run_auto_skills(user_input: str) -> str:
 import json
 
 
-def _build_prompt(user_input, context_bundle):
+def _is_strict_web_only_query(user_input: str) -> bool:
+    q = (user_input or "").lower()
+    hard_terms = (
+        "новост", "news", "курс", "доллар", "евро", "рубл", "тенге",
+        "usd", "eur", "kzt", "погод", "weather", "сегодня", "today",
+        "сейчас", "current", "актуальн", "latest", "последние"
+    )
+    return any(term in q for term in hard_terms)
+
+
+
+def _get_web_search_result(tool_results):
+    for item in reversed(tool_results or []):
+        if item.get("tool") == "web_search":
+            result = item.get("result") or {}
+            if isinstance(result, dict):
+                return result
+    return {}
+
+
+
+def _build_prompt(user_input, context_bundle, mode="default"):
     from datetime import datetime
     days_ru = {"Monday": "понедельник", "Tuesday": "вторник", "Wednesday": "среда", "Thursday": "четверг", "Friday": "пятница", "Saturday": "суббота", "Sunday": "воскресенье"}
     now = datetime.now()
@@ -911,28 +946,36 @@ def run_agent(*, model_name, profile_name, user_input, use_memory=True, use_libr
     history = _trim_history(history or [])
     timeline, tool_results = [], []
     planner = PlannerV2Service()
-    run = _HISTORY.start_run(user_input)
+    raw_user_input = user_input
+    planner_input = _strip_frontend_project_context(user_input)
+    run = _HISTORY.start_run(raw_user_input)
     try:
-        plan = planner.plan(user_input)
+        plan = planner.plan(planner_input)
         _HISTORY.add_event(run["run_id"], "planner", plan)
         route = plan.get("route", "chat")
         selected = [t for t in plan.get("tools", []) if not (t == "memory_search" and not use_memory) and not (t == "library_context" and not use_library)]
+        strict_web_only = route == "research" and _is_strict_web_only_query(planner_input)
+        if strict_web_only:
+            selected = [t for t in selected if t != "memory_search"]
+        strict_web_only = route == "research" and _is_strict_web_only_query(planner_input)
+        if strict_web_only:
+            selected = [t for t in selected if t != "memory_search"]
 
         # Умная память: извлекаем факты из сообщения
         try:
-            saved = extract_and_save(user_input)
+            saved = extract_and_save(planner_input)
             if saved:
                 _tl(timeline, "memory_save", "Память", "done", "Сохранено: " + str(len(saved)))
         except Exception:
             pass
 
-        ctx = _collect_context(profile_name=profile_name, user_input=user_input, tools=selected, tool_results=tool_results, timeline=timeline, use_reflection=use_reflection)
+        ctx = _collect_context(profile_name=profile_name, user_input=planner_input, tools=selected, tool_results=tool_results, timeline=timeline, use_reflection=use_reflection)
 
         # Умная память + RAG: добавляем релевантные воспоминания
         try:
-            mem_ctx = get_relevant_context(user_input, max_items=5)
+            mem_ctx = get_relevant_context(planner_input, max_items=5)
             if _HAS_RAG:
-                rag_ctx = get_rag_context(user_input, max_items=3)
+                rag_ctx = get_rag_context(planner_input, max_items=3)
                 if rag_ctx:
                     mem_ctx = (mem_ctx + "\n\n" + rag_ctx) if mem_ctx else rag_ctx
             if mem_ctx:
@@ -941,7 +984,7 @@ def run_agent(*, model_name, profile_name, user_input, use_memory=True, use_libr
         except Exception:
             pass
 
-        prompt = _build_prompt(user_input, ctx)
+        prompt = _build_prompt(raw_user_input, ctx)
         draft = run_chat(model_name=model_name, profile_name=profile_name, user_input=prompt, history=history)
         if not draft.get("ok"):
             raise RuntimeError("; ".join(draft.get("warnings", [])) or "LLM failed")
@@ -951,7 +994,7 @@ def run_agent(*, model_name, profile_name, user_input, use_memory=True, use_libr
         has_generated_files = any(a["type"] in ("image", "file") for a in _pending_attachments)
         should_reflect = (route in _REFLECTION_ROUTES) or use_reflection
         if should_reflect and answer.strip() and not has_generated_files:
-            ref = run_reflection_loop(model_name=model_name, profile_name=profile_name, user_input=user_input, draft_text=answer, review_text="Улучши.", context=ctx)
+            ref = run_reflection_loop(model_name=model_name, profile_name=profile_name, user_input=raw_user_input, draft_text=answer, review_text="Улучши.", context=ctx)
             answer = ref.get("answer") or answer
 
         # Добавляем вложения (картинки, файлы)
@@ -960,7 +1003,7 @@ def run_agent(*, model_name, profile_name, user_input, use_memory=True, use_libr
             answer += attachments
 
         # POST-генерация: Word/Excel из ответа LLM
-        post_files = _maybe_generate_files(user_input, answer)
+        post_files = _maybe_generate_files(raw_user_input, answer)
         if post_files:
             answer += post_files
 
@@ -981,16 +1024,18 @@ def run_agent_stream(*, model_name, profile_name, user_input, use_memory=True, u
     history = _trim_history(history or [])
     timeline, tool_results = [], []
     planner = PlannerV2Service()
-    run = _HISTORY.start_run(user_input)
+    raw_user_input = user_input
+    planner_input = _strip_frontend_project_context(user_input)
+    run = _HISTORY.start_run(raw_user_input)
     try:
-        plan = planner.plan(user_input)
+        plan = planner.plan(planner_input)
         _HISTORY.add_event(run["run_id"], "planner", plan)
         route = plan.get("route", "chat")
         selected = [t for t in plan.get("tools", []) if not (t == "memory_search" and not use_memory) and not (t == "library_context" and not use_library)]
 
         # Умная память: извлекаем факты
         try:
-            extract_and_save(user_input)
+            extract_and_save(planner_input)
         except Exception:
             pass
 
@@ -999,13 +1044,13 @@ def run_agent_stream(*, model_name, profile_name, user_input, use_memory=True, u
         elif selected:
             yield {"token": "", "done": False, "phase": "tools", "message": "Подготовка..."}
 
-        ctx = _collect_context(profile_name=profile_name, user_input=user_input, tools=selected, tool_results=tool_results, timeline=timeline, use_reflection=use_reflection)
+        ctx = _collect_context(profile_name=profile_name, user_input=planner_input, tools=selected, tool_results=tool_results, timeline=timeline, use_reflection=use_reflection)
 
         # Умная память + RAG
         try:
-            mem_ctx = get_relevant_context(user_input, max_items=5)
+            mem_ctx = get_relevant_context(planner_input, max_items=5)
             if _HAS_RAG:
-                rag_ctx = get_rag_context(user_input, max_items=3)
+                rag_ctx = get_rag_context(planner_input, max_items=3)
                 if rag_ctx:
                     mem_ctx = (mem_ctx + "\n\n" + rag_ctx) if mem_ctx else rag_ctx
             if mem_ctx:
@@ -1015,7 +1060,7 @@ def run_agent_stream(*, model_name, profile_name, user_input, use_memory=True, u
 
         yield {"token": "", "done": False, "phase": "thinking", "message": "Генерирую ответ..."}
 
-        prompt = _build_prompt(user_input, ctx)
+        prompt = _build_prompt(raw_user_input, ctx)
         full_text = ""
         for token in run_chat_stream(model_name=model_name, profile_name=profile_name, user_input=prompt, history=history):
             full_text += token
@@ -1025,7 +1070,7 @@ def run_agent_stream(*, model_name, profile_name, user_input, use_memory=True, u
         should_reflect = (route in _REFLECTION_ROUTES) or use_reflection
         if should_reflect and full_text.strip() and not has_generated_files:
             yield {"token": "", "done": False, "phase": "reflecting", "message": "Проверяю..."}
-            ref = run_reflection_loop(model_name=model_name, profile_name=profile_name, user_input=user_input, draft_text=full_text, review_text="Улучши.", context=ctx)
+            ref = run_reflection_loop(model_name=model_name, profile_name=profile_name, user_input=raw_user_input, draft_text=full_text, review_text="Улучши.", context=ctx)
             refined = ref.get("answer", "")
             if refined and refined != full_text:
                 full_text = refined
@@ -1033,7 +1078,7 @@ def run_agent_stream(*, model_name, profile_name, user_input, use_memory=True, u
 
         # Авто-выполнение Python
         try:
-            full_text = _maybe_auto_exec_python(user_input, full_text, timeline)
+            full_text = _maybe_auto_exec_python(raw_user_input, full_text, timeline)
         except Exception:
             pass
 
@@ -1043,10 +1088,10 @@ def run_agent_stream(*, model_name, profile_name, user_input, use_memory=True, u
             full_text += attachments
 
         # POST-генерация: Word/Excel из ответа LLM
-        ql_check = user_input.lower()
+        ql_check = raw_user_input.lower()
         if any(t in ql_check for t in _FILE_TRIGGERS_WORD + _FILE_TRIGGERS_EXCEL):
             yield {"token": "", "done": False, "phase": "generating_file", "message": "📄 Создаю файл..."}
-        post_files = _maybe_generate_files(user_input, full_text)
+        post_files = _maybe_generate_files(raw_user_input, full_text)
         if post_files:
             full_text += post_files
 
