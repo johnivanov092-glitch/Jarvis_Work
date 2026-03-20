@@ -26,6 +26,9 @@ OUTPUT_DIR = Path("data/generated")
 OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 WORKSPACE = Path("data/workspace")
 WORKSPACE.mkdir(parents=True, exist_ok=True)
+PROJECT_ROOT = Path(__file__).resolve().parents[3]
+LEGACY_UPLOADS = PROJECT_ROOT / "data" / "uploads"
+BACKEND_UPLOADS = Path("data/uploads")
 
 
 # ═══════════════════════════════════════════════════════════════
@@ -122,7 +125,9 @@ def convert_file(source_path: str, target_format: str) -> dict:
     if not src.exists():
         src = WORKSPACE / source_path
         if not src.exists():
-            src = Path("data/uploads") / source_path
+            src = BACKEND_UPLOADS / source_path
+            if not src.exists():
+                src = LEGACY_UPLOADS / source_path
     if not src.exists():
         return {"ok": False, "error": f"Не найден: {source_path}"}
 
@@ -278,7 +283,9 @@ def analyze_csv(file_path: str, query: str = "") -> dict:
     if not fp.exists():
         fp = WORKSPACE / file_path
         if not fp.exists():
-            fp = Path("data/uploads") / file_path
+            fp = BACKEND_UPLOADS / file_path
+            if not fp.exists():
+                fp = LEGACY_UPLOADS / file_path
     if not fp.exists():
         return {"ok": False, "error": f"Не найден: {file_path}"}
 

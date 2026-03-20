@@ -534,5 +534,53 @@
     "route": "chat",
     "model": "qwen3:8b",
     "answer_len": 168
+  },
+  {
+    "run_id": "e635d6d8",
+    "finished_at": "2026-03-20T11:29:25.734181",
+    "ok": true,
+    "route": "chat",
+    "model": "qwen3:8b",
+    "answer_len": 1971
+  },
+  {
+    "run_id": "68c34372",
+    "finished_at": "2026-03-20T11:31:26.914979",
+    "ok": true,
+    "route": "chat",
+    "model": "qwen3:8b",
+    "answer_len": 2765
+  },
+  {
+    "run_id": "dc9a72ed",
+    "finished_at": "2026-03-20T11:34:04.540312",
+    "ok": true,
+    "route": "chat",
+    "model": "qwen3:8b",
+    "answer_len": 3786
+  },
+  {
+    "run_id": "72404e1a",
+    "finished_at": "2026-03-20T11:46:47.813640",
+    "ok": true,
+    "route": "chat",
+    "model": "qwen3:8b",
+    "answer_len": 134
+  },
+  {
+    "run_id": "16d83902",
+    "finished_at": "2026-03-20T11:48:29.829917",
+    "ok": true,
+    "route": "chat",
+    "model": "qwen3:8b",
+    "answer_len": 111
+  },
+  {
+    "run_id": "0ff6d1bb",
+    "finished_at": "2026-03-20T11:49:26.594913",
+    "ok": true,
+    "route": "research",
+    "model": "qwen3:8b",
+    "answer_len": 2316
   }
 ]

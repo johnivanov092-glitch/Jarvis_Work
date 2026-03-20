@@ -21,8 +21,9 @@ from pydantic import BaseModel, Field
 router = APIRouter(prefix="/api/project-brain", tags=["project-brain"])
 
 PROJECT_ROOT = Path(".").resolve()
-UPLOAD_ROOT = PROJECT_ROOT / ".jarvis_chat_uploads"
+UPLOAD_ROOT = PROJECT_ROOT / "data" / "chat_uploads_tmp"
 UPLOAD_ROOT.mkdir(parents=True, exist_ok=True)
+TMP_UPLOAD_TTL_SECONDS = 24 * 60 * 60
 
 EXCLUDED_PARTS = {
     ".git",
@@ -43,6 +44,7 @@ EXCLUDED_PARTS = {
     "temp",
     "logs",
     ".jarvis_chat_uploads",
+    "data/chat_uploads_tmp",
 }
 TEXT_SUFFIXES = {
     ".py", ".js", ".jsx", ".ts", ".tsx", ".json", ".md", ".txt",
@@ -253,7 +255,35 @@ def _extract_upload_text(filename: str, data: bytes) -> tuple[str, str]:
     return "", "binary"
 
 
+
+
+def _cleanup_stale_temp_uploads() -> None:
+    now = time.time()
+    stale_ids: list[str] = []
+    for attachment_id, item in list(ATTACHMENT_INDEX.items()):
+        created_at = float(item.get("created_at") or 0)
+        path_str = item.get("path") or ""
+        if not created_at or (now - created_at) <= TMP_UPLOAD_TTL_SECONDS:
+            continue
+        try:
+            path = Path(path_str)
+            if path.exists() and path.is_file():
+                path.unlink()
+        except Exception:
+            pass
+        stale_ids.append(attachment_id)
+    for attachment_id in stale_ids:
+        ATTACHMENT_INDEX.pop(attachment_id, None)
+
+    for path in UPLOAD_ROOT.glob("*"):
+        try:
+            if path.is_file() and (now - path.stat().st_mtime) > TMP_UPLOAD_TTL_SECONDS:
+                path.unlink()
+        except Exception:
+            pass
+
 def _store_attachment(filename: str, data: bytes, source: str = "upload") -> dict[str, Any]:
+    _cleanup_stale_temp_uploads()
     attachment_id = uuid.uuid4().hex[:16]
     safe_name = _safe_filename(filename)
     disk_path = UPLOAD_ROOT / f"{attachment_id}_{safe_name}"
