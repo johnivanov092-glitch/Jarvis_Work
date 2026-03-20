@@ -47,21 +47,25 @@ def _get_pipe():
 
     logger.info(f"Loading FLUX.1-schnell (first time may take a few minutes)...")
 
+    cuda_available = _HAS_TORCH and torch.cuda.is_available()
+    dtype = torch.float16 if cuda_available else torch.float32
+    logger.info("CUDA доступна: %s", cuda_available)
+
     _pipe = FluxPipeline.from_pretrained(
         _model_id,
-        torch_dtype=torch.float16,
+        torch_dtype=dtype,
     )
 
-    # RTX 4060 Ti 8GB: используем CPU offload для экономии VRAM
-    try:
-        _pipe.enable_model_cpu_offload()
-        logger.info("CPU offload enabled (saves VRAM)")
-    except Exception:
+    if cuda_available:
         try:
-            _pipe = _pipe.to("cuda")
+            _pipe.enable_model_cpu_offload()
+            logger.info("CUDA + CPU offload enabled (saves VRAM)")
         except Exception:
-            _pipe = _pipe.to("cpu")
-            logger.warning("Running on CPU (slow)")
+            _pipe = _pipe.to("cuda")
+            logger.info("CUDA (full GPU) enabled")
+    else:
+        _pipe = _pipe.to("cpu")
+        logger.warning("Running on CPU — CUDA недоступна. Переустанови torch: pip install torch --index-url https://download.pytorch.org/whl/cu121")
 
     # Оптимизации
     try:
