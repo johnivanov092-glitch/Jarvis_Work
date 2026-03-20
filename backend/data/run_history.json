@@ -486,5 +486,53 @@
     "route": "chat",
     "model": "qwen3:8b",
     "answer_len": 133
+  },
+  {
+    "run_id": "884d7557",
+    "finished_at": "2026-03-20T11:18:07.624718",
+    "ok": true,
+    "route": "chat",
+    "model": "qwen3:8b",
+    "answer_len": 291
+  },
+  {
+    "run_id": "44bb53ac",
+    "finished_at": "2026-03-20T11:18:41.583121",
+    "ok": true,
+    "route": "chat",
+    "model": "qwen3:8b",
+    "answer_len": 372
+  },
+  {
+    "run_id": "6fa936df",
+    "finished_at": "2026-03-20T11:21:49.984856",
+    "ok": true,
+    "route": "research",
+    "model": "qwen3:8b",
+    "answer_len": 1155
+  },
+  {
+    "run_id": "52fbb8f1",
+    "finished_at": "2026-03-20T11:22:14.760940",
+    "ok": true,
+    "route": "chat",
+    "model": "qwen3:8b",
+    "answer_len": 176
+  },
+  {
+    "run_id": "e8c78713",
+    "finished_at": "2026-03-20T11:23:34.960408",
+    "ok": true,
+    "route": "chat",
+    "model": "qwen3:8b",
+    "answer_len": 386
+  },
+  {
+    "run_id": "db8ecabc",
+    "finished_at": "2026-03-20T11:23:48.724554",
+    "ok": true,
+    "route": "chat",
+    "model": "qwen3:8b",
+    "answer_len": 168
   }
 ]

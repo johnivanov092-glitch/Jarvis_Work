@@ -17,7 +17,7 @@ from app.services.planner_v2_service import PlannerV2Service
 from app.services.reflection_loop_service import run_reflection_loop
 from app.services.run_history_service import RunHistoryService
 from app.services.tool_service import run_tool
-from app.services.smart_memory import extract_and_save, get_relevant_context
+from app.services.smart_memory import extract_and_save, get_relevant_context, is_memory_command
 
 # RAG память (опционально — если embedding модель доступна)
 try:

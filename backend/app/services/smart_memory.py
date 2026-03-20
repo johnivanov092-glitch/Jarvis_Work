@@ -230,6 +230,24 @@ _FACT_PATTERNS = [
 ]
 
 
+def is_memory_command(text: str) -> bool:
+    text = (text or "").strip().lower()
+    if not text:
+        return False
+    return bool(re.match(r"^(запомни|сохрани|remember|save)", text))
+
+
+def _classify_memory_text(text: str) -> str:
+    t = (text or "").strip().lower()
+    if not t:
+        return "fact"
+    if re.search(r"(для |всегда |никогда |используй|не используй|отвечай|пиши|говори|remember to|always|never)", t):
+        return "instruction"
+    if re.search(r"(люблю|нравит|предпочита|хочу|нужно|важно|удобно|коротк|подробн|минимализм|новости)", t):
+        return "preference"
+    return "fact"
+
+
 def extract_and_save(user_message: str, assistant_message: str = "") -> list[dict]:
     """
     Извлекает факты из сообщения пользователя и сохраняет.
@@ -247,7 +265,7 @@ def extract_and_save(user_message: str, assistant_message: str = "") -> list[dic
             fact = match.group(1) if match.lastindex else match.group(0)
             fact = fact.strip().rstrip(".")
             if len(fact) > 5:
-                result = add_memory(fact, category="instruction", source="user_command", importance=8)
+                result = add_memory(fact, category=_classify_memory_text(fact), source="user_command", importance=8)
                 if result.get("ok"):
                     saved.append(result)
                 return saved  # Явная команда — не ищем дальше
