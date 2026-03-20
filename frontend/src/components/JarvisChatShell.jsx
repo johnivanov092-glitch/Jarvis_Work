@@ -280,7 +280,7 @@ export default function JarvisChatShell() {
       // Обычный стриминг
       let fullText = "";
       const ctrl = executeStream(
-        { model_name: model, profile_name: profile, user_input: `${text}${cp}`, history, use_memory: skills.includes("memory"), use_library: skills.includes("file_context"), use_reflection: skills.includes("reflection") },
+        { model_name: model, profile_name: profile, user_input: `${text}${cp}`, history, use_memory: skills.includes("memory"), use_library: skills.includes("file_context"), use_reflection: skills.includes("reflection"), use_web_search: skills.includes("web_search"), use_python_exec: skills.includes("python_exec"), use_image_gen: skills.includes("image_gen"), use_file_gen: skills.includes("file_gen"), use_http_api: skills.includes("http_api"), use_sql: skills.includes("sql_query"), use_screenshot: skills.includes("screenshot"), use_encrypt: skills.includes("encrypt"), use_archiver: skills.includes("archiver"), use_converter: skills.includes("converter"), use_regex: skills.includes("regex"), use_translator: skills.includes("translator"), use_csv: skills.includes("csv_analysis"), use_webhook: skills.includes("webhook"), use_plugins: skills.includes("plugins") },
         {
           onToken(t) { fullText += t; setStreamText(fullText); setPhase(""); },
           onPhase(ev) {

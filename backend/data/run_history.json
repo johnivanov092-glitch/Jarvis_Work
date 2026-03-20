@@ -46,5 +46,29 @@
     "route": "chat",
     "model": "qwen3:8b",
     "answer_len": 336
+  },
+  {
+    "run_id": "af466d04",
+    "finished_at": "2026-03-20T14:10:38.906077",
+    "ok": true,
+    "route": "research",
+    "model": "qwen3:8b",
+    "answer_len": 2913
+  },
+  {
+    "run_id": "9c899885",
+    "finished_at": "2026-03-20T14:13:23.579591",
+    "ok": true,
+    "route": "research",
+    "model": "qwen3:8b",
+    "answer_len": 1134
+  },
+  {
+    "run_id": "f94fe886",
+    "finished_at": "2026-03-20T14:25:41.401772",
+    "ok": true,
+    "route": "research",
+    "model": "qwen3:8b",
+    "answer_len": 2649
   }
 ]

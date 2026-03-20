@@ -186,6 +186,21 @@ export function executeStream(body = {}, { onToken, onDone, onError, onPhase } =
     use_memory: body.use_memory ?? true,
     use_library: body.use_library ?? true,
     use_reflection: body.use_reflection ?? false,
+    use_web_search: body.use_web_search ?? true,
+    use_python_exec: body.use_python_exec ?? true,
+    use_image_gen: body.use_image_gen ?? true,
+    use_file_gen: body.use_file_gen ?? true,
+    use_http_api: body.use_http_api ?? true,
+    use_sql: body.use_sql ?? true,
+    use_screenshot: body.use_screenshot ?? true,
+    use_encrypt: body.use_encrypt ?? true,
+    use_archiver: body.use_archiver ?? true,
+    use_converter: body.use_converter ?? true,
+    use_regex: body.use_regex ?? true,
+    use_translator: body.use_translator ?? true,
+    use_csv: body.use_csv ?? true,
+    use_webhook: body.use_webhook ?? true,
+    use_plugins: body.use_plugins ?? true,
   };
 
   fetch(`${API_BASE}/api/chat/stream`, {

@@ -109,8 +109,10 @@ def _strip_frontend_project_context(user_input: str) -> str:
 _EXEC_TRIGGERS = ["запусти", "посчитай", "вычисли", "выполни", "рассчитай", "run", "execute", "calculate", "compute"]
 
 
-def _maybe_auto_exec_python(user_input, answer, timeline):
+def _maybe_auto_exec_python(user_input, answer, timeline, enabled: bool = True):
     """Если пользователь просил выполнить и ответ содержит Python — запускаем."""
+    if not enabled:
+        return answer
     ql = user_input.lower()
     if not any(t in ql for t in _EXEC_TRIGGERS):
         return answer
@@ -158,8 +160,10 @@ _FILE_TRIGGERS_EXCEL = ["в excel", "в эксель", "xlsx", "в таблиц�
                         "создай excel", "сделай excel"]
 
 
-def _maybe_generate_files(user_input: str, llm_answer: str) -> str:
+def _maybe_generate_files(user_input: str, llm_answer: str, enabled: bool = True) -> str:
     """После ответа LLM: если пользователь хотел Word/Excel — создаём файлы из ответа."""
+    if not enabled:
+        return ""
     import time
     ql = user_input.lower()
 
@@ -237,17 +241,19 @@ def _maybe_generate_files(user_input: str, llm_answer: str) -> str:
     return "".join(extra_parts)
 
 
-def _run_auto_skills(user_input: str) -> str:
-    """Авто-детект ВСЕХ скиллов по ключевым словам в чате."""
+def _run_auto_skills(user_input: str, disabled: set | None = None) -> str:
+    """Авто-детект скиллов по ключевым словам. disabled — набор ID отключённых скиллов."""
     import re as _re
+    disabled = disabled or set()
     ql = user_input.lower()
     parts = []
     url_match = _re.search(r"(https?://\S+)", user_input)
     API_BASE = ""  # relative URLs
 
     # ─── 🌐 HTTP/API ───
-    http_triggers = ["запрос к api", "api запрос", "fetch", "http запрос", "вызови api", "get запрос", "post запрос"]
-    if url_match and any(t in ql for t in http_triggers + ["покажи сайт", "загрузи url", "открой ссылку"]):
+    if "http_api" not in disabled:
+     http_triggers = ["запрос к api", "api запрос", "fetch", "http запрос", "вызови api", "get запрос", "post запрос"]
+     if "http_api" not in disabled and url_match and any(t in ql for t in http_triggers + ["покажи сайт", "загрузи url", "открой ссылку"]):
         try:
             from app.services.skills_service import http_request
             method = "POST" if "post" in ql else "GET"
@@ -263,7 +269,7 @@ def _run_auto_skills(user_input: str) -> str:
 
     # ─── 🗄 SQL ───
     sql_triggers = ["покажи таблиц", "запрос к базе", "sql запрос", "база данных", "покажи базу", "select ", "покажи записи", "покажи данные из"]
-    if any(t in ql for t in sql_triggers):
+    if "sql" not in disabled and any(t in ql for t in sql_triggers):
         try:
             from app.services.skills_service import list_databases, describe_db, run_sql
             sql_match = _re.search(r"(SELECT\s+.+)", user_input, _re.IGNORECASE)
@@ -288,7 +294,7 @@ def _run_auto_skills(user_input: str) -> str:
 
     # ─── 🖼 Скриншот ───
     screenshot_triggers = ["скриншот", "screenshot", "покажи как выглядит", "сделай снимок"]
-    if url_match and any(t in ql for t in screenshot_triggers):
+    if "screenshot" not in disabled and url_match and any(t in ql for t in screenshot_triggers):
         try:
             from app.services.skills_service import screenshot_url
             result = screenshot_url(url_match.group(1))
@@ -303,7 +309,7 @@ def _run_auto_skills(user_input: str) -> str:
     img_triggers = ["нарисуй", "нарисуй мне", "сгенерируй картинк", "сгенерируй изображен",
                     "создай картинк", "создай изображен", "generate image", "draw me",
                     "сделай картинк", "покажи картинк", "нарисовать"]
-    if any(t in ql for t in img_triggers):
+    if "image_gen" not in disabled and any(t in ql for t in img_triggers):
         try:
             from app.services.image_gen import generate_image
             prompt = user_input
@@ -332,19 +338,20 @@ def _run_auto_skills(user_input: str) -> str:
                      "создай мне документ", "сделай мне документ", "напиши документ",
                      "подготовь документ", "сгенерируй документ",
                      "напиши в word", "создай word", "сохрани в word", "экспортируй в word"]
-    if any(t in ql for t in word_triggers):
+    if "file_gen" not in disabled and any(t in ql for t in word_triggers):
         parts.append("SKILL_HINT: Пользователь хочет Word документ для скачивания. Напиши ПОЛНЫЙ развёрнутый текст документа. После ответа файл .docx будет создан автоматически.")
 
     excel_triggers = ["в excel", "в эксель", "xlsx", "создай таблицу", "сделай таблицу",
                       "создай excel", "сделай excel", "сохрани в excel", "экспортируй в excel",
                       "excel файл", "таблицу для скач", "скачать таблицу"]
-    if any(t in ql for t in excel_triggers):
+    if "file_gen" not in disabled and any(t in ql for t in excel_triggers):
         parts.append("SKILL_HINT: Пользователь хочет Excel файл. Напиши данные в формате markdown-таблицы (| col1 | col2 |). После ответа файл .xlsx будет создан автоматически.")
 
     # ─── 🌍 Переводчик ───
     translate_triggers = ["переведи на ", "переведи в ", "translate to ", "перевод на ", "переведи текст"]
-    for t in translate_triggers:
-        if t in ql:
+    if "translator" not in disabled:
+     for t in translate_triggers:
+      if t in ql:
             try:
                 after = user_input[ql.find(t) + len(t):].strip()
                 lang_text = after.split(":", 1) if ":" in after else after.split(" ", 1)
@@ -360,7 +367,7 @@ def _run_auto_skills(user_input: str) -> str:
             break
 
     # ─── 🔐 Шифрование ───
-    if any(t in ql for t in ["зашифруй", "шифрование", "encrypt"]):
+    if "encrypt" not in disabled and any(t in ql for t in ["зашифруй", "шифрование", "encrypt"]):
         try:
             from app.services.skills_extra import encrypt_text
             text = user_input
@@ -376,7 +383,7 @@ def _run_auto_skills(user_input: str) -> str:
         except Exception as e:
             parts.append(f"SKILL_ERROR:🔐 Шифрование: {e}")
 
-    if any(t in ql for t in ["расшифруй", "дешифруй", "decrypt"]):
+    if "encrypt" not in disabled and any(t in ql for t in ["расшифруй", "дешифруй", "decrypt"]):
         try:
             from app.services.skills_extra import decrypt_text
             token = user_input
@@ -396,7 +403,7 @@ def _run_auto_skills(user_input: str) -> str:
 
     # ─── 📦 Архиватор ───
     zip_triggers = ["запакуй", "архивируй", "создай архив", "создай zip", "сделай zip"]
-    if any(t in ql for t in zip_triggers):
+    if "archiver" not in disabled and any(t in ql for t in zip_triggers):
         try:
             from app.services.skills_extra import create_zip
             path = user_input
@@ -415,7 +422,7 @@ def _run_auto_skills(user_input: str) -> str:
             parts.append(f"SKILL_ERROR:📦 Архив: {e}")
 
     unzip_triggers = ["распакуй", "разархивируй", "извлеки архив"]
-    if any(t in ql for t in unzip_triggers):
+    if "archiver" not in disabled and any(t in ql for t in unzip_triggers):
         try:
             from app.services.skills_extra import extract_zip
             path = user_input
@@ -433,7 +440,7 @@ def _run_auto_skills(user_input: str) -> str:
 
     # ─── 🔄 Конвертер ───
     convert_triggers = ["конвертируй", "преобразуй", "конвертировать", "convert "]
-    if any(t in ql for t in convert_triggers):
+    if "converter" not in disabled and any(t in ql for t in convert_triggers):
         try:
             from app.services.skills_extra import convert_file
             # Парсим: "конвертируй data.csv в xlsx"
@@ -451,7 +458,7 @@ def _run_auto_skills(user_input: str) -> str:
 
     # ─── 📐 Regex ───
     regex_triggers = ["проверь regex", "тест regex", "regex тест", "test regex", "регулярка", "регулярное выражение"]
-    if any(t in ql for t in regex_triggers):
+    if "regex" not in disabled and any(t in ql for t in regex_triggers):
         try:
             from app.services.skills_extra import test_regex
             # Парсим: "проверь regex \d+ на строке abc123def"
@@ -469,7 +476,7 @@ def _run_auto_skills(user_input: str) -> str:
 
     # ─── 📈 CSV анализ ───
     csv_triggers = ["проанализируй csv", "анализ csv", "статистика csv", "analyze csv", "проанализируй файл", "покажи статистику"]
-    if any(t in ql for t in csv_triggers):
+    if "csv_analysis" not in disabled and any(t in ql for t in csv_triggers):
         try:
             from app.services.skills_extra import analyze_csv
             # Ищем имя файла
@@ -488,7 +495,7 @@ def _run_auto_skills(user_input: str) -> str:
 
     # ─── 📡 Webhook ───
     webhook_triggers = ["покажи вебхуки", "покажи webhook", "что пришло на webhook", "список вебхуков"]
-    if any(t in ql for t in webhook_triggers):
+    if "webhook" not in disabled and any(t in ql for t in webhook_triggers):
         try:
             from app.services.skills_extra import list_webhooks
             result = list_webhooks(10)
@@ -505,7 +512,7 @@ def _run_auto_skills(user_input: str) -> str:
 
     # ─── 🔌 Плагины ───
     plugin_triggers = ["список плагинов", "покажи плагины", "plugins list"]
-    if any(t in ql for t in plugin_triggers):
+    if "plugins" not in disabled and any(t in ql for t in plugin_triggers):
         try:
             from app.services.plugin_system import list_plugins
             result = list_plugins()
@@ -521,7 +528,7 @@ def _run_auto_skills(user_input: str) -> str:
             parts.append(f"SKILL_ERROR:🔌 Плагины: {e}")
 
     run_plugin_triggers = ["запусти плагин", "выполни плагин", "run plugin"]
-    if any(t in ql for t in run_plugin_triggers):
+    if "plugins" not in disabled and any(t in ql for t in run_plugin_triggers):
         try:
             from app.services.plugin_system import run_plugin
             name_match = _re.search(r"плагин\s+(\S+)", user_input, _re.IGNORECASE)
@@ -597,7 +604,7 @@ def _get_web_search_result(tool_results):
 
 
 
-def _build_prompt(user_input, context_bundle, mode="default"):
+def _build_prompt(user_input, context_bundle, mode="default", disabled_skills: set | None = None):
     from datetime import datetime
     days_ru = {"Monday": "понедельник", "Tuesday": "вторник", "Wednesday": "среда", "Thursday": "четверг", "Friday": "пятница", "Saturday": "суббота", "Sunday": "воскресенье"}
     now = datetime.now()
@@ -605,7 +612,7 @@ def _build_prompt(user_input, context_bundle, mode="default"):
     time_line = f"Сейчас: {now.strftime('%d.%m.%Y, %H:%M')}, {day_name}."
 
     # Авто-скиллы
-    skill_results = _run_auto_skills(user_input)
+    skill_results = _run_auto_skills(user_input, disabled=disabled_skills or set())
 
     # Отделяем картинки/файлы — они не идут в LLM контекст, а добавляются к ответу
     _pending_attachments.clear()
@@ -942,8 +949,10 @@ def _collect_context(*, profile_name, user_input, tools, tool_results, timeline,
 # run_agent
 # ═══════════════════════════════════════════════════════════════
 
-def run_agent(*, model_name, profile_name, user_input, use_memory=True, use_library=True, use_reflection=False, history=None):
+def run_agent(*, model_name, profile_name, user_input, use_memory=True, use_library=True, use_reflection=False, history=None, use_web_search=True, use_python_exec=True, use_image_gen=True, use_file_gen=True, use_http_api=True, use_sql=True, use_screenshot=True, use_encrypt=True, use_archiver=True, use_converter=True, use_regex=True, use_translator=True, use_csv=True, use_webhook=True, use_plugins=True):
     history = _trim_history(history or [])
+    _skill_flags = {"web_search": use_web_search, "python_exec": use_python_exec, "image_gen": use_image_gen, "file_gen": use_file_gen, "http_api": use_http_api, "sql": use_sql, "screenshot": use_screenshot, "encrypt": use_encrypt, "archiver": use_archiver, "converter": use_converter, "regex": use_regex, "translator": use_translator, "csv_analysis": use_csv, "webhook": use_webhook, "plugins": use_plugins}
+    _disabled_skills = {k for k, v in _skill_flags.items() if not v}
     timeline, tool_results = [], []
     planner = PlannerV2Service()
     raw_user_input = user_input
@@ -953,7 +962,7 @@ def run_agent(*, model_name, profile_name, user_input, use_memory=True, use_libr
         plan = planner.plan(planner_input)
         _HISTORY.add_event(run["run_id"], "planner", plan)
         route = plan.get("route", "chat")
-        selected = [t for t in plan.get("tools", []) if not (t == "memory_search" and not use_memory) and not (t == "library_context" and not use_library)]
+        selected = [t for t in plan.get("tools", []) if not (t == "memory_search" and not use_memory) and not (t == "library_context" and not use_library) and not (t == "web_search" and not use_web_search)]
         strict_web_only = route == "research" and _is_strict_web_only_query(planner_input)
         if strict_web_only:
             selected = [t for t in selected if t != "memory_search"]
@@ -984,7 +993,7 @@ def run_agent(*, model_name, profile_name, user_input, use_memory=True, use_libr
         except Exception:
             pass
 
-        prompt = _build_prompt(raw_user_input, ctx)
+        prompt = _build_prompt(raw_user_input, ctx, disabled_skills=_disabled_skills)
         draft = run_chat(model_name=model_name, profile_name=profile_name, user_input=prompt, history=history)
         if not draft.get("ok"):
             raise RuntimeError("; ".join(draft.get("warnings", [])) or "LLM failed")
@@ -1003,7 +1012,7 @@ def run_agent(*, model_name, profile_name, user_input, use_memory=True, use_libr
             answer += attachments
 
         # POST-генерация: Word/Excel из ответа LLM
-        post_files = _maybe_generate_files(raw_user_input, answer)
+        post_files = _maybe_generate_files(raw_user_input, answer, enabled=use_file_gen)
         if post_files:
             answer += post_files
 
@@ -1020,8 +1029,10 @@ def run_agent(*, model_name, profile_name, user_input, use_memory=True, use_libr
 # run_agent_stream
 # ═══════════════════════════════════════════════════════════════
 
-def run_agent_stream(*, model_name, profile_name, user_input, use_memory=True, use_library=True, use_reflection=False, history=None):
+def run_agent_stream(*, model_name, profile_name, user_input, use_memory=True, use_library=True, use_reflection=False, history=None, use_web_search=True, use_python_exec=True, use_image_gen=True, use_file_gen=True, use_http_api=True, use_sql=True, use_screenshot=True, use_encrypt=True, use_archiver=True, use_converter=True, use_regex=True, use_translator=True, use_csv=True, use_webhook=True, use_plugins=True):
     history = _trim_history(history or [])
+    _skill_flags = {"web_search": use_web_search, "python_exec": use_python_exec, "image_gen": use_image_gen, "file_gen": use_file_gen, "http_api": use_http_api, "sql": use_sql, "screenshot": use_screenshot, "encrypt": use_encrypt, "archiver": use_archiver, "converter": use_converter, "regex": use_regex, "translator": use_translator, "csv_analysis": use_csv, "webhook": use_webhook, "plugins": use_plugins}
+    _disabled_skills = {k for k, v in _skill_flags.items() if not v}
     timeline, tool_results = [], []
     planner = PlannerV2Service()
     raw_user_input = user_input
@@ -1031,7 +1042,7 @@ def run_agent_stream(*, model_name, profile_name, user_input, use_memory=True, u
         plan = planner.plan(planner_input)
         _HISTORY.add_event(run["run_id"], "planner", plan)
         route = plan.get("route", "chat")
-        selected = [t for t in plan.get("tools", []) if not (t == "memory_search" and not use_memory) and not (t == "library_context" and not use_library)]
+        selected = [t for t in plan.get("tools", []) if not (t == "memory_search" and not use_memory) and not (t == "library_context" and not use_library) and not (t == "web_search" and not use_web_search)]
 
         # Умная память: извлекаем факты
         try:
@@ -1060,7 +1071,7 @@ def run_agent_stream(*, model_name, profile_name, user_input, use_memory=True, u
 
         yield {"token": "", "done": False, "phase": "thinking", "message": "Генерирую ответ..."}
 
-        prompt = _build_prompt(raw_user_input, ctx)
+        prompt = _build_prompt(raw_user_input, ctx, disabled_skills=_disabled_skills)
         full_text = ""
         for token in run_chat_stream(model_name=model_name, profile_name=profile_name, user_input=prompt, history=history):
             full_text += token
@@ -1078,7 +1089,7 @@ def run_agent_stream(*, model_name, profile_name, user_input, use_memory=True, u
 
         # Авто-выполнение Python
         try:
-            full_text = _maybe_auto_exec_python(raw_user_input, full_text, timeline)
+            full_text = _maybe_auto_exec_python(raw_user_input, full_text, timeline, enabled=use_python_exec)
         except Exception:
             pass
 
@@ -1091,7 +1102,7 @@ def run_agent_stream(*, model_name, profile_name, user_input, use_memory=True, u
         ql_check = raw_user_input.lower()
         if any(t in ql_check for t in _FILE_TRIGGERS_WORD + _FILE_TRIGGERS_EXCEL):
             yield {"token": "", "done": False, "phase": "generating_file", "message": "📄 Создаю файл..."}
-        post_files = _maybe_generate_files(raw_user_input, full_text)
+        post_files = _maybe_generate_files(raw_user_input, full_text, enabled=use_file_gen)
         if post_files:
             full_text += post_files
 

@@ -22,6 +22,22 @@ class ChatRequest(BaseModel):
     use_memory: bool = True
     use_library: bool = True
     use_reflection: bool = False
+    # Скиллы — явные флаги (по умолчанию True для обратной совместимости)
+    use_web_search: bool = True
+    use_python_exec: bool = True
+    use_image_gen: bool = True
+    use_file_gen: bool = True
+    use_http_api: bool = True
+    use_sql: bool = True
+    use_screenshot: bool = True
+    use_encrypt: bool = True
+    use_archiver: bool = True
+    use_converter: bool = True
+    use_regex: bool = True
+    use_translator: bool = True
+    use_csv: bool = True
+    use_webhook: bool = True
+    use_plugins: bool = True
 
 
 # ── обычный запрос (без стриминга) ──────────────────────────────
@@ -36,6 +52,21 @@ def chat_send(payload: ChatRequest):
             use_library=payload.use_library,
             use_reflection=payload.use_reflection,
             history=payload.history,
+            use_web_search=payload.use_web_search,
+            use_python_exec=payload.use_python_exec,
+            use_image_gen=payload.use_image_gen,
+            use_file_gen=payload.use_file_gen,
+            use_http_api=payload.use_http_api,
+            use_sql=payload.use_sql,
+            use_screenshot=payload.use_screenshot,
+            use_encrypt=payload.use_encrypt,
+            use_archiver=payload.use_archiver,
+            use_converter=payload.use_converter,
+            use_regex=payload.use_regex,
+            use_translator=payload.use_translator,
+            use_csv=payload.use_csv,
+            use_webhook=payload.use_webhook,
+            use_plugins=payload.use_plugins,
         )
         return JSONResponse(
             content=jsonable_encoder(result),
@@ -83,6 +114,21 @@ def chat_stream(payload: ChatRequest):
                 use_library=payload.use_library,
                 use_reflection=payload.use_reflection,
                 history=payload.history,
+                use_web_search=payload.use_web_search,
+                use_python_exec=payload.use_python_exec,
+                use_image_gen=payload.use_image_gen,
+                use_file_gen=payload.use_file_gen,
+                use_http_api=payload.use_http_api,
+                use_sql=payload.use_sql,
+                use_screenshot=payload.use_screenshot,
+                use_encrypt=payload.use_encrypt,
+                use_archiver=payload.use_archiver,
+                use_converter=payload.use_converter,
+                use_regex=payload.use_regex,
+                use_translator=payload.use_translator,
+                use_csv=payload.use_csv,
+                use_webhook=payload.use_webhook,
+                use_plugins=payload.use_plugins,
             ):
                 yield f"data: {json.dumps(event, ensure_ascii=False)}\n\n"
         except Exception as exc:
