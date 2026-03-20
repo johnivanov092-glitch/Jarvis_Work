@@ -158,5 +158,245 @@
     "route": "code",
     "model": "qwen3:8b",
     "answer_len": 3360
+  },
+  {
+    "run_id": "cea01625",
+    "finished_at": "2026-03-20T16:00:31.282848",
+    "ok": true,
+    "route": "chat",
+    "model": "qwen2.5:7b",
+    "answer_len": 125
+  },
+  {
+    "run_id": "dbd1b032",
+    "finished_at": "2026-03-20T16:01:18.107654",
+    "ok": true,
+    "route": "research",
+    "model": "qwen2.5:7b",
+    "answer_len": 1081
+  },
+  {
+    "run_id": "4b1e2808",
+    "finished_at": "2026-03-20T16:01:52.200931",
+    "ok": true,
+    "route": "research",
+    "model": "qwen2.5:7b",
+    "answer_len": 669
+  },
+  {
+    "run_id": "c1799482",
+    "finished_at": "2026-03-20T16:02:25.699999",
+    "ok": true,
+    "route": "research",
+    "model": "qwen2.5:7b",
+    "answer_len": 1807
+  },
+  {
+    "run_id": "2439e62f",
+    "finished_at": "2026-03-20T16:02:41.595869",
+    "ok": true,
+    "route": "chat",
+    "model": "qwen2.5:7b",
+    "answer_len": 51
+  },
+  {
+    "run_id": "52dac536",
+    "finished_at": "2026-03-20T16:03:01.646914",
+    "ok": true,
+    "route": "chat",
+    "model": "qwen2.5:7b",
+    "answer_len": 212
+  },
+  {
+    "run_id": "b16108b7",
+    "finished_at": "2026-03-20T16:06:37.424853",
+    "ok": true,
+    "route": "research",
+    "model": "qwen2.5:7b",
+    "answer_len": 2723
+  },
+  {
+    "run_id": "45e55729",
+    "finished_at": "2026-03-20T16:07:28.361772",
+    "ok": true,
+    "route": "chat",
+    "model": "qwen2.5:7b",
+    "answer_len": 296
+  },
+  {
+    "run_id": "b2e2a00a",
+    "finished_at": "2026-03-20T16:09:24.852685",
+    "ok": true,
+    "route": "chat",
+    "model": "yandex/YandexGPT-5-Lite-8B-instruct-GGUF:latest",
+    "answer_len": 31
+  },
+  {
+    "run_id": "4a91fe4a",
+    "finished_at": "2026-03-20T16:10:36.985140",
+    "ok": true,
+    "route": "research",
+    "model": "yandex/YandexGPT-5-Lite-8B-instruct-GGUF:latest",
+    "answer_len": 1712
+  },
+  {
+    "run_id": "d2558e5e",
+    "finished_at": "2026-03-20T16:11:36.600959",
+    "ok": true,
+    "route": "research",
+    "model": "yandex/YandexGPT-5-Lite-8B-instruct-GGUF:latest",
+    "answer_len": 581
+  },
+  {
+    "run_id": "6f06c814",
+    "finished_at": "2026-03-20T16:13:23.162603",
+    "ok": true,
+    "route": "research",
+    "model": "yandex/YandexGPT-5-Lite-8B-instruct-GGUF:latest",
+    "answer_len": 37
+  },
+  {
+    "run_id": "9ef5f5b1",
+    "finished_at": "2026-03-20T16:14:03.995567",
+    "ok": true,
+    "route": "chat",
+    "model": "yandex/YandexGPT-5-Lite-8B-instruct-GGUF:latest",
+    "answer_len": 19
+  },
+  {
+    "run_id": "494ab7e4",
+    "finished_at": "2026-03-20T16:14:12.180942",
+    "ok": true,
+    "route": "chat",
+    "model": "yandex/YandexGPT-5-Lite-8B-instruct-GGUF:latest",
+    "answer_len": 198
+  },
+  {
+    "run_id": "026fc15a",
+    "finished_at": "2026-03-20T16:26:01.576542",
+    "ok": true,
+    "route": "chat",
+    "model": "yandex/YandexGPT-5-Lite-8B-instruct-GGUF:latest",
+    "answer_len": 50
+  },
+  {
+    "run_id": "a3f38a1e",
+    "finished_at": "2026-03-20T16:26:14.987380",
+    "ok": true,
+    "route": "chat",
+    "model": "yandex/YandexGPT-5-Lite-8B-instruct-GGUF:latest",
+    "answer_len": 163
+  },
+  {
+    "run_id": "25b2e2a2",
+    "finished_at": "2026-03-20T16:26:34.934474",
+    "ok": true,
+    "route": "chat",
+    "model": "yandex/YandexGPT-5-Lite-8B-instruct-GGUF:latest",
+    "answer_len": 134
+  },
+  {
+    "run_id": "562852f7",
+    "finished_at": "2026-03-20T16:26:47.290530",
+    "ok": true,
+    "route": "chat",
+    "model": "yandex/YandexGPT-5-Lite-8B-instruct-GGUF:latest",
+    "answer_len": 135
+  },
+  {
+    "run_id": "1594c77d",
+    "finished_at": "2026-03-20T16:26:57.333662",
+    "ok": true,
+    "route": "chat",
+    "model": "yandex/YandexGPT-5-Lite-8B-instruct-GGUF:latest",
+    "answer_len": 135
+  },
+  {
+    "run_id": "52b319ef",
+    "finished_at": "2026-03-20T16:27:05.407184",
+    "ok": true,
+    "route": "chat",
+    "model": "yandex/YandexGPT-5-Lite-8B-instruct-GGUF:latest",
+    "answer_len": 214
+  },
+  {
+    "run_id": "4b4f8f59",
+    "finished_at": "2026-03-20T16:27:25.971883",
+    "ok": true,
+    "route": "chat",
+    "model": "qwen2.5:7b",
+    "answer_len": 154
+  },
+  {
+    "run_id": "2d240d9c",
+    "finished_at": "2026-03-20T16:27:49.225591",
+    "ok": true,
+    "route": "chat",
+    "model": "qwen2.5:7b",
+    "answer_len": 953
+  },
+  {
+    "run_id": "8db0b5a2",
+    "finished_at": "2026-03-20T16:28:10.425684",
+    "ok": true,
+    "route": "chat",
+    "model": "qwen2.5:7b",
+    "answer_len": 226
+  },
+  {
+    "run_id": "5ed76109",
+    "finished_at": "2026-03-20T16:31:08.702500",
+    "ok": true,
+    "route": "project",
+    "model": "qwen2.5:7b",
+    "answer_len": 2595
+  },
+  {
+    "run_id": "8d0f0c2f",
+    "finished_at": "2026-03-20T16:33:48.759094",
+    "ok": true,
+    "route": "project",
+    "model": "qwen3:8b",
+    "answer_len": 4119
+  },
+  {
+    "run_id": "96fe81b5",
+    "finished_at": "2026-03-20T16:35:15.837399",
+    "ok": true,
+    "route": "project",
+    "model": "qwen3:8b",
+    "answer_len": 1748
+  },
+  {
+    "run_id": "f5e657de",
+    "finished_at": "2026-03-20T16:36:20.980715",
+    "ok": true,
+    "route": "chat",
+    "model": "qwen2.5:7b",
+    "answer_len": 232
+  },
+  {
+    "run_id": "d8f6c097",
+    "finished_at": "2026-03-20T16:37:02.370207",
+    "ok": true,
+    "route": "chat",
+    "model": "deepseek-r1:8b",
+    "answer_len": 828
+  },
+  {
+    "run_id": "b0766f68",
+    "finished_at": "2026-03-20T16:38:14.483839",
+    "ok": true,
+    "route": "project",
+    "model": "qwen2.5:7b",
+    "answer_len": 2734
+  },
+  {
+    "run_id": "90845399",
+    "finished_at": "2026-03-20T16:39:10.960131",
+    "ok": true,
+    "route": "research",
+    "model": "qwen2.5:7b",
+    "answer_len": 2711
   }
 ]
