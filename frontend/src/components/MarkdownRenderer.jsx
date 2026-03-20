@@ -38,12 +38,33 @@ function parseInline(text, keyPrefix = "il") {
   const parts = [];
   let remaining = text;
   let idx = 0;
+  const API = "http://127.0.0.1:8000";
+  const isLocalDL = (url) => url.includes("/api/skills/download/") || url.includes("/api/skills/view/") || url.includes("/api/extra/");
+  const doDownload = (url, fname) => {
+    const full = url.startsWith("http") ? url : `${API}${url}`;
+    fetch(full).then(r => r.blob()).then(blob => {
+      const a = document.createElement("a");
+      a.href = URL.createObjectURL(blob);
+      a.download = fname || url.split("/").pop() || "file";
+      document.body.appendChild(a); a.click(); a.remove();
+      URL.revokeObjectURL(a.href);
+    }).catch(() => window.open(full, "_blank"));
+  };
   const patterns = [
     { re: /`([^`]+)`/, render: (m, k) => <code key={k} className="md-inline-code">{m[1]}</code> },
     { re: /\*\*(.+?)\*\*/, render: (m, k) => <strong key={k}>{m[1]}</strong> },
     { re: /\*(.+?)\*/, render: (m, k) => <em key={k}>{m[1]}</em> },
-    { re: /!\[([^\]]*)\]\(([^)]+)\)/, render: (m, k) => <img key={k} src={m[2]} alt={m[1]} style={{maxWidth:"100%",borderRadius:8,marginTop:8,marginBottom:8}} loading="lazy" /> },
-    { re: /\[([^\]]+)\]\(([^)]+)\)/, render: (m, k) => <a key={k} href={m[2]} target="_blank" rel="noopener noreferrer" className="md-link">{m[1]}</a> },
+    { re: /!\[([^\]]*)\]\(([^)]+)\)/, render: (m, k) => {
+      const src = m[2].startsWith("http") ? m[2] : `${API}${m[2]}`;
+      return <img key={k} src={src} alt={m[1]} style={{maxWidth:"100%",borderRadius:8,marginTop:8,marginBottom:8}} loading="lazy" />;
+    }},
+    { re: /\[([^\]]+)\]\(([^)]+)\)/, render: (m, k) => {
+      const url = m[2]; const label = m[1];
+      if (isLocalDL(url)) {
+        return <button key={k} className="md-link" onClick={() => doDownload(url, label)} style={{background:"none",border:"none",color:"inherit",cursor:"pointer",textDecoration:"underline",padding:0,font:"inherit"}}>📥 {label}</button>;
+      }
+      return <a key={k} href={url} target="_blank" rel="noopener noreferrer" className="md-link">{label}</a>;
+    }},
   ];
   while (remaining.length > 0) {
     let earliest = null, earliestIndex = Infinity, matchedPattern = null;

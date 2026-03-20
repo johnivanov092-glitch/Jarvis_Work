@@ -438,11 +438,11 @@ def _run_auto_skills(user_input: str) -> str:
     # ─── 📑 PDF Pro ───
     pdf_word_triggers = ["конвертируй pdf в word", "pdf в word", "pdf to word", "pdf в docx"]
     if any(t in ql for t in pdf_word_triggers):
-        parts.append("SKILL_HINT: Для конвертации PDF→Word загрузи PDF файл и скажи 'конвертируй в word'. Или используй API: POST /api/pdf/to-word")
+        parts.append("SKILL_HINT: Чтобы конвертировать PDF в Word — загрузи PDF через кнопку + и напиши 'конвертируй в word'. PDF будет обработан автоматически через /api/pdf/to-word.")
 
     pdf_table_triggers = ["извлеки таблицы из pdf", "таблицы из pdf", "pdf таблицы в excel"]
     if any(t in ql for t in pdf_table_triggers):
-        parts.append("SKILL_HINT: Для извлечения таблиц загрузи PDF файл. Или используй API: POST /api/pdf/tables")
+        parts.append("SKILL_HINT: Чтобы извлечь таблицы из PDF — загрузи PDF через кнопку + и напиши 'извлеки таблицы'. Таблицы будут сохранены в Excel через /api/pdf/tables.")
 
     # ─── 🎨 GPU статус ───
     gpu_triggers = ["статус gpu", "gpu status", "сколько vram", "видеопамять"]
