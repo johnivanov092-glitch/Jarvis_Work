@@ -1,3 +1,4 @@
+# DEPRECATED: дублирует models_service.py. Используй models_service.get_models()
 
 import httpx
 

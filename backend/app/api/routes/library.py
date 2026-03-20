@@ -1,3 +1,7 @@
+"""
+DEPRECATED: Этот роутер устарел. Используй /api/lib (library_sqlite.py).
+Оставлен для обратной совместимости — НЕ добавлять новые эндпоинты сюда.
+"""
 from __future__ import annotations
 
 from fastapi import APIRouter

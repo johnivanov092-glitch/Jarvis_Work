@@ -14,5 +14,37 @@
     "route": "chat",
     "model": "qwen3:8b",
     "answer_len": 2769
+  },
+  {
+    "run_id": "bdc745dd",
+    "finished_at": "2026-03-20T13:54:44.180753",
+    "ok": true,
+    "route": "chat",
+    "model": "qwen3:8b",
+    "answer_len": 2317
+  },
+  {
+    "run_id": "faec8b0d",
+    "finished_at": "2026-03-20T13:56:31.624059",
+    "ok": true,
+    "route": "chat",
+    "model": "qwen3:8b",
+    "answer_len": 1641
+  },
+  {
+    "run_id": "a6a6c9e4",
+    "finished_at": "2026-03-20T13:56:58.998586",
+    "ok": true,
+    "route": "chat",
+    "model": "qwen3:8b",
+    "answer_len": 329
+  },
+  {
+    "run_id": "b6bb4161",
+    "finished_at": "2026-03-20T13:57:35.383076",
+    "ok": true,
+    "route": "chat",
+    "model": "qwen3:8b",
+    "answer_len": 336
   }
 ]

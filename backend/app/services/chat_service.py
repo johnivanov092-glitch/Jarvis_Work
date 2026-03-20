@@ -35,7 +35,7 @@ def run_chat(model_name: str, profile_name: str, user_input: str, history: list[
     try:
         client = ollama.Client()
         resp = client.chat(model=model_name, messages=messages)
-        text = resp["message"]["content"]
+        text = resp.message.content or ""
         return {"ok": True, "answer": text, "warnings": [], "meta": {"profile": profile}}
     except Exception as e:
         return {"ok": False, "answer": "", "warnings": [str(e)], "meta": {}}
@@ -65,7 +65,7 @@ def run_chat_stream(
         client = ollama.Client()
         stream = client.chat(model=model_name, messages=messages, stream=True)
         for chunk in stream:
-            token = chunk.get("message", {}).get("content", "")
+            token = chunk.message.content or ""
             if token:
                 yield token
     except Exception as e:

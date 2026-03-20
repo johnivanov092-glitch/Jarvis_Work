@@ -2,43 +2,45 @@
 # Установка: cd backend && .venv\Scripts\pip install -r requirements.txt
 
 # ── Обязательные (без них бекенд не запустится) ──
-fastapi
-uvicorn[standard]
-pydantic
-ollama
-httpx
-python-multipart
-aiofiles
+fastapi>=0.115,<0.116
+uvicorn[standard]>=0.32,<0.35
+pydantic>=2.10,<3.0
+ollama>=0.4,<0.5
+httpx>=0.27,<0.29
+python-multipart>=0.0.12
+aiofiles>=24.1
 
 # ── Основные скиллы ──
-duckduckgo-search        # 🌐 Веб-поиск
-requests                 # 🌐 HTTP/API запросы
-beautifulsoup4           # 🌐 Парсинг HTML
-pypdf                    # 📑 PDF (базовый)
-scikit-learn             # 🧠 TF-IDF (умная память)
+ddgs>=7.0                # 🌐 Веб-поиск (бывший duckduckgo-search — переименован в ddgs)
+requests>=2.32           # 🌐 HTTP/API запросы
+beautifulsoup4>=4.12     # 🌐 Парсинг HTML
+pypdf>=5.0               # 📑 PDF (базовый)
+scikit-learn>=1.5        # 🧠 TF-IDF (умная память)
 
 # ── Расширенные скиллы ──
-python-docx              # 📝 Word генерация
-openpyxl                 # 📝 Excel генерация/чтение
-pdfplumber               # 📑 PDF таблицы
-pandas                   # 📈 CSV анализ
-cryptography             # 🔐 AES шифрование
+python-docx>=1.1         # 📝 Word генерация
+openpyxl>=3.1            # 📝 Excel генерация/чтение
+pdfplumber>=0.11         # 📑 PDF таблицы
+pandas>=2.2              # 📈 CSV анализ
+cryptography>=43.0       # 🔐 AES шифрование
 
 # ── Генерация картинок (FLUX.1-schnell) ──
 # ~2GB скачивания. Модель (~12GB) скачается автоматически при первом запросе.
-torch
-diffusers
-transformers
-accelerate
-sentencepiece
-protobuf
+# ВАЖНО: torch устанавливать отдельно с CUDA:
+#   pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu121
+torch>=2.5
+diffusers>=0.30,<0.32
+transformers>=4.44,<5.0
+accelerate>=0.33
+sentencepiece>=0.2
+protobuf>=4.25
 
 # ── OCR для сканированных PDF (опционально) ──
 # + нужен Poppler: https://github.com/oschwartz10612/poppler-windows/releases
 # + нужен Tesseract: https://github.com/UB-Mannheim/tesseract/wiki
-pytesseract
-pdf2image
+pytesseract>=0.3.13
+pdf2image>=1.17
 
 # ── Скриншоты сайтов (опционально) ──
 # После установки: playwright install chromium
-# playwright
+# playwright>=1.45

@@ -1,3 +1,4 @@
+# DEPRECATED: логика перенесена в profiles_service.py и memory_service.py
 from ..core.memory import list_mem_profiles, create_mem_profile, delete_mem_profile
 
 def get_profiles():

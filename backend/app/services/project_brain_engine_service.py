@@ -1,3 +1,4 @@
+# DEPRECATED: не используется ни одним роутером. Кандидат на удаление.
 from __future__ import annotations
 
 import hashlib

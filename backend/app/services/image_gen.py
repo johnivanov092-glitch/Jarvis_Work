@@ -76,6 +76,20 @@ def _get_pipe():
     return _pipe
 
 
+
+
+def _clip_prompt(prompt: str, max_words: int = 60) -> str:
+    """CLIP поддерживает максимум 77 токенов (~60 слов).
+    Обрезаем промпт чтобы избежать IndexError и truncation warning.
+    """
+    words = prompt.split()
+    if len(words) <= max_words:
+        return prompt
+    clipped = " ".join(words[:max_words])
+    logger.warning(f"Промпт обрезан: {len(words)} слов → {max_words} (лимит CLIP 77 токенов)")
+    return clipped
+
+
 def generate_image(
     prompt: str,
     width: int = 768,
@@ -93,6 +107,9 @@ def generate_image(
     """
     if not prompt or not prompt.strip():
         return {"ok": False, "error": "Пустой промпт"}
+
+    # CLIP обрезает до 77 токенов — обрезаем заранее чтобы избежать ошибок
+    prompt = _clip_prompt(prompt.strip())
 
     # Ограничения для 8GB VRAM
     max_pixels = 1024 * 1024
