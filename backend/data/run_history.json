@@ -206,5 +206,109 @@
     "route": "chat",
     "model": "qwen3:8b",
     "answer_len": 3343
+  },
+  {
+    "run_id": "11a7b8ea",
+    "finished_at": "2026-03-20T07:48:35.479947",
+    "ok": true,
+    "route": "research",
+    "model": "qwen3:8b",
+    "answer_len": 1128
+  },
+  {
+    "run_id": "1bbc9524",
+    "finished_at": "2026-03-20T07:52:55.363937",
+    "ok": true,
+    "route": "project",
+    "model": "qwen3:8b",
+    "answer_len": 2643
+  },
+  {
+    "run_id": "558a58e0",
+    "finished_at": "2026-03-20T07:54:47.563359",
+    "ok": true,
+    "route": "project",
+    "model": "qwen3:8b",
+    "answer_len": 3760
+  },
+  {
+    "run_id": "f1ab2767",
+    "finished_at": "2026-03-20T07:56:23.971931",
+    "ok": true,
+    "route": "project",
+    "model": "qwen3:8b",
+    "answer_len": 3388
+  },
+  {
+    "run_id": "78733f34",
+    "finished_at": "2026-03-20T07:57:52.787339",
+    "ok": true,
+    "route": "project",
+    "model": "qwen3:8b",
+    "answer_len": 2595
+  },
+  {
+    "run_id": "8433a936",
+    "finished_at": "2026-03-20T07:59:32.109365",
+    "ok": true,
+    "route": "project",
+    "model": "qwen3:8b",
+    "answer_len": 2636
+  },
+  {
+    "run_id": "e5b286fa",
+    "finished_at": "2026-03-20T08:02:18.628584",
+    "ok": true,
+    "route": "project",
+    "model": "qwen3:8b",
+    "answer_len": 4016
+  },
+  {
+    "run_id": "7a375a60",
+    "finished_at": "2026-03-20T08:03:15.440892",
+    "ok": true,
+    "route": "research",
+    "model": "qwen3:8b",
+    "answer_len": 2386
+  },
+  {
+    "run_id": "b72135e1",
+    "finished_at": "2026-03-20T08:12:11.023115",
+    "ok": true,
+    "route": "chat",
+    "model": "qwen3:8b",
+    "answer_len": 4054
+  },
+  {
+    "run_id": "1ea8acb8",
+    "finished_at": "2026-03-20T08:16:49.881780",
+    "ok": true,
+    "route": "project",
+    "model": "qwen3:8b",
+    "answer_len": 2798
+  },
+  {
+    "run_id": "b54efd57",
+    "finished_at": "2026-03-20T08:18:38.353250",
+    "ok": true,
+    "route": "project",
+    "model": "qwen3:8b",
+    "answer_len": 2968
+  },
+  {
+    "run_id": "845ec2e9",
+    "finished_at": "2026-03-20T08:20:42.955686",
+    "ok": true,
+    "route": "project",
+    "model": "qwen3:8b",
+    "answer_len": 3895
+  },
+  {
+    "run_id": "3d6a69f3",
+    "finished_at": "2026-03-20T08:22:11.552955",
+    "ok": true,
+    "route": "project",
+    "model": "qwen3:8b",
+    "answer_len": 3063
   }
 ]

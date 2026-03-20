@@ -40,16 +40,45 @@ function parseInline(text, keyPrefix = "il") {
   let idx = 0;
   const API = "http://127.0.0.1:8000";
   const isLocalDL = (url) => url.includes("/api/skills/download/") || url.includes("/api/skills/view/") || url.includes("/api/extra/");
-  const doDownload = (url, fname) => {
-    const full = url.startsWith("http") ? url : `${API}${url}`;
-    fetch(full).then(r => r.blob()).then(blob => {
-      const a = document.createElement("a");
-      a.href = URL.createObjectURL(blob);
-      a.download = fname || url.split("/").pop() || "file";
-      document.body.appendChild(a); a.click(); a.remove();
-      URL.revokeObjectURL(a.href);
-    }).catch(() => window.open(full, "_blank"));
+
+  // Извлекает имя файла из URL: /api/skills/download/jarvis_123.docx → jarvis_123.docx
+  const extractFilename = (url) => {
+    const parts = url.split("/");
+    const last = parts[parts.length - 1];
+    return last && last.includes(".") ? decodeURIComponent(last) : null;
   };
+
+  // Проверяет что строка похожа на имя файла (содержит расширение)
+  const isFilename = (s) => /\.\w{1,5}$/.test(s);
+
+  const doDownload = (url, label) => {
+    const full = url.startsWith("http") ? url : `${API}${url}`;
+    // Имя файла: если label — настоящее имя файла, используем его; иначе извлекаем из URL
+    const fname = isFilename(label) ? label : extractFilename(url) || label || "download";
+
+    // Метод 1: fetch → blob (работает в браузере)
+    fetch(full, { mode: "cors" })
+      .then(r => { if (!r.ok) throw new Error(r.status); return r.blob(); })
+      .then(blob => {
+        const a = document.createElement("a");
+        a.href = URL.createObjectURL(blob);
+        a.download = fname;
+        document.body.appendChild(a);
+        a.click();
+        setTimeout(() => { a.remove(); URL.revokeObjectURL(a.href); }, 200);
+      })
+      .catch(() => {
+        // Метод 2: прямая ссылка (fallback для Tauri)
+        const a = document.createElement("a");
+        a.href = full;
+        a.download = fname;
+        a.target = "_self";
+        document.body.appendChild(a);
+        a.click();
+        setTimeout(() => a.remove(), 200);
+      });
+  };
+
   const patterns = [
     { re: /`([^`]+)`/, render: (m, k) => <code key={k} className="md-inline-code">{m[1]}</code> },
     { re: /\*\*(.+?)\*\*/, render: (m, k) => <strong key={k}>{m[1]}</strong> },
@@ -61,7 +90,8 @@ function parseInline(text, keyPrefix = "il") {
     { re: /\[([^\]]+)\]\(([^)]+)\)/, render: (m, k) => {
       const url = m[2]; const label = m[1];
       if (isLocalDL(url)) {
-        return <button key={k} className="md-link" onClick={() => doDownload(url, label)} style={{background:"none",border:"none",color:"inherit",cursor:"pointer",textDecoration:"underline",padding:0,font:"inherit"}}>📥 {label}</button>;
+        const displayName = isFilename(label) ? label : (extractFilename(url) || label);
+        return <button key={k} className="md-link" onClick={() => doDownload(url, label)} style={{background:"rgba(100,200,255,0.08)",border:"1px solid rgba(100,200,255,0.2)",color:"#7dd3fc",cursor:"pointer",borderRadius:6,padding:"3px 10px",font:"inherit",fontSize:"0.9em"}}>📥 {displayName}</button>;
       }
       return <a key={k} href={url} target="_blank" rel="noopener noreferrer" className="md-link">{label}</a>;
     }},

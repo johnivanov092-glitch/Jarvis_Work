@@ -127,6 +127,102 @@ def _maybe_auto_exec_python(user_input, answer, timeline):
         return answer
 
 
+# ═══════════════════════════════════════════════════════════════
+# POST-ГЕНЕРАЦИЯ ФАЙЛОВ: LLM написал ответ → сохраняем в Word/Excel
+# ═══════════════════════════════════════════════════════════════
+
+_FILE_TRIGGERS_WORD = ["в word", "word документ", "word файл", "docx", "в ворд",
+                       "документ для скач", "сохрани в документ", "для скачки",
+                       "сделай документ", "создай документ", "экспорт в word",
+                       "скачать документ", "файл для скач", "сохрани как документ",
+                       "создай мне документ", "сделай мне документ",
+                       "создай отчёт", "создай отчет", "сделай отчёт", "сделай отчет",
+                       "напиши документ", "подготовь документ", "сгенерируй документ"]
+_FILE_TRIGGERS_EXCEL = ["в excel", "в эксель", "xlsx", "в таблицу", "excel файл",
+                        "экспорт в excel", "сделай таблицу", "создай таблицу",
+                        "excel документ", "таблицу для скач", "скачать таблицу",
+                        "создай excel", "сделай excel"]
+
+
+def _maybe_generate_files(user_input: str, llm_answer: str) -> str:
+    """После ответа LLM: если пользователь хотел Word/Excel — создаём файлы из ответа."""
+    import time
+    ql = user_input.lower()
+
+    extra_parts = []
+
+    # Word
+    wants_word = any(t in ql for t in _FILE_TRIGGERS_WORD)
+    if wants_word and len(llm_answer) > 50:
+        try:
+            from app.services.skills_service import generate_word
+            # Извлекаем заголовок из первой строки ответа
+            lines = llm_answer.strip().split("\n")
+            title = ""
+            for line in lines:
+                clean = line.strip().strip("#").strip("*").strip()
+                if clean and len(clean) > 3:
+                    title = clean[:80]
+                    break
+            title = title or "Документ Jarvis"
+
+            # Убираем markdown-разметку для чистого текста в Word
+            content = llm_answer
+            result = generate_word(title, content)
+            if result.get("ok"):
+                fname = result.get("filename", "")
+                dl = result.get("download_url", "")
+                extra_parts.append(f"\n\n📄 **Word документ создан:** [{fname}]({dl})")
+        except Exception as e:
+            extra_parts.append(f"\n\n⚠️ Word ошибка: {e}")
+
+    # Excel
+    wants_excel = any(t in ql for t in _FILE_TRIGGERS_EXCEL)
+    if wants_excel and len(llm_answer) > 30:
+        try:
+            from app.services.skills_service import generate_excel
+            import re as _re
+
+            # Парсим markdown таблицы из ответа LLM
+            table_pattern = _re.findall(r'\|(.+)\|', llm_answer)
+            if table_pattern and len(table_pattern) >= 2:
+                rows = []
+                headers = []
+                for i, row_str in enumerate(table_pattern):
+                    cells = [c.strip() for c in row_str.split("|") if c.strip()]
+                    # Пропускаем разделители (---)
+                    if cells and all(set(c) <= {'-', ':', ' '} for c in cells):
+                        continue
+                    if not headers:
+                        headers = cells
+                    else:
+                        rows.append(cells)
+
+                if headers and rows:
+                    result = generate_excel("Данные", rows, headers)
+                    if result.get("ok"):
+                        fname = result.get("filename", "")
+                        dl = result.get("download_url", "")
+                        extra_parts.append(f"\n\n📊 **Excel файл создан:** [{fname}]({dl})")
+            else:
+                # Нет таблицы в ответе — создаём простой Excel из текста
+                lines_data = []
+                for line in llm_answer.split("\n"):
+                    clean = line.strip()
+                    if clean and not clean.startswith("#") and not clean.startswith("---"):
+                        lines_data.append([clean])
+                if lines_data:
+                    result = generate_excel("Экспорт", lines_data, ["Содержимое"])
+                    if result.get("ok"):
+                        fname = result.get("filename", "")
+                        dl = result.get("download_url", "")
+                        extra_parts.append(f"\n\n📊 **Excel файл создан:** [{fname}]({dl})")
+        except Exception as e:
+            extra_parts.append(f"\n\n⚠️ Excel ошибка: {e}")
+
+    return "".join(extra_parts)
+
+
 def _run_auto_skills(user_input: str) -> str:
     """Авто-детект ВСЕХ скиллов по ключевым словам в чате."""
     import re as _re
@@ -214,34 +310,22 @@ def _run_auto_skills(user_input: str) -> str:
         except Exception as e:
             parts.append(f"SKILL_ERROR:🎨 Генерация: {e}")
 
-    # ─── 📝 Word генерация ───
-    word_triggers = ["создай документ", "создай отчёт", "создай отчет", "сделай документ", "сделай отчёт",
-                     "напиши в word", "создай word", "создай docx", "сгенерируй документ",
-                     "сохрани в word", "экспортируй в word"]
+    # ─── 📝 Word/Excel: НЕ генерируем заранее — файлы создаются ПОСЛЕ ответа LLM через _maybe_generate_files ───
+    # Просто подсказываем LLM что нужно написать полный текст
+    word_triggers = ["в word", "word документ", "docx", "в ворд", "документ для скач",
+                     "сделай документ", "создай документ", "создай отчёт", "создай отчет",
+                     "сделай отчёт", "сделай отчет", "для скачки", "скачать документ",
+                     "создай мне документ", "сделай мне документ", "напиши документ",
+                     "подготовь документ", "сгенерируй документ",
+                     "напиши в word", "создай word", "сохрани в word", "экспортируй в word"]
     if any(t in ql for t in word_triggers):
-        try:
-            from app.services.skills_service import generate_word
-            # Извлекаем содержимое после триггера
-            content = user_input
-            for t in word_triggers:
-                idx = ql.find(t)
-                if idx >= 0:
-                    content = user_input[idx + len(t):].strip().strip(":").strip()
-                    break
-            title = content.split("\n")[0][:80] if content else "Документ Jarvis"
-            result = generate_word(title, content)
-            if result.get("ok"):
-                parts.append(f"FILE_GENERATED:word:{result.get('download_url','')}:{result.get('filename','')}")
-            else:
-                parts.append(f"SKILL_ERROR:📝 Word: {result.get('error')}")
-        except Exception as e:
-            parts.append(f"SKILL_ERROR:📝 Word: {e}")
+        parts.append("SKILL_HINT: Пользователь хочет Word документ для скачивания. Напиши ПОЛНЫЙ развёрнутый текст документа. После ответа файл .docx будет создан автоматически.")
 
-    # ─── 📝 Excel генерация ───
-    excel_triggers = ["создай таблицу", "создай excel", "создай xlsx", "сделай таблицу",
-                      "сохрани в excel", "экспортируй в excel"]
+    excel_triggers = ["в excel", "в эксель", "xlsx", "создай таблицу", "сделай таблицу",
+                      "создай excel", "сделай excel", "сохрани в excel", "экспортируй в excel",
+                      "excel файл", "таблицу для скач", "скачать таблицу"]
     if any(t in ql for t in excel_triggers):
-        parts.append("SKILL_HINT: Пользователь хочет Excel. Сгенерируй данные в формате таблицы, потом их можно экспортировать.")
+        parts.append("SKILL_HINT: Пользователь хочет Excel файл. Напиши данные в формате markdown-таблицы (| col1 | col2 |). После ответа файл .xlsx будет создан автоматически.")
 
     # ─── 🌍 Переводчик ───
     translate_triggers = ["переведи на ", "переведи в ", "translate to ", "перевод на ", "переведи текст"]
@@ -874,6 +958,11 @@ def run_agent(*, model_name, profile_name, user_input, use_memory=True, use_libr
         if attachments:
             answer += attachments
 
+        # POST-генерация: Word/Excel из ответа LLM
+        post_files = _maybe_generate_files(user_input, answer)
+        if post_files:
+            answer += post_files
+
         result = {"ok": True, "answer": answer, "timeline": timeline, "tool_results": tool_results, "meta": {"model_name": model_name, "profile_name": profile_name, "route": route, "tools": selected, "run_id": run["run_id"]}}
         _HISTORY.finish_run(run["run_id"], result)
         return result
@@ -950,6 +1039,14 @@ def run_agent_stream(*, model_name, profile_name, user_input, use_memory=True, u
         attachments = _get_and_clear_attachments()
         if attachments:
             full_text += attachments
+
+        # POST-генерация: Word/Excel из ответа LLM
+        ql_check = user_input.lower()
+        if any(t in ql_check for t in _FILE_TRIGGERS_WORD + _FILE_TRIGGERS_EXCEL):
+            yield {"token": "", "done": False, "phase": "generating_file", "message": "📄 Создаю файл..."}
+        post_files = _maybe_generate_files(user_input, full_text)
+        if post_files:
+            full_text += post_files
 
         meta = {"model_name": model_name, "profile_name": profile_name, "route": route, "tools": selected, "run_id": run["run_id"]}
         _HISTORY.finish_run(run["run_id"], {"ok": True, "answer": full_text, "meta": meta})
