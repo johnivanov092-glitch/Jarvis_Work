@@ -190,7 +190,7 @@ def get_rag_context(query: str, max_items: int = 5, max_chars: int = 2000) -> st
         lines.append(line)
         total += len(line)
 
-    return "Из RAG-памяти Jarvis:\n" + "\n".join(lines) if lines else ""
+    return "Из RAG-памяти Elira:\n" + "\n".join(lines) if lines else ""
 
 
 def list_rag(limit: int = 50) -> dict:

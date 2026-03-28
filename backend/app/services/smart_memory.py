@@ -316,7 +316,7 @@ def get_relevant_context(query: str, max_items: int = 5, max_chars: int = 1500) 
     if not lines:
         return ""
 
-    return "Из памяти Jarvis:\n" + "\n".join(lines)
+    return "Из памяти Elira:\n" + "\n".join(lines)
 
 
 def get_stats() -> dict:

@@ -192,7 +192,7 @@ def _maybe_generate_files(user_input: str, llm_answer: str, enabled: bool = True
                 if clean and len(clean) > 3:
                     title = clean[:80]
                     break
-            title = title or "Документ Jarvis"
+            title = title or "Документ Elira"
 
             # Убираем markdown-разметку для чистого текста в Word
             content = llm_answer
@@ -698,9 +698,13 @@ def _build_prompt(user_input, context_bundle, mode="default", disabled_skills: s
         + context_bundle
         + "\n\n---\n\n"
         "Вопрос пользователя: " + user_input + "\n\n"
-        "ОБЯЗАТЕЛЬНО используй данные выше для ответа. "
-        "Если в данных есть конкретные цифры, ссылки или факты — приведи их. "
-        "Не говори что данных нет, если они есть выше."
+        "ПРАВИЛА ОТВЕТА:\n"
+        "1. ОБЯЗАТЕЛЬНО используй данные выше для ответа — они собраны из нескольких поисковиков.\n"
+        "2. Если есть секция «СОДЕРЖИМОЕ ВЕБ-СТРАНИЦ» — это ГЛАВНЫЙ источник, цитируй оттуда.\n"
+        "3. Если есть «СВЕЖИЕ НОВОСТИ» — упомяни актуальные события по теме.\n"
+        "4. Приводи конкретные цифры, даты, ссылки и факты из данных.\n"
+        "5. Указывай источники (URL) когда цитируешь факты.\n"
+        "6. Не говори что данных нет, если они есть выше."
     )
 
 
@@ -801,112 +805,157 @@ def _fetch_page_text(url, max_chars=4000):
 
 
 def _do_web_search(query, timeline, tool_results):
-    """Глубокий поиск: ddgs → берёт топ-3 URL → заходит и вытаскивает контент."""
+    """
+    Multi-engine поиск: DDG + Bing + Google + Yandex + DDG News.
+    Параллельный fetch top-3 страниц через BeautifulSoup.
+    Использует core/web.py для мульти-поиска.
+    """
     search_query = _clean_query(query)
-    errors = []
 
-    # Шаг 1: получаем URL через ddgs
+    # ═══ Шаг 1: Multi-engine поиск ═══
     search_results = []
+    engines_used = []
+    try:
+        from app.core.web import search_web as multi_search, fetch_page_text as core_fetch
+        raw = multi_search(search_query, max_results=12, engines=("duckduckgo", "searxng", "wikipedia", "bing", "google"))
+        for r in raw:
+            href = r.get("href", "")
+            if href and href.startswith("http"):
+                search_results.append({
+                    "title": r.get("title", ""),
+                    "url": href,
+                    "snippet": r.get("body", ""),
+                    "engine": r.get("engine", ""),
+                })
+        engines_used = list({r.get("engine", "") for r in raw if r.get("engine")})
+    except Exception as e:
+        logger.warning(f"Multi-search failed, falling back to DDG: {e}")
+
+    # Fallback: только DDG если мульти-поиск упал
+    if not search_results:
+        try:
+            DDGS = None
+            try:
+                from ddgs import DDGS
+            except ImportError:
+                from duckduckgo_search import DDGS
+            with DDGS() as ddgs:
+                raw = list(ddgs.text(search_query, max_results=8))
+            for r in raw:
+                url = r.get("href") or r.get("url") or ""
+                if url:
+                    search_results.append({"title": r.get("title", ""), "url": url, "snippet": r.get("body", ""), "engine": "duckduckgo"})
+            engines_used = ["duckduckgo"]
+        except Exception as e:
+            logger.warning(f"DDG fallback also failed: {e}")
+
+    # ═══ Шаг 1.5: DDG News (свежие новости) ═══
+    news_results = []
     try:
         DDGS = None
         try:
             from ddgs import DDGS
         except ImportError:
             from duckduckgo_search import DDGS
-
         with DDGS() as ddgs:
-            raw = list(ddgs.text(search_query, max_results=8))
-
-        for r in raw:
-            url = r.get("href") or r.get("url") or ""
-            if url:
-                search_results.append({
-                    "title": r.get("title", ""),
+            news_raw = list(ddgs.news(search_query, max_results=5))
+        for n in news_raw:
+            url = n.get("url") or n.get("href") or ""
+            if url and url.startswith("http"):
+                news_results.append({
+                    "title": n.get("title", ""),
                     "url": url,
-                    "snippet": r.get("body", ""),
+                    "snippet": n.get("body", ""),
+                    "date": n.get("date", ""),
+                    "source": n.get("source", ""),
                 })
-    except Exception as e:
-        errors.append("ddgs: " + str(e))
+        if news_results:
+            engines_used.append("ddg-news")
+    except Exception:
+        pass  # Новости — бонус, не критично
 
-    if not search_results:
-        # HTML fallback
-        try:
-            import requests
-            from bs4 import BeautifulSoup
+    if not search_results and not news_results:
+        _tl(timeline, "tool_web", "Веб-поиск", "error", "Нет результатов")
+        tool_results.append({"tool": "web_search", "result": {"count": 0}})
+        return "[Поиск не дал результатов]"
 
-            resp = requests.get(
-                "https://html.duckduckgo.com/html/",
-                params={"q": search_query},
-                headers={"User-Agent": "Mozilla/5.0"},
-                timeout=10,
-            )
-            soup = BeautifulSoup(resp.text, "html.parser")
-            for item in soup.select(".result, .web-result"):
-                a = item.select_one("a.result__a")
-                snip = item.select_one(".result__snippet")
-                if a and a.get("href"):
-                    href = a["href"]
-                    if "uddg=" in href:
-                        from urllib.parse import parse_qs, urlparse, unquote
-                        href = unquote(parse_qs(urlparse(href).query).get("uddg", [""])[0])
-                    if href.startswith("http"):
-                        search_results.append({
-                            "title": a.get_text(strip=True),
-                            "url": href,
-                            "snippet": snip.get_text(strip=True) if snip else "",
-                        })
-                if len(search_results) >= 8:
-                    break
-        except Exception as e:
-            errors.append("html: " + str(e))
-
-    if not search_results:
-        err_msg = " | ".join(errors) or "Нет результатов"
-        _tl(timeline, "tool_web", "Веб-поиск", "error", err_msg)
-        tool_results.append({"tool": "web_search", "result": {"count": 0, "errors": errors}})
-        return "[Поиск не дал результатов: " + err_msg + "]"
-
-    # Шаг 2: заходим на топ-3 сайта и вытаскиваем контент
+    # ═══ Шаг 2: Deep fetch top-3 страниц (параллельно) ═══
     deep_content = []
-    fetched_count = 0
+    fetched_urls = set()
     skip_domains = ["youtube.com", "youtu.be", "facebook.com", "instagram.com",
                     "tiktok.com", "twitter.com", "x.com", "vk.com", "t.me",
-                    "pinterest.com", "wikipedia.org"]  # wiki даёт слишком общую инфу
-    for item in search_results[:5]:  # Пробуем 5, берём 3
-        url = item["url"]
-        if any(d in url for d in skip_domains):
-            continue
-        page_text = _fetch_page_text(url, max_chars=3000)
-        if page_text and len(page_text) > 100:
-            deep_content.append(
-                "--- " + item["title"] + " ---\n"
-                "URL: " + url + "\n"
-                + page_text
-            )
-            fetched_count += 1
-        if fetched_count >= 3:
-            break
+                    "pinterest.com"]
 
-    # Шаг 3: формируем контекст
+    # Дедупликация URL, фильтр соцсетей
+    all_urls_seen = set()
+    fetch_candidates = []
+    for item in search_results[:7]:
+        url = item["url"]
+        if url not in all_urls_seen and not any(d in url for d in skip_domains):
+            all_urls_seen.add(url)
+            fetch_candidates.append(item)
+
+    # Параллельный fetch через ThreadPoolExecutor
+    from concurrent.futures import ThreadPoolExecutor, as_completed
+    targets = fetch_candidates[:5]  # Пробуем 5, берём лучшие 3
+    if targets:
+        page_results = {}  # url → text
+        with ThreadPoolExecutor(max_workers=min(len(targets), 4)) as executor:
+            future_map = {executor.submit(_fetch_page_text, t["url"], 3000): t for t in targets}
+            for future in as_completed(future_map):
+                item = future_map[future]
+                try:
+                    text = future.result()
+                    if text and len(text) > 100:
+                        page_results[item["url"]] = (item, text)
+                except Exception:
+                    pass
+
+        # Берём первые 3 успешных (по порядку оригинальных результатов)
+        for t in targets:
+            if t["url"] in page_results and len(deep_content) < 3:
+                item, text = page_results[t["url"]]
+                deep_content.append(
+                    "--- " + item["title"] + " ---\n"
+                    "URL: " + item["url"] + "\n"
+                    + text
+                )
+                fetched_urls.add(item["url"])
+
+    fetched_count = len(deep_content)
+
+    # ═══ Шаг 3: Формируем контекст ═══
+    engines_str = ", ".join(engines_used) if engines_used else "search"
     tool_results.append({"tool": "web_search", "result": {
         "query": search_query,
         "found": len(search_results),
+        "news": len(news_results),
         "fetched_pages": fetched_count,
+        "engines": engines_used,
     }})
     _tl(timeline, "tool_web", "Веб-поиск", "done",
-        str(len(search_results)) + " найдено, " + str(fetched_count) + " страниц загружено")
+        f"{len(search_results)} найдено ({engines_str}), {fetched_count} страниц загружено, {len(news_results)} новостей")
 
     parts = []
 
     # Глубокий контент (со страниц)
     if deep_content:
-        parts.append("Содержимое веб-страниц:\n\n" + "\n\n".join(deep_content))
+        parts.append("══ СОДЕРЖИМОЕ ВЕБ-СТРАНИЦ (ИСПОЛЬЗУЙ ЭТИ ДАННЫЕ!) ══\n\n" + "\n\n".join(deep_content))
 
-    # Сниппеты остальных результатов
-    remaining = search_results[fetched_count:6] if fetched_count < len(search_results) else []
+    # Свежие новости
+    if news_results:
+        news_lines = []
+        for n in news_results[:5]:
+            date_str = f" [{n['date']}]" if n.get("date") else ""
+            source_str = f" ({n['source']})" if n.get("source") else ""
+            news_lines.append(f"- {n['title']}{date_str}{source_str}: {n['snippet']} ({n['url']})")
+        parts.append("══ СВЕЖИЕ НОВОСТИ ══\n" + "\n".join(news_lines))
+
+    # Сниппеты остальных результатов (исключаем уже загруженные)
+    remaining = [s for s in search_results if s["url"] not in fetched_urls][:5]
     if remaining:
-        snippet_lines = [("- " + s["title"] + ": " + s["snippet"] + " (" + s["url"] + ")") for s in remaining]
-        parts.append("Другие результаты поиска:\n" + "\n".join(snippet_lines))
+        snippet_lines = [f"- [{s.get('engine','')}] {s['title']}: {s['snippet']} ({s['url']})" for s in remaining]
+        parts.append("══ ДРУГИЕ РЕЗУЛЬТАТЫ ══\n" + "\n".join(snippet_lines))
 
     return "\n\n".join(parts)
 

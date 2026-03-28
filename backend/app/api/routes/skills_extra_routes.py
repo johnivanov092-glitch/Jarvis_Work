@@ -15,7 +15,10 @@ from app.services.skills_extra import (
     analyze_csv,
     store_webhook, list_webhooks, clear_webhooks,
 )
-from app.services.plugin_system import list_plugins, run_plugin, reload_plugins
+from app.services.plugin_system import (
+    list_plugins, run_plugin, reload_plugins,
+    enable_plugin, disable_plugin, get_plugin_info, update_plugin_settings,
+)
 
 router = APIRouter(prefix="/api/extra", tags=["extra-skills"])
 
@@ -128,13 +131,33 @@ class PluginRunRequest(BaseModel):
     name: str
     args: dict = {}
 
+class PluginSettingsRequest(BaseModel):
+    name: str
+    settings: dict = {}
+
 @router.get("/plugins/list")
 def api_plugins_list():
     return list_plugins()
 
+@router.get("/plugins/info/{name}")
+def api_plugin_info(name: str):
+    return get_plugin_info(name)
+
 @router.post("/plugins/run")
 def api_plugin_run(p: PluginRunRequest):
     return run_plugin(p.name, p.args)
+
+@router.post("/plugins/enable/{name}")
+def api_plugin_enable(name: str):
+    return enable_plugin(name)
+
+@router.post("/plugins/disable/{name}")
+def api_plugin_disable(name: str):
+    return disable_plugin(name)
+
+@router.post("/plugins/settings")
+def api_plugin_settings(p: PluginSettingsRequest):
+    return update_plugin_settings(p.name, p.settings)
 
 @router.post("/plugins/reload")
 def api_plugins_reload():

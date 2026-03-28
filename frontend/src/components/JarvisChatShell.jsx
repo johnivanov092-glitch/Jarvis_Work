@@ -165,6 +165,8 @@ export default function JarvisChatShell() {
   const [renaming, setRenaming] = useState(false);
   const [renameVal, setRenameVal] = useState("");
   const [showPanel, setShowPanel] = useState(false);
+  const [showExportMenu, setShowExportMenu] = useState(false);
+  const [mobileSidebar, setMobileSidebar] = useState(false);
   const [multiAgent, setMultiAgent] = useState(false);
   const [lastInput, setLastInput] = useState("");
   const [lastModel, setLastModel] = useState("");
@@ -183,6 +185,14 @@ export default function JarvisChatShell() {
   useEffect(() => { if (msgRef.current) msgRef.current.scrollTop = msgRef.current.scrollHeight; }, [messages, chatId]);
   useEffect(() => { if (streaming && msgRef.current) { const id = requestAnimationFrame(() => { msgRef.current && (msgRef.current.scrollTop = msgRef.current.scrollHeight); }); return () => cancelAnimationFrame(id); } }, [streamText, streaming]);
   useEffect(() => { if (!taRef.current) return; taRef.current.style.height = "36px"; taRef.current.style.height = `${Math.min(120, taRef.current.scrollHeight)}px`; }, [input]);
+
+  // Закрытие export dropdown при клике снаружи
+  useEffect(() => {
+    if (!showExportMenu) return;
+    const h = (e) => { if (!e.target.closest(".export-dropdown-wrap")) setShowExportMenu(false); };
+    document.addEventListener("mousedown", h);
+    return () => document.removeEventListener("mousedown", h);
+  }, [showExportMenu]);
 
   // Тема: применяем к document
   useEffect(() => {
@@ -285,7 +295,7 @@ export default function JarvisChatShell() {
     } catch (e) { setError(normalizeErrorMessage(e)); return null; }
   }
   async function openChat(id) {
-    try { streamRef.current?.abort(); setStreamText(""); setStreaming(false); setPhase(""); setChatId(id); setMessages(await api.getMessages({ chatId: id }) || []); setSideTab("chats"); setMainTab("chat"); setRenaming(false);
+    try { streamRef.current?.abort(); setStreamText(""); setStreaming(false); setPhase(""); setChatId(id); setMessages(await api.getMessages({ chatId: id }) || []); setSideTab("chats"); setMainTab("chat"); setRenaming(false); setMobileSidebar(false);
     } catch (e) { setError(normalizeErrorMessage(e)); }
   }
   async function renameActive() { const t = renameVal.trim(); if (!t || !chatId) return; try { await api.renameChat({ id: chatId, title: t }); await loadChats(chatId); setRenaming(false); } catch (e) { setError(normalizeErrorMessage(e)); } }
@@ -294,19 +304,37 @@ export default function JarvisChatShell() {
 
   function exportChat(fmt) {
     if (!messages.length) return;
-    const title = chats.find(c => c.id === chatId)?.title || "Jarvis Chat";
+    const title = chats.find(c => c.id === chatId)?.title || "Elira Chat";
     const safe = title.slice(0,40).replace(/[^\w\u0400-\u04FF]/g,"_");
+    const ts = new Date().toLocaleString("ru-RU");
+    let blob, ext;
     if (fmt === "md") {
-      const body = messages.map(m => (m.role==="user"?"**Вы**":"**Jarvis**") + "\n\n" + m.content).join("\n\n---\n\n");
-      const a = document.createElement("a");
-      a.href = URL.createObjectURL(new Blob(["# "+title+"\n\n"+body],{type:"text/markdown"}));
-      a.download = safe + ".md"; a.click();
+      const body = messages.map(m => `### ${m.role==="user"?"Вы":"Elira"}\n\n${m.content}`).join("\n\n---\n\n");
+      blob = new Blob([`# ${title}\n\n> Экспорт: ${ts} | Сообщений: ${messages.length}\n\n---\n\n${body}`], {type:"text/markdown;charset=utf-8"});
+      ext = ".md";
+    } else if (fmt === "json") {
+      const data = { title, exported_at: new Date().toISOString(), message_count: messages.length, messages: messages.map(m => ({ role: m.role, content: m.content, created_at: m.created_at || null })) };
+      blob = new Blob([JSON.stringify(data, null, 2)], {type:"application/json;charset=utf-8"});
+      ext = ".json";
+    } else if (fmt === "html") {
+      const msgs = messages.map(m => {
+        const who = m.role==="user" ? "Вы" : "Elira";
+        const bg = m.role==="user" ? "#e3f2fd" : "#f5f5f5";
+        const content = m.content.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/\n/g,"<br>");
+        return `<div style="margin:12px 0;padding:12px 16px;border-radius:10px;background:${bg}"><strong>${who}</strong><div style="margin-top:6px;white-space:pre-wrap">${content}</div></div>`;
+      }).join("\n");
+      const html = `<!DOCTYPE html><html lang="ru"><head><meta charset="utf-8"><title>${title}</title><style>body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;max-width:800px;margin:0 auto;padding:24px;background:#fff;color:#333}h1{font-size:22px;border-bottom:2px solid #1976d2;padding-bottom:8px}.meta{color:#888;font-size:13px;margin-bottom:24px}</style></head><body><h1>${title}</h1><div class="meta">${ts} | ${messages.length} сообщений</div>${msgs}</body></html>`;
+      blob = new Blob([html], {type:"text/html;charset=utf-8"});
+      ext = ".html";
     } else {
-      const body = messages.map(m => (m.role==="user"?"Вы: ":"Jarvis: ") + m.content).join("\n\n");
-      const a = document.createElement("a");
-      a.href = URL.createObjectURL(new Blob([body],{type:"text/plain"}));
-      a.download = safe + ".txt"; a.click();
+      const body = messages.map(m => `${m.role==="user"?"Вы":"Elira"}:\n${m.content}`).join("\n\n" + "─".repeat(40) + "\n\n");
+      blob = new Blob([`${title}\nЭкспорт: ${ts} | Сообщений: ${messages.length}\n${"═".repeat(40)}\n\n${body}`], {type:"text/plain;charset=utf-8"});
+      ext = ".txt";
     }
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    a.download = safe + ext; a.click();
+    URL.revokeObjectURL(a.href);
   }
 
   function handleResend(withModel) {
@@ -513,11 +541,12 @@ export default function JarvisChatShell() {
 
   return (
     <div className="jarvis-shell" style={showPanel && sideTab === "chats" ? {gridTemplateColumns: "200px 1fr auto"} : undefined}>
-      <aside className="jarvis-sidebar">
+      {mobileSidebar && <div className="mobile-overlay" onClick={()=>setMobileSidebar(false)}/>}
+      <aside className={`jarvis-sidebar ${mobileSidebar?"mobile-open":""}`}>
         <button className="sidebar-newchat-btn" onClick={() => newChat(false)}>+ Новый чат</button>
         <div className="sidebar-nav">
           {[["chats","☰ Чаты"],["project","📂 Проекты"],["library","📚 Файлы"],["memory","★ Память"],["settings","⚙ Настройки"]].map(([k,l]) => (
-            <button key={k} className={`sidebar-nav-item ${sideTab === k ? "active" : ""}`} onClick={() => { setSideTab(k); if(k==="settings"){setSettingsModel(model);setSettingsProfile(profile);setSettingsContext(ollamaContext);setSettingsSaved(false);refreshModels();} }}>{l}</button>
+            <button key={k} className={`sidebar-nav-item ${sideTab === k ? "active" : ""}`} onClick={() => { setSideTab(k); setMobileSidebar(false); if(k==="settings"){setSettingsModel(model);setSettingsProfile(profile);setSettingsContext(ollamaContext);setSettingsSaved(false);refreshModels();} }}>{l}</button>
           ))}
         </div>
         <div className="sidebar-nav-item search-shell">
@@ -545,7 +574,8 @@ export default function JarvisChatShell() {
 
       <main className="jarvis-main">
         <div className="jarvis-topbar slim">
-          <div className="jarvis-brand"><svg width="22" height="22" viewBox="0 0 64 64" fill="none" style={{marginRight:7,verticalAlign:"middle",marginTop:-2}}><defs><linearGradient id="jg" x1="12" y1="10" x2="52" y2="54" gradientUnits="userSpaceOnUse"><stop stopColor="#7C3AED"/><stop offset="1" stopColor="#06B6D4"/></linearGradient></defs><rect x="5" y="5" width="54" height="54" rx="14" fill="#0B1020"/><circle cx="32" cy="32" r="14" stroke="url(#jg)" strokeWidth="3"/><circle cx="32" cy="32" r="6" fill="url(#jg)"/></svg>Jarvis</div>
+          <button className="mobile-burger" onClick={()=>setMobileSidebar(v=>!v)}>☰</button>
+          <div className="jarvis-brand"><svg width="22" height="22" viewBox="0 0 64 64" fill="none" style={{marginRight:7,verticalAlign:"middle",marginTop:-2}}><defs><linearGradient id="jg" x1="12" y1="10" x2="52" y2="54" gradientUnits="userSpaceOnUse"><stop stopColor="#7C3AED"/><stop offset="1" stopColor="#06B6D4"/></linearGradient></defs><rect x="5" y="5" width="54" height="54" rx="14" fill="#0B1020"/><circle cx="32" cy="32" r="14" stroke="url(#jg)" strokeWidth="3"/><circle cx="32" cy="32" r="6" fill="url(#jg)"/></svg>Elira AI</div>
           <div className="topbar-tabs">
             <button className={`soft-btn ${mainTab==="chat"?"active":""}`} onClick={() => setMainTab("chat")}>Chat</button>
             <button className={`soft-btn ${mainTab==="code"?"active":""}`} onClick={() => setMainTab("code")}>Code</button>
@@ -558,9 +588,15 @@ export default function JarvisChatShell() {
             <div className="chat-page-title">{sideTab==="chats"&&"Чат"}{sideTab==="memory"&&"Память"}{sideTab==="settings"&&"Настройки"}{sideTab==="library"&&"Библиотека"}{sideTab==="project"&&"Проект"}</div>
             {sideTab === "chats" && chatId && (
               <div className="chat-header-actions icon-actions" style={{display:"flex"}}>
-                <div className={`working-chip ${working?"active":""}`}>{working ? (phase || "Думаю...") : "Готов"}</div>
-                <button className="soft-btn icon-btn" title="Экспорт MD" onClick={()=>exportChat("md")}>📋</button>
-                <button className="soft-btn icon-btn" title="Экспорт TXT" onClick={()=>exportChat("txt")}>📄</button>
+                <div className="export-dropdown-wrap" style={{position:"relative"}}>
+                  <button className="soft-btn icon-btn" title="Экспорт чата" onClick={()=>setShowExportMenu(v=>!v)}>📥</button>
+                  {showExportMenu && <div className="export-dropdown" style={{position:"absolute",top:"100%",right:0,zIndex:99,background:"var(--bg-card)",border:"1px solid var(--border)",borderRadius:8,padding:"4px 0",minWidth:140,boxShadow:"0 4px 16px rgba(0,0,0,.18)"}}>
+                    <button className="export-item" onClick={()=>{exportChat("md");setShowExportMenu(false)}}>📋 Markdown</button>
+                    <button className="export-item" onClick={()=>{exportChat("html");setShowExportMenu(false)}}>🌐 HTML</button>
+                    <button className="export-item" onClick={()=>{exportChat("json");setShowExportMenu(false)}}>📦 JSON</button>
+                    <button className="export-item" onClick={()=>{exportChat("txt");setShowExportMenu(false)}}>📄 Text</button>
+                  </div>}
+                </div>
                 <button className="soft-btn icon-btn" onClick={() => saveToMemory(chatId, chats.find(c=>c.id===chatId)?.memory_saved)}>🧠</button>
                 <button className="soft-btn icon-btn" onClick={() => pinChat(chatId, chats.find(c=>c.id===chatId)?.pinned)}>📌</button>
                 <button className="soft-btn icon-btn" onClick={() => { setRenaming(true); setRenameVal(chats.find(c=>c.id===chatId)?.title||""); }}>✎</button>
@@ -577,7 +613,7 @@ export default function JarvisChatShell() {
                 <div style={{fontSize:13,fontWeight:600,color:"var(--text)"}}>Настройки по умолчанию</div>
                 <button className="soft-btn" style={{fontSize:10,padding:"3px 10px",border:"1px solid var(--border)"}} onClick={async()=>{const ml=await refreshModels();setError(ml.length?"":`Ollama недоступна`);}}>↻ Обновить модели ({modelOpts.length})</button>
               </div>
-              <div className="settings-desc" style={{marginBottom:14,fontSize:11}}>Сохранённые значения загружаются при каждом запуске Jarvis</div>
+              <div className="settings-desc" style={{marginBottom:14,fontSize:11}}>Сохранённые значения загружаются при каждом запуске Elira</div>
               <div className="settings-tile-grid">
                 <div className="settings-tile">
                   <div className="settings-title">Модель по умолчанию</div>
@@ -626,7 +662,8 @@ export default function JarvisChatShell() {
                             value={current[0] || ""}
                             onChange={e=>{
                               const val = e.target.value;
-                              const updated = {...routeMap, [route]: val ? [val, ...current.filter(m => m !== val)] : current};
+                              const rest = current.filter(m => m !== val).slice(0, 2);
+                              const updated = {...routeMap, [route]: val ? [val, ...rest] : current};
                               setRouteMap(updated);
                               setSettingsSaved(false);
                             }}
@@ -637,6 +674,7 @@ export default function JarvisChatShell() {
                             {allModels.map(n=><option key={n} value={n}>{n}</option>)}
                           </select>
                           {current.length > 1 && <span style={{fontSize:10,color:"var(--text-muted)"}}>фоллбэк: {current.slice(1).join(" → ")}</span>}
+                          {current.length > 1 && <button className="soft-btn" style={{fontSize:9,padding:"1px 6px",marginLeft:4}} onClick={()=>{setRouteMap({...routeMap,[route]:[current[0]]});setSettingsSaved(false)}} title="Очистить фоллбэк">✕</button>}
                         </div>
                       </div>
                     );
@@ -686,8 +724,17 @@ export default function JarvisChatShell() {
 
               <div className="message-stream compact-stream" ref={msgRef}>
                 {messages.map(msg => <MessageItem key={msg.id} msg={msg} />)}
-                {streaming && streamText && <div className="message-row assistant"><div className="message-bubble smaller-text streaming-cursor"><MarkdownRenderer content={streamText}/></div></div>}
-                {streaming && !streamText && <div className="message-row assistant"><div className="message-bubble smaller-text phase-indicator">{phase || "Думаю..."}</div></div>}
+                {streaming && streamText && <div className="message-row assistant"><div className="message-bubble smaller-text streaming-active"><MarkdownRenderer content={streamText}/><span className="typing-cursor"/></div></div>}
+                {streaming && !streamText && (
+                  <div className="message-row assistant">
+                    <div className="message-bubble smaller-text thinking-bubble">
+                      <div className="thinking-indicator">
+                        <div className="thinking-dots"><span/><span/><span/></div>
+                        <span className="thinking-text">{phase || "Думаю..."}</span>
+                      </div>
+                    </div>
+                  </div>
+                )}
               </div>
 
               {error && <div className="error-banner smaller-text">{error}</div>}

@@ -6,7 +6,7 @@ import { useState, useRef, useEffect } from "react";
 const API = import.meta.env.VITE_API_BASE_URL || `http://${window.location.hostname}:8000`;
 
 export default function TerminalPanel() {
-  const [history, setHistory] = useState([{ type: "info", text: "Jarvis Terminal. Введи команду." }]);
+  const [history, setHistory] = useState([{ type: "info", text: "Elira Terminal. Введи команду." }]);
   const [input, setInput] = useState("");
   const [cwd, setCwd] = useState("");
   const [running, setRunning] = useState(false);

@@ -162,7 +162,7 @@ export default function MemoryPanel() {
       ) : filtered.length === 0 ? (
         <div style={{ color: "var(--text-muted)", fontSize: 12, textAlign: "center", padding: 20 }}>
           <div style={{ fontSize: 24, opacity: 0.2, marginBottom: 8 }}>🧠</div>
-          Память пуста. Скажи "Jarvis, запомни что..." или добавь вручную.
+          Память пуста. Скажи "Elira, запомни что..." или добавь вручную.
         </div>
       ) : (
         <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>

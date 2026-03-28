@@ -6,17 +6,38 @@ from urllib.parse import quote, urlparse, parse_qs, unquote
 
 import requests
 from bs4 import BeautifulSoup
-from duckduckgo_search import DDGS
+try:
+    from ddgs import DDGS
+except ImportError:
+    from duckduckgo_search import DDGS
 
 from .files import truncate_text
 
-DEFAULT_SEARCH_ENGINES = ("duckduckgo", "bing", "google", "yandex")
+import json as _json
+
+# Yandex оставлен в _ENGINE_FUNCS но убран из дефолтов (дублирует SearXNG, часто блокирует)
+DEFAULT_SEARCH_ENGINES = ("duckduckgo", "searxng", "wikipedia", "bing", "google")
 _ENGINE_LABELS = {
     "duckduckgo": "DuckDuckGo",
     "bing": "Bing",
     "google": "Google",
     "yandex": "Yandex",
+    "searxng": "SearXNG",
+    "wikipedia": "Wikipedia",
 }
+
+# ── SearXNG ──
+# Публичные инстансы SearXNG (fallback-цепочка).
+# Можно переопределить через переменную окружения SEARXNG_URL.
+import os as _os
+_SEARXNG_INSTANCES = [
+    _os.environ.get("SEARXNG_URL", ""),
+    "https://search.sapti.me",
+    "https://searx.tiekoetter.com",
+    "https://search.bus-hit.me",
+    "https://searxng.site",
+]
+_SEARXNG_INSTANCES = [u for u in _SEARXNG_INSTANCES if u]  # убираем пустые
 
 
 def _session() -> requests.Session:
@@ -178,11 +199,90 @@ def _search_yandex(query: str, max_results: int = 5) -> List[Dict[str, str]]:
     return results
 
 
+def _search_searxng(query: str, max_results: int = 5) -> List[Dict[str, str]]:
+    """Поиск через публичный SearXNG инстанс (мета-поисковик)."""
+    results = []
+    last_err = None
+    for base_url in _SEARXNG_INSTANCES:
+        try:
+            url = f"{base_url.rstrip('/')}/search"
+            params = {
+                "q": query,
+                "format": "json",
+                "categories": "general",
+                "language": "ru-RU",
+                "pageno": 1,
+            }
+            resp = _session().get(url, params=params, timeout=15)
+            resp.raise_for_status()
+            data = resp.json()
+            for r in data.get("results", [])[:max_results]:
+                href = _clean_url(r.get("url", ""))
+                if not href.startswith("http"):
+                    continue
+                results.append({
+                    "title": (r.get("title") or "").strip(),
+                    "href": href,
+                    "body": truncate_text((r.get("content") or "").strip(), 300),
+                    "engine": "searxng",
+                })
+            if results:
+                break  # Успех — не пробуем другие инстансы
+        except Exception as e:
+            last_err = e
+            continue
+    if not results and last_err:
+        raise last_err
+    return results
+
+
+def _search_wikipedia(query: str, max_results: int = 5) -> List[Dict[str, str]]:
+    """Поиск по Wikipedia API (русская + английская)."""
+    results = []
+    for lang in ("ru", "en"):
+        if len(results) >= max_results:
+            break
+        try:
+            url = f"https://{lang}.wikipedia.org/w/api.php"
+            params = {
+                "action": "query",
+                "list": "search",
+                "srsearch": query,
+                "srlimit": min(max_results, 5),
+                "format": "json",
+                "utf8": 1,
+            }
+            resp = _session().get(url, params=params, timeout=15)
+            resp.raise_for_status()
+            data = resp.json()
+            for item in data.get("query", {}).get("search", []):
+                title = item.get("title", "")
+                # Убираем HTML-теги из snippet
+                snippet = re.sub(r"<[^>]+>", "", item.get("snippet", ""))
+                page_url = f"https://{lang}.wikipedia.org/wiki/{quote(title.replace(' ', '_'))}"
+                # Проверяем дубликаты (одна статья на двух языках)
+                if any(r["title"] == title for r in results):
+                    continue
+                results.append({
+                    "title": f"{title} (Wikipedia {lang.upper()})",
+                    "href": page_url,
+                    "body": snippet,
+                    "engine": "wikipedia",
+                })
+                if len(results) >= max_results:
+                    break
+        except Exception:
+            continue
+    return results
+
+
 _ENGINE_FUNCS = {
     "duckduckgo": _search_duckduckgo,
     "bing": _search_bing,
     "google": _search_google,
     "yandex": _search_yandex,
+    "searxng": _search_searxng,
+    "wikipedia": _search_wikipedia,
 }
 
 

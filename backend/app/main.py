@@ -33,11 +33,12 @@ from app.api.routes.skills_routes import router as skills_router
 from app.api.routes.skills_extra_routes import router as skills_extra_router
 from app.api.routes.image_routes import router as image_router
 from app.api.routes.git_routes import router as git_router
+from app.api.routes.web_search_routes import router as web_search_router
 
-app = FastAPI(title="Jarvis Work API")
+app = FastAPI(title="Elira AI API")
 
-# Для dev/Tauri важнее стабильный CORS, чем wildcard + credentials.
-# Консольная ошибка у тебя была из-за сочетания allow_credentials=True и "*".
+# CORS: localhost + LAN (для mobile mode).
+# Regex покрывает: 127.0.0.1, localhost, и любой LAN IP (192.168.x.x, 10.x.x.x, 172.16-31.x.x)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[
@@ -48,7 +49,7 @@ app.add_middleware(
         "tauri://localhost",
         "http://tauri.localhost",
     ],
-    allow_origin_regex=r"https?://(127\.0\.0\.1|localhost)(:\d+)?$",
+    allow_origin_regex=r"https?://(127\.0\.0\.1|localhost|192\.168\.\d{1,3}\.\d{1,3}|10\.\d{1,3}\.\d{1,3}\.\d{1,3}|172\.(1[6-9]|2\d|3[01])\.\d{1,3}\.\d{1,3})(:\d+)?$",
     allow_credentials=False,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -86,7 +87,8 @@ app.include_router(skills_router)
 app.include_router(skills_extra_router)
 app.include_router(image_router)
 app.include_router(git_router)
+app.include_router(web_search_router)
 
 @app.get("/health")
 def health():
-    return {"status": "ok", "service": "jarvis-work-api"}
+    return {"status": "ok", "service": "elira-ai-api"}

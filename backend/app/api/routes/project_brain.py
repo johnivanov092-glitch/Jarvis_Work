@@ -676,7 +676,7 @@ def chat_send(payload: ChatRequest):
         else:
             refs = _read_reference_context(payload.selected_project_paths, selected_path=target_attachment["project_path"])
             system_prompt = (
-                "You are Jarvis coder agent. Return JSON only with keys: answer, plan, target_path, updated_content, notes. "
+                "You are Elira coder agent. Return JSON only with keys: answer, plan, target_path, updated_content, notes. "
                 "updated_content must contain the full replacement file content for target_path. "
                 "Do not return markdown."
             )
@@ -703,7 +703,7 @@ def chat_send(payload: ChatRequest):
             return response
 
     system_prompt = (
-        "You are Jarvis chat-first local agent. Return JSON only with keys: answer, plan, sources_note, suggested_agent, image_prompt. "
+        "You are Elira chat-first local agent. Return JSON only with keys: answer, plan, sources_note, suggested_agent, image_prompt. "
         "For plan mode, plan should be a list of short steps. For image requests, answer briefly and fill image_prompt."
     )
     result = _call_ollama_json(model, system_prompt, _build_chat_prompt(payload.message, route["mode"], attachments, project_refs, web_results))
@@ -763,7 +763,7 @@ def ollama_agent_run(payload: LocalAgentRunRequest):
     model = _pick_model(payload.model, tags)
     refs = _read_reference_context(payload.project_files, selected_path=payload.selected_path)
     system_prompt = (
-        "You are Jarvis local coder agent. Return JSON only with keys: answer, plan, target_path, updated_content, notes. "
+        "You are Elira local coder agent. Return JSON only with keys: answer, plan, target_path, updated_content, notes. "
         "updated_content must be the full file content."
     )
     result = _call_ollama_json(model, system_prompt, _build_code_prompt(payload.goal, payload.selected_path, payload.selected_content, refs))

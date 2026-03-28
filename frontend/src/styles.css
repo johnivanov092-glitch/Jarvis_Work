@@ -267,15 +267,69 @@ select, option {
   font-size: 14px;
 }
 
-.working-chip {
-  padding: 4px 10px;
-  border-radius: var(--radius-full);
-  border: 1px solid var(--border);
-  background: var(--bg-surface);
-  color: var(--text-muted);
-  font-size: 11px;
+/* Export dropdown */
+.export-dropdown-wrap { display: inline-flex; }
+.export-dropdown .export-item {
+  display: block; width: 100%; border: 0; background: transparent;
+  color: var(--text); font-size: 12px; padding: 7px 14px; cursor: pointer;
+  text-align: left; white-space: nowrap;
 }
-.working-chip.active { background: var(--accent-dim); color: var(--accent); border-color: rgba(124,159,255,0.2); }
+.export-dropdown .export-item:hover { background: var(--bg-surface-hover); }
+
+/* ── Thinking indicator (Claude-style) ── */
+.thinking-bubble {
+  background: transparent !important;
+  border: none !important;
+  box-shadow: none !important;
+  padding: 8px 0 !important;
+}
+.thinking-indicator {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.thinking-dots {
+  display: flex;
+  gap: 4px;
+  align-items: center;
+}
+.thinking-dots span {
+  width: 7px; height: 7px;
+  border-radius: 50%;
+  background: var(--accent);
+  opacity: 0.4;
+  animation: thinkPulse 1.4s ease-in-out infinite;
+}
+.thinking-dots span:nth-child(2) { animation-delay: 0.2s; }
+.thinking-dots span:nth-child(3) { animation-delay: 0.4s; }
+@keyframes thinkPulse {
+  0%, 80%, 100% { opacity: 0.25; transform: scale(0.85); }
+  40% { opacity: 1; transform: scale(1.15); }
+}
+.thinking-text {
+  font-size: 13px;
+  color: var(--text-muted);
+  animation: thinkFade 2s ease-in-out infinite;
+}
+@keyframes thinkFade {
+  0%, 100% { opacity: 0.5; }
+  50% { opacity: 1; }
+}
+
+/* ── Typing cursor (streaming) ── */
+.streaming-active { position: relative; }
+.typing-cursor {
+  display: inline-block;
+  width: 2px; height: 16px;
+  background: var(--accent);
+  margin-left: 2px;
+  vertical-align: text-bottom;
+  animation: cursorBlink 0.8s step-end infinite;
+}
+@keyframes cursorBlink {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0; }
+}
 
 .rename-bar { padding: 0 20px; display: flex; gap: 8px; align-items: center; max-width: 500px; }
 .rename-input {
@@ -652,11 +706,59 @@ select, option {
 }
 
 /* ── RESPONSIVE ────────────────────────────────────────────── */
+/* ── Mobile burger (hidden on desktop) ── */
+.mobile-burger {
+  display: none;
+  background: none; border: none; color: var(--text);
+  font-size: 20px; cursor: pointer; padding: 4px 8px;
+  margin-right: 4px;
+}
+.mobile-overlay {
+  display: none;
+}
+
 @media (max-width: 900px) {
   .jarvis-shell { grid-template-columns: 1fr; }
-  .jarvis-sidebar { display: none; }
+
+  /* Sidebar — скрыт по умолчанию, выезжает overlay */
+  .jarvis-sidebar {
+    display: none;
+    position: fixed; top: 0; left: 0; bottom: 0;
+    width: 280px; z-index: 200;
+    background: var(--bg-card);
+    border-right: 1px solid var(--border);
+    box-shadow: 4px 0 24px rgba(0,0,0,.4);
+    animation: slideIn .2s ease;
+  }
+  .jarvis-sidebar.mobile-open { display: flex; flex-direction: column; }
+  @keyframes slideIn { from { transform: translateX(-100%); } to { transform: translateX(0); } }
+
+  /* Overlay затемнение */
+  .mobile-overlay {
+    display: block;
+    position: fixed; inset: 0; z-index: 199;
+    background: rgba(0,0,0,.5);
+  }
+
+  /* Burger видима */
+  .mobile-burger { display: inline-flex; }
+
+  /* Полноширинные элементы */
   .chat-input-shell { width: 100%; }
+  .chat-input-textarea { font-size: 16px !important; } /* prevent iOS zoom */
   .ide-grid { grid-template-columns: 1fr; }
   .settings-tile-grid { grid-template-columns: 1fr; }
   .library-table-row { grid-template-columns: 1.5fr 1fr 0.8fr 0.6fr 0.4fr; }
+
+  /* Topbar компактнее */
+  .jarvis-topbar { padding: 0 8px; }
+  .jarvis-brand { font-size: 14px; }
+  .topbar-tabs .soft-btn { font-size: 11px; padding: 4px 8px; }
+
+  /* Bottom bar — модель/профиль компактнее */
+  .topbar-select { font-size: 11px !important; max-width: 120px; }
+
+  /* Chat header actions */
+  .chat-header-actions { gap: 2px; }
+  .icon-btn { width: 28px; min-width: 28px; height: 28px; font-size: 13px; }
 }

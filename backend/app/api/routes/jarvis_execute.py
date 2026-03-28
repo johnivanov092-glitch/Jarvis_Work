@@ -87,7 +87,7 @@ def build_mode_reply(payload: ExecutePayload) -> Dict[str, Any]:
     else:
         assistant = (
             "Режим Chat активирован.\n\n"
-            "Jarvis принял сообщение и подготовил обычный диалоговый ответ.\n\n"
+            "Elira приняла сообщение и подготовила обычный диалоговый ответ.\n\n"
             f"Запрос: {content}"
         )
 

@@ -8,7 +8,13 @@ llm.py — вся работа с Ollama.
   • ask_model_stream() — стриминг с тем же retry
 """
 import re
+import warnings
 from typing import Generator, List, Dict, Optional
+
+# Ollama SDK использует httpx внутри и иногда не закрывает сокеты при стриминге.
+# Это безопасный варнинг (GC подберёт), подавляем чтобы не засорять лог.
+warnings.filterwarnings("ignore", category=ResourceWarning, module="httpx")
+warnings.filterwarnings("ignore", category=ResourceWarning, module="bs4")
 
 import ollama
 

@@ -142,7 +142,7 @@ export default function IdeWorkspaceShell({messages=[],libraryFiles:propLib,setL
     }catch{setSaveStatus("error");}
   }
 
-  function askJarvis(prompt){
+  function askElira(prompt){
     if(!selected||!onSendToChat)return;
     onSendToChat(`${prompt}\n\`\`\`${selected.lang||""}\n${(selected.content||"").slice(0,3000)}\n\`\`\``);
   }
@@ -260,9 +260,9 @@ export default function IdeWorkspaceShell({messages=[],libraryFiles:propLib,setL
                   </div>
                   <div style={{display:"flex",gap:3,flexWrap:"wrap",flexShrink:0}}>
                     {onSendToChat&&<>
-                      <button onClick={()=>askJarvis("Объясни этот код:")} style={SB()}>💬 Объясни</button>
-                      <button onClick={()=>askJarvis("Найди и исправь баги в этом коде:")} style={SB()}>🐛 Баги</button>
-                      <button onClick={()=>askJarvis("Напиши тесты для этого кода:")} style={SB()}>🧪 Тесты</button>
+                      <button onClick={()=>askElira("Объясни этот код:")} style={SB()}>💬 Объясни</button>
+                      <button onClick={()=>askElira("Найди и исправь баги в этом коде:")} style={SB()}>🐛 Баги</button>
+                      <button onClick={()=>askElira("Напиши тесты для этого кода:")} style={SB()}>🧪 Тесты</button>
                     </>}
                     {!editing?(
                       <>
@@ -287,7 +287,7 @@ export default function IdeWorkspaceShell({messages=[],libraryFiles:propLib,setL
                 <div style={{textAlign:"center"}}>
                   <div style={{fontSize:32,opacity:0.12,marginBottom:8}}>◇</div>
                   <div>Выбери артефакт слева</div>
-                  <div style={{fontSize:11,marginTop:4,opacity:0.6}}>Код из ответов Jarvis появляется автоматически</div>
+                  <div style={{fontSize:11,marginTop:4,opacity:0.6}}>Код из ответов Elira появляется автоматически</div>
                 </div>
               </div>
             )}
@@ -374,7 +374,7 @@ export default function IdeWorkspaceShell({messages=[],libraryFiles:propLib,setL
             {ftLoading&&<div style={{padding:16,fontSize:11,color:"var(--text-muted)"}}>⏳ Загрузка дерева...</div>}
             {!ftLoading&&fileTree&&fileTree.length===0&&(
               <div style={{padding:16,fontSize:11,color:"var(--text-muted)",lineHeight:1.6}}>
-                Проект не открыт.<br/>Напиши Jarvis:<br/><code style={{fontSize:10}}>открой проект /путь</code>
+                Проект не открыт.<br/>Напиши Elira:<br/><code style={{fontSize:10}}>открой проект /путь</code>
               </div>
             )}
             {(fileTree||[]).map((item,i)=>(
@@ -400,7 +400,7 @@ export default function IdeWorkspaceShell({messages=[],libraryFiles:propLib,setL
       {mainView==="history"&&(
         <div style={{flex:1,overflow:"auto",padding:16}}>
           {runHistory===null&&<div style={{fontSize:12,color:"var(--text-muted)"}}>⏳ Загрузка...</div>}
-          {runHistory!==null&&runHistory.length===0&&<div style={{fontSize:12,color:"var(--text-muted)"}}>История пуста — записи появятся после первых запросов к Jarvis.</div>}
+          {runHistory!==null&&runHistory.length===0&&<div style={{fontSize:12,color:"var(--text-muted)"}}>История пуста — записи появятся после первых запросов к Elira.</div>}
           {(runHistory||[]).map((r,i)=>(
             <div key={i} style={{padding:"10px 14px",marginBottom:6,borderRadius:8,border:"1px solid var(--border)",background:"var(--bg-surface)"}}>
               <div style={{display:"flex",alignItems:"center",gap:8,flexWrap:"wrap"}}>

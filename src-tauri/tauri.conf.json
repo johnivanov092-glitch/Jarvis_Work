@@ -1,7 +1,7 @@
 {
   "$schema": "../node_modules/@tauri-apps/cli/schema.json",
   "package": {
-    "productName": "Jarvis",
+    "productName": "Elira",
     "version": "0.2.0"
   },
   "build": {
@@ -37,7 +37,7 @@
     },
     "windows": [
       {
-        "title": "Jarvis",
+        "title": "Elira AI",
         "width": 1440,
         "height": 960,
         "resizable": true,

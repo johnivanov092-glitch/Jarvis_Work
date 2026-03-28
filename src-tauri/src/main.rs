@@ -52,7 +52,7 @@ fn start_backend(_app: tauri::AppHandle, state: tauri::State<BackendState>) -> R
     let project_dir = find_project_root()
         .ok_or_else(|| "Failed to find project root (no backend/ folder found)".to_string())?;
 
-    eprintln!("[Jarvis] Project root: {}", project_dir.display());
+    eprintln!("[Elira] Project root: {}", project_dir.display());
     let backend_dir = project_dir.join("backend");
 
     let python_candidates = vec![
@@ -82,7 +82,7 @@ fn start_backend(_app: tauri::AppHandle, state: tauri::State<BackendState>) -> R
         .arg("uvicorn")
         .arg("app.main:app")
         .arg("--host")
-        .arg("127.0.0.1")
+        .arg("0.0.0.0")
         .arg("--port")
         .arg("8000")
         .stdout(Stdio::null())
@@ -149,10 +149,10 @@ fn main() {
             let handle = app.handle();
             let state: tauri::State<BackendState> = handle.state();
             match start_backend(handle.clone(), state) {
-                Ok(msg) => eprintln!("[Jarvis] {}", msg),
+                Ok(msg) => eprintln!("[Elira] {}", msg),
                 Err(e) => {
-                    eprintln!("[Jarvis] WARNING: Backend failed to start: {}", e);
-                    eprintln!("[Jarvis] Проверь: 1) backend/.venv/ существует  2) pip install -r requirements.txt  3) порт 8000 свободен");
+                    eprintln!("[Elira] WARNING: Backend failed to start: {}", e);
+                    eprintln!("[Elira] Проверь: 1) backend/.venv/ существует  2) pip install -r requirements.txt  3) порт 8000 свободен");
                 }
             }
             Ok(())
@@ -163,10 +163,10 @@ fn main() {
                 let state: tauri::State<BackendState> = event.window().state();
                 if let Ok(mut guard) = state.child.lock() {
                     if let Some(mut child) = guard.take() {
-                        eprintln!("[Jarvis] Stopping backend (pid {})...", child.id());
+                        eprintln!("[Elira] Stopping backend (pid {})...", child.id());
                         let _ = child.kill();
                         let _ = child.wait();
-                        eprintln!("[Jarvis] Backend stopped.");
+                        eprintln!("[Elira] Backend stopped.");
                     }
                 };
             }
