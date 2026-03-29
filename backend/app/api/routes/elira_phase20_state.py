@@ -56,9 +56,9 @@ def build_execution_state(payload: Phase20StatePayload):
         "strategy": "checkpoint-based",
         "targets": payload.staged_paths,
         "advice": [
-            "Сохрани patch history перед apply.",
-            "Держи staged набор неизменным до verify.",
-            "При конфликте используй rollback по файлам из history.",
+            "РЎРѕС…СЂР°РЅРё patch history РїРµСЂРµРґ apply.",
+            "Р”РµСЂР¶Рё staged РЅР°Р±РѕСЂ РЅРµРёР·РјРµРЅРЅС‹Рј РґРѕ verify.",
+            "РџСЂРё РєРѕРЅС„Р»РёРєС‚Рµ РёСЃРїРѕР»СЊР·СѓР№ rollback РїРѕ С„Р°Р№Р»Р°Рј РёР· history.",
         ],
     }
 
@@ -114,3 +114,4 @@ def list_execution_states(limit: int = 30):
         return {"items": [dict(row) for row in rows]}
     finally:
         conn.close()
+

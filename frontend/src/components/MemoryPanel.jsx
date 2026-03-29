@@ -1,28 +1,12 @@
-/**
- * MemoryPanel.jsx — панель умной памяти Jarvis.
- *
- * Показывает все воспоминания, поиск, добавление, удаление, статистику.
- * Работает через /api/smart-memory/*
- */
-import { useEffect, useState, useMemo } from "react";
-
-const API = import.meta.env.VITE_API_BASE_URL || `http://${window.location.hostname}:8000`;
-
-async function fetchJson(path, options = {}) {
-  const resp = await fetch(`${API}${path}`, {
-    headers: { "Content-Type": "application/json" },
-    ...options,
-  });
-  if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
-  return resp.json();
-}
+import { useEffect, useMemo, useState } from "react";
+import { api } from "../api/ide";
 
 const CATEGORIES = [
-  { id: "all", label: "Все", icon: "📋" },
-  { id: "fact", label: "Факты", icon: "📌" },
-  { id: "preference", label: "Предпочтения", icon: "⭐" },
+  { id: "all", label: "Все", icon: "🧠" },
+  { id: "fact", label: "Факты", icon: "📊" },
+  { id: "preference", label: "Предпочтения", icon: "❤️" },
   { id: "instruction", label: "Инструкции", icon: "📝" },
-  { id: "context", label: "Контекст", icon: "🔗" },
+  { id: "context", label: "Контекст", icon: "🧭" },
 ];
 
 export default function MemoryPanel() {
@@ -33,160 +17,196 @@ export default function MemoryPanel() {
   const [newText, setNewText] = useState("");
   const [newCat, setNewCat] = useState("fact");
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
 
-  useEffect(() => { loadMemories(); loadStats(); }, []);
+  useEffect(() => {
+    loadMemories();
+    loadStats();
+  }, []);
 
   async function loadMemories() {
     setLoading(true);
+    setError("");
     try {
-      const data = await fetchJson("/api/smart-memory/list?limit=100");
-      setMemories(data.items || []);
+      setMemories(await api.listSmartMemory(100));
     } catch (e) {
-      console.warn("Failed to load memories:", e);
+      setError(e.message || "Не удалось загрузить память");
+    } finally {
+      setLoading(false);
     }
-    setLoading(false);
   }
 
   async function loadStats() {
     try {
-      const data = await fetchJson("/api/smart-memory/stats");
+      const data = await api.getSmartMemoryStats();
       setStats(data);
-    } catch {}
+    } catch (e) {
+      setError(e.message || "Не удалось загрузить статистику");
+    }
   }
 
   async function handleAdd() {
     const text = newText.trim();
     if (!text) return;
-    await fetchJson("/api/smart-memory/add", {
-      method: "POST",
-      body: JSON.stringify({ text, category: newCat, importance: 7 }),
-    });
-    setNewText("");
-    await loadMemories();
-    await loadStats();
+    setError("");
+    try {
+      await api.addSmartMemory({ text, category: newCat, importance: 7 });
+      setNewText("");
+      await loadMemories();
+      await loadStats();
+    } catch (e) {
+      setError(e.message || "Не удалось добавить запись");
+    }
   }
 
   async function handleDelete(id) {
-    await fetchJson(`/api/smart-memory/${id}`, { method: "DELETE" });
-    setMemories(prev => prev.filter(m => m.id !== id));
-    await loadStats();
+    setError("");
+    try {
+      await api.deleteSmartMemory(id);
+      setMemories((prev) => prev.filter((item) => item.id !== id));
+      await loadStats();
+    } catch (e) {
+      setError(e.message || "Не удалось удалить запись");
+    }
   }
 
   async function handleSearch() {
-    if (!search.trim()) { await loadMemories(); return; }
+    if (!search.trim()) {
+      await loadMemories();
+      return;
+    }
     setLoading(true);
+    setError("");
     try {
-      const data = await fetchJson("/api/smart-memory/search", {
-        method: "POST",
-        body: JSON.stringify({ query: search, limit: 20 }),
-      });
-      setMemories(data.items || []);
-    } catch {}
-    setLoading(false);
+      setMemories(await api.searchSmartMemory(search, 20));
+    } catch (e) {
+      setError(e.message || "Не удалось выполнить поиск");
+    } finally {
+      setLoading(false);
+    }
   }
 
   const filtered = useMemo(() => {
     if (category === "all") return memories;
-    return memories.filter(m => m.category === category);
+    return memories.filter((item) => item.category === category);
   }, [memories, category]);
 
-  const catIcon = (cat) => (CATEGORIES.find(c => c.id === cat)?.icon || "📋");
+  const catIcon = (cat) => CATEGORIES.find((entry) => entry.id === cat)?.icon || "🧠";
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 12, padding: "16px 20px", overflow: "auto", flex: 1 }}>
+      {error && <div style={{ fontSize: 11, color: "#ff6b6b" }}>{error}</div>}
 
-      {/* Stats */}
       {stats && (
         <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-          <div style={statChip}>🧠 {stats.total || 0} воспоминаний</div>
-          {stats.by_category && Object.entries(stats.by_category).map(([k, v]) => (
-            <div key={k} style={statChip}>{catIcon(k)} {k}: {v}</div>
-          ))}
+          <div style={statChip}>🧠 {stats.total || 0} записей</div>
+          {stats.by_category &&
+            Object.entries(stats.by_category).map(([key, value]) => (
+              <div key={key} style={statChip}>
+                {catIcon(key)} {key}: {value}
+              </div>
+            ))}
         </div>
       )}
 
-      {/* Search */}
       <div style={{ display: "flex", gap: 6 }}>
         <input
           value={search}
-          onChange={e => setSearch(e.target.value)}
-          onKeyDown={e => e.key === "Enter" && handleSearch()}
+          onChange={(e) => setSearch(e.target.value)}
+          onKeyDown={(e) => e.key === "Enter" && handleSearch()}
           placeholder="Поиск по памяти..."
           style={inputStyle}
         />
-        <button onClick={handleSearch} style={btnSmall}>🔍</button>
-        <button onClick={loadMemories} style={btnSmall}>↻</button>
+        <button onClick={handleSearch} style={btnSmall} title="Поиск">
+          🔍
+        </button>
+        <button onClick={loadMemories} style={btnSmall} title="Обновить">
+          ↻
+        </button>
       </div>
 
-      {/* Add new */}
       <div style={{ display: "flex", gap: 6, alignItems: "end" }}>
         <div style={{ flex: 1 }}>
           <input
             value={newText}
-            onChange={e => setNewText(e.target.value)}
-            onKeyDown={e => e.key === "Enter" && handleAdd()}
+            onChange={(e) => setNewText(e.target.value)}
+            onKeyDown={(e) => e.key === "Enter" && handleAdd()}
             placeholder="Запомни: мой сервер на 192.168.1.100..."
             style={inputStyle}
           />
         </div>
-        <select value={newCat} onChange={e => setNewCat(e.target.value)} style={{ ...inputStyle, width: 120 }}>
+        <select value={newCat} onChange={(e) => setNewCat(e.target.value)} style={{ ...inputStyle, width: 140 }}>
           <option value="fact">Факт</option>
           <option value="preference">Предпочтение</option>
           <option value="instruction">Инструкция</option>
           <option value="context">Контекст</option>
         </select>
-        <button onClick={handleAdd} style={{ ...btnSmall, background: "rgba(124,159,255,0.15)", borderColor: "rgba(124,159,255,0.3)" }}>+ Добавить</button>
+        <button
+          onClick={handleAdd}
+          style={{ ...btnSmall, background: "rgba(124,159,255,0.15)", borderColor: "rgba(124,159,255,0.3)" }}
+        >
+          + Добавить
+        </button>
       </div>
 
-      {/* Category filter */}
       <div style={{ display: "flex", gap: 4, flexWrap: "wrap" }}>
-        {CATEGORIES.map(c => (
+        {CATEGORIES.map((entry) => (
           <button
-            key={c.id}
-            onClick={() => setCategory(c.id)}
+            key={entry.id}
+            onClick={() => setCategory(entry.id)}
             style={{
-              padding: "3px 10px", borderRadius: 99, fontSize: 11, cursor: "pointer",
+              padding: "3px 10px",
+              borderRadius: 99,
+              fontSize: 11,
+              cursor: "pointer",
               border: "1px solid var(--border)",
-              background: category === c.id ? "var(--bg-surface-active)" : "transparent",
-              color: category === c.id ? "var(--text-primary)" : "var(--text-muted)",
+              background: category === entry.id ? "var(--bg-surface-active)" : "transparent",
+              color: category === entry.id ? "var(--text-primary)" : "var(--text-muted)",
             }}
           >
-            {c.icon} {c.label}
+            {entry.icon} {entry.label}
           </button>
         ))}
       </div>
 
-      {/* Memory list */}
       {loading ? (
         <div style={{ color: "var(--text-muted)", fontSize: 12 }}>Загрузка...</div>
       ) : filtered.length === 0 ? (
         <div style={{ color: "var(--text-muted)", fontSize: 12, textAlign: "center", padding: 20 }}>
           <div style={{ fontSize: 24, opacity: 0.2, marginBottom: 8 }}>🧠</div>
-          Память пуста. Скажи "Elira, запомни что..." или добавь вручную.
+          Память пуста. Напиши: «Elira, запомни это...», или добавь запись вручную.
         </div>
       ) : (
         <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-          {filtered.map(mem => (
-            <div key={mem.id} style={memCard}>
+          {filtered.map((memory) => (
+            <div key={memory.id} style={memCard}>
               <div style={{ display: "flex", alignItems: "start", gap: 8 }}>
-                <span style={{ fontSize: 14 }}>{catIcon(mem.category)}</span>
+                <span style={{ fontSize: 14 }}>{catIcon(memory.category)}</span>
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <div style={{ fontSize: 12, lineHeight: 1.4, color: "var(--text-primary)", wordBreak: "break-word" }}>
-                    {mem.text}
+                    {memory.text}
                   </div>
                   <div style={{ display: "flex", gap: 8, marginTop: 4, fontSize: 10, color: "var(--text-muted)" }}>
-                    <span>{mem.category}</span>
-                    <span>·</span>
-                    <span>{mem.source}</span>
-                    <span>·</span>
-                    <span>важность: {mem.importance}/10</span>
-                    {mem.access_count > 0 && <><span>·</span><span>использовано: {mem.access_count}×</span></>}
+                    <span>{memory.category}</span>
+                    <span>•</span>
+                    <span>{memory.source}</span>
+                    <span>•</span>
+                    <span>Важность: {memory.importance}/10</span>
+                    {memory.access_count > 0 && (
+                      <>
+                        <span>•</span>
+                        <span>Использовано: {memory.access_count}x</span>
+                      </>
+                    )}
                   </div>
                 </div>
                 <button
-                  onClick={() => handleDelete(mem.id)}
+                  onClick={() => handleDelete(memory.id)}
                   style={{ border: "none", background: "transparent", color: "var(--text-muted)", cursor: "pointer", fontSize: 12 }}
-                >✕</button>
+                  title="Удалить"
+                >
+                  ✕
+                </button>
               </div>
             </div>
           ))}
@@ -197,24 +217,39 @@ export default function MemoryPanel() {
 }
 
 const statChip = {
-  padding: "4px 10px", borderRadius: 99, fontSize: 10,
-  background: "var(--bg-surface)", border: "1px solid var(--border)",
+  padding: "4px 10px",
+  borderRadius: 99,
+  fontSize: 10,
+  background: "var(--bg-surface)",
+  border: "1px solid var(--border)",
   color: "var(--text-secondary)",
 };
 
 const inputStyle = {
-  padding: "6px 10px", borderRadius: 8, fontSize: 12,
-  border: "1px solid var(--border)", background: "var(--bg-input)",
-  color: "var(--text-primary)", outline: "none", width: "100%",
+  padding: "6px 10px",
+  borderRadius: 8,
+  fontSize: 12,
+  border: "1px solid var(--border)",
+  background: "var(--bg-input)",
+  color: "var(--text-primary)",
+  outline: "none",
+  width: "100%",
 };
 
 const btnSmall = {
-  padding: "6px 10px", borderRadius: 8, fontSize: 11,
-  border: "1px solid var(--border)", background: "var(--bg-surface)",
-  color: "var(--text-secondary)", cursor: "pointer", whiteSpace: "nowrap",
+  padding: "6px 10px",
+  borderRadius: 8,
+  fontSize: 11,
+  border: "1px solid var(--border)",
+  background: "var(--bg-surface)",
+  color: "var(--text-secondary)",
+  cursor: "pointer",
+  whiteSpace: "nowrap",
 };
 
 const memCard = {
-  padding: "8px 10px", borderRadius: 8,
-  border: "1px solid var(--border)", background: "var(--bg-surface)",
+  padding: "8px 10px",
+  borderRadius: 8,
+  border: "1px solid var(--border)",
+  background: "var(--bg-surface)",
 };

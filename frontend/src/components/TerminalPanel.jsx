@@ -1,9 +1,5 @@
-/**
- * TerminalPanel.jsx — реальный терминал в Code вкладке.
- */
-import { useState, useRef, useEffect } from "react";
-
-const API = import.meta.env.VITE_API_BASE_URL || `http://${window.location.hostname}:8000`;
+import { useEffect, useRef, useState } from "react";
+import { api } from "../api/ide";
 
 export default function TerminalPanel() {
   const [history, setHistory] = useState([{ type: "info", text: "Elira Terminal. Введи команду." }]);
@@ -16,39 +12,42 @@ export default function TerminalPanel() {
   const inputRef = useRef(null);
 
   useEffect(() => {
-    fetch(`${API}/api/terminal/cwd`).then(r => r.json()).then(d => { if (d.cwd) setCwd(d.cwd); }).catch(() => {});
+    api.getTerminalCwd()
+      .then((data) => {
+        if (data?.cwd) setCwd(data.cwd);
+      })
+      .catch(() => {});
   }, []);
 
-  useEffect(() => { endRef.current?.scrollIntoView({ behavior: "smooth" }); }, [history]);
+  useEffect(() => {
+    endRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [history]);
 
   async function handleExec() {
     const cmd = input.trim();
     if (!cmd || running) return;
     setInput("");
     setRunning(true);
-    setCmdHistory(prev => [...prev, cmd]);
+    setCmdHistory((prev) => [...prev, cmd]);
     setHistIdx(-1);
-    setHistory(prev => [...prev, { type: "cmd", text: cmd, cwd }]);
+    setHistory((prev) => [...prev, { type: "cmd", text: cmd, cwd }]);
 
     try {
-      const resp = await fetch(`${API}/api/terminal/exec`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ command: cmd, cwd }),
-      });
-      const data = await resp.json();
+      const data = await api.executeTerminal({ command: cmd, cwd });
 
       if (data.cwd) setCwd(data.cwd);
 
       if (data.ok) {
-        if (data.stdout) setHistory(prev => [...prev, { type: "stdout", text: data.stdout }]);
-        if (data.stderr) setHistory(prev => [...prev, { type: "stderr", text: data.stderr }]);
-        if (!data.stdout && !data.stderr) setHistory(prev => [...prev, { type: "info", text: "(нет вывода)" }]);
+        if (data.stdout) setHistory((prev) => [...prev, { type: "stdout", text: data.stdout }]);
+        if (data.stderr) setHistory((prev) => [...prev, { type: "stderr", text: data.stderr }]);
+        if (!data.stdout && !data.stderr) {
+          setHistory((prev) => [...prev, { type: "info", text: "(нет вывода)" }]);
+        }
       } else {
-        setHistory(prev => [...prev, { type: "error", text: data.error || "Ошибка" }]);
+        setHistory((prev) => [...prev, { type: "error", text: data.error || "Ошибка" }]);
       }
     } catch (e) {
-      setHistory(prev => [...prev, { type: "error", text: e.message }]);
+      setHistory((prev) => [...prev, { type: "error", text: e.message }]);
     } finally {
       setRunning(false);
       inputRef.current?.focus();
@@ -56,20 +55,31 @@ export default function TerminalPanel() {
   }
 
   function handleKeyDown(e) {
-    if (e.key === "Enter") { e.preventDefault(); handleExec(); }
-    else if (e.key === "ArrowUp") {
+    if (e.key === "Enter") {
+      e.preventDefault();
+      handleExec();
+      return;
+    }
+    if (e.key === "ArrowUp") {
       e.preventDefault();
       if (cmdHistory.length > 0) {
         const idx = histIdx < 0 ? cmdHistory.length - 1 : Math.max(0, histIdx - 1);
         setHistIdx(idx);
         setInput(cmdHistory[idx] || "");
       }
-    } else if (e.key === "ArrowDown") {
+      return;
+    }
+    if (e.key === "ArrowDown") {
       e.preventDefault();
       if (histIdx >= 0) {
         const idx = histIdx + 1;
-        if (idx >= cmdHistory.length) { setHistIdx(-1); setInput(""); }
-        else { setHistIdx(idx); setInput(cmdHistory[idx] || ""); }
+        if (idx >= cmdHistory.length) {
+          setHistIdx(-1);
+          setInput("");
+        } else {
+          setHistIdx(idx);
+          setInput(cmdHistory[idx] || "");
+        }
       }
     }
   }
@@ -79,8 +89,8 @@ export default function TerminalPanel() {
   return (
     <div style={{ display: "flex", flexDirection: "column", height: "100%", background: "#0d0d0f", fontFamily: "var(--font-mono)", fontSize: 12 }}>
       <div style={{ flex: 1, overflow: "auto", padding: "8px 12px" }}>
-        {history.map((item, i) => (
-          <div key={i} style={{ marginBottom: 2 }}>
+        {history.map((item, index) => (
+          <div key={index} style={{ marginBottom: 2 }}>
             {item.type === "cmd" && (
               <div style={{ color: "#6ee7b7" }}>
                 <span style={{ color: "#555" }}>{(item.cwd || "").split(/[/\\]/).pop() || "~"}</span>
@@ -103,7 +113,7 @@ export default function TerminalPanel() {
         <input
           ref={inputRef}
           value={input}
-          onChange={e => setInput(e.target.value)}
+          onChange={(e) => setInput(e.target.value)}
           onKeyDown={handleKeyDown}
           placeholder="команда..."
           disabled={running}
@@ -117,6 +127,9 @@ export default function TerminalPanel() {
 }
 
 const prePre = {
-  margin: 0, whiteSpace: "pre-wrap", wordBreak: "break-word",
-  color: "#d4d4d4", lineHeight: 1.4,
+  margin: 0,
+  whiteSpace: "pre-wrap",
+  wordBreak: "break-word",
+  color: "#d4d4d4",
+  lineHeight: 1.4,
 };

@@ -1,14 +1,31 @@
-# Elira AI Workspace
+# Elira AI Docs
 
-Это стартовая миграция со Streamlit на FastAPI + React + Tauri.
+This folder now keeps only the current working documentation at the top level.
 
-Уже сделано:
-- ядро разложено по backend/app/core
-- `llm.py`, `files.py`, `memory.py` очищены от прямой зависимости на Streamlit
-- `agents.py` больше не читает `st.session_state` в multi-agent сценарии
-- добавлены базовые роуты: health, profiles, library, chat
+## Current docs
 
-Следующий этап:
-1. Прогнать backend.
-2. Проверить `/api/health` и `/api/chat/send`.
-3. Дальше чистить `agents.py` глубже и добавлять WebSocket run events.
+- `ROADMAP_STABILIZATION_2026-03-29.md`
+  Current stabilization roadmap: what is done, what is left, logging follow-up, and next priorities.
+
+## Source of truth
+
+- `README_Elira_AI.md`
+  Setup, dependencies, startup order, launchers, and smoke checks.
+
+- `docs/ROADMAP_STABILIZATION_2026-03-29.md`
+  Current project status, completed work, remaining work, logging follow-up, and next priorities.
+
+If you need to know how to install or run the project, use the root README.
+If you need to know what is done and what still needs to be finished, use the roadmap in `docs/`.
+
+## Archive
+
+Historical notes were moved out of the top level to keep `docs` readable:
+
+- `archive/notes/`
+  One-off patch notes, migration notes, and temporary checklists.
+
+- `archive/stages/`
+  Stage-by-stage historical implementation notes from earlier migration work.
+
+These archived files are useful for context, but they are not the current source of truth.

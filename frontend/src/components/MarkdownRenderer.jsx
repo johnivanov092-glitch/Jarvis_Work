@@ -7,19 +7,17 @@
  *   • CopyButton и CodeBlock мемоизированы
  */
 import React, { useState, useCallback, useMemo } from "react";
-
-const API_BASE = `http://${window.location.hostname}:8000`;
+import { buildApiUrl, request } from "../api/client";
+import { isLocalApiAssetUrl } from "../api/ide";
 
 // ─── Утилиты (создаются один раз) ──────────────────────────────
-const isLocalDL = (url) => url.includes("/api/skills/download/") || url.includes("/api/skills/view/") || url.includes("/api/extra/");
 const extractFilename = (url) => { const p = url.split("/"); const l = p[p.length - 1]; return l && l.includes(".") ? decodeURIComponent(l) : null; };
 const isFilename = (s) => /\.\w{1,5}$/.test(s);
 
 function doDownload(url, label) {
-  const full = url.startsWith("http") ? url : `${API_BASE}${url}`;
+  const full = buildApiUrl(url);
   const fname = isFilename(label) ? label : extractFilename(url) || label || "download";
-  fetch(full, { mode: "cors" })
-    .then(r => { if (!r.ok) throw new Error(r.status); return r.blob(); })
+  request(full, { responseType: "blob" })
     .then(blob => {
       const a = document.createElement("a");
       a.href = URL.createObjectURL(blob);
@@ -43,12 +41,12 @@ const INLINE_PATTERNS = [
   { re: /\*\*(.+?)\*\*/, render: (m, k) => <strong key={k}>{m[1]}</strong> },
   { re: /\*(.+?)\*/, render: (m, k) => <em key={k}>{m[1]}</em> },
   { re: /!\[([^\]]*)\]\(([^)]+)\)/, render: (m, k) => {
-    const src = m[2].startsWith("http") ? m[2] : `${API_BASE}${m[2]}`;
+    const src = buildApiUrl(m[2]);
     return <img key={k} src={src} alt={m[1]} className="md-image" loading="lazy" />;
   }},
   { re: /\[([^\]]+)\]\(([^)]+)\)/, render: (m, k) => {
     const url = m[2]; const label = m[1];
-    if (isLocalDL(url)) {
+    if (isLocalApiAssetUrl(url)) {
       const displayName = isFilename(label) ? label : (extractFilename(url) || label);
       return <button key={k} className="md-link md-download-btn" onClick={() => doDownload(url, label)}>📥 {displayName}</button>;
     }

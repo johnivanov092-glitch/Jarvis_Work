@@ -70,9 +70,9 @@ def scan_project(limit: int = 600) -> List[str]:
 def build_reasoning(goal: str, selected_paths: List[str], project_files: List[str]) -> dict:
     goal_l = goal.lower()
     scope = "multi-file"
-    if any(word in goal_l for word in ["api", "route", "backend", "эндпоинт", "роут"]):
+    if any(word in goal_l for word in ["api", "route", "backend", "СЌРЅРґРїРѕРёРЅС‚", "СЂРѕСѓС‚"]):
         scope = "backend"
-    elif any(word in goal_l for word in ["ui", "button", "component", "panel", "интерфейс", "кнопк"]):
+    elif any(word in goal_l for word in ["ui", "button", "component", "panel", "РёРЅС‚РµСЂС„РµР№СЃ", "РєРЅРѕРїРє"]):
         scope = "ui"
 
     return {
@@ -81,9 +81,9 @@ def build_reasoning(goal: str, selected_paths: List[str], project_files: List[st
         "selected_paths": selected_paths,
         "project_context_sample": project_files[:30],
         "advice": [
-            "Используй staged файлы как рабочий набор.",
-            "Сначала preview, затем apply, затем verify.",
-            "Для create/rename/delete проверяй Project Map и историю патчей.",
+            "РСЃРїРѕР»СЊР·СѓР№ staged С„Р°Р№Р»С‹ РєР°Рє СЂР°Р±РѕС‡РёР№ РЅР°Р±РѕСЂ.",
+            "РЎРЅР°С‡Р°Р»Р° preview, Р·Р°С‚РµРј apply, Р·Р°С‚РµРј verify.",
+            "Р”Р»СЏ create/rename/delete РїСЂРѕРІРµСЂСЏР№ Project Map Рё РёСЃС‚РѕСЂРёСЋ РїР°С‚С‡РµР№.",
         ],
     }
 
@@ -95,34 +95,34 @@ def build_planner(goal: str, selected_paths: List[str], project_files: List[str]
         plan.append({
             "action": "modify",
             "path": path,
-            "reason": "Файл выбран пользователем и включён в рабочий набор.",
+            "reason": "Р¤Р°Р№Р» РІС‹Р±СЂР°РЅ РїРѕР»СЊР·РѕРІР°С‚РµР»РµРј Рё РІРєР»СЋС‡С‘РЅ РІ СЂР°Р±РѕС‡РёР№ РЅР°Р±РѕСЂ.",
         })
 
     goal_l = goal.lower()
 
-    if any(word in goal_l for word in ["create", "создай", "новый файл", "component", "компонент"]):
+    if any(word in goal_l for word in ["create", "СЃРѕР·РґР°Р№", "РЅРѕРІС‹Р№ С„Р°Р№Р»", "component", "РєРѕРјРїРѕРЅРµРЅС‚"]):
         suggested = "frontend/src/components/Phase20GeneratedPanel.jsx"
         if suggested not in selected_paths:
             plan.append({
                 "action": "create",
                 "path": suggested,
-                "reason": "Задача выглядит как добавление нового UI-компонента.",
+                "reason": "Р—Р°РґР°С‡Р° РІС‹РіР»СЏРґРёС‚ РєР°Рє РґРѕР±Р°РІР»РµРЅРёРµ РЅРѕРІРѕРіРѕ UI-РєРѕРјРїРѕРЅРµРЅС‚Р°.",
             })
 
-    if any(word in goal_l for word in ["api", "route", "backend", "роут", "эндпоинт"]):
+    if any(word in goal_l for word in ["api", "route", "backend", "СЂРѕСѓС‚", "СЌРЅРґРїРѕРёРЅС‚"]):
         suggested = "backend/app/api/routes/phase20_generated_route.py"
         if suggested not in selected_paths:
             plan.append({
                 "action": "create",
                 "path": suggested,
-                "reason": "Задача затрагивает backend API или роутинг.",
+                "reason": "Р—Р°РґР°С‡Р° Р·Р°С‚СЂР°РіРёРІР°РµС‚ backend API РёР»Рё СЂРѕСѓС‚РёРЅРі.",
             })
 
     if not plan and project_files:
         plan.append({
             "action": "inspect",
             "path": project_files[0],
-            "reason": "Нет выбранных файлов, нужен стартовый inspect по проекту.",
+            "reason": "РќРµС‚ РІС‹Р±СЂР°РЅРЅС‹С… С„Р°Р№Р»РѕРІ, РЅСѓР¶РµРЅ СЃС‚Р°СЂС‚РѕРІС‹Р№ inspect РїРѕ РїСЂРѕРµРєС‚Сѓ.",
         })
 
     return {
@@ -174,9 +174,9 @@ def build_reviewer(planner: dict, coder: dict) -> dict:
         "diff_targets": targets,
         "history_targets": [item["path"] for item in planner.get("items", []) if item["action"] == "modify"],
         "notes": [
-            "Проверь unified diff по каждому modify файлу.",
-            "Проверь patch history для конфликтующих изменений.",
-            "Перед batch apply убедись, что staged набор актуален.",
+            "РџСЂРѕРІРµСЂСЊ unified diff РїРѕ РєР°Р¶РґРѕРјСѓ modify С„Р°Р№Р»Сѓ.",
+            "РџСЂРѕРІРµСЂСЊ patch history РґР»СЏ РєРѕРЅС„Р»РёРєС‚СѓСЋС‰РёС… РёР·РјРµРЅРµРЅРёР№.",
+            "РџРµСЂРµРґ batch apply СѓР±РµРґРёСЃСЊ, С‡С‚Рѕ staged РЅР°Р±РѕСЂ Р°РєС‚СѓР°Р»РµРЅ.",
         ],
     }
 
@@ -188,8 +188,8 @@ def build_tester(coder: dict) -> dict:
         "verify_targets": targets,
         "checks": [
             "Batch verify recommended for staged files.",
-            "После apply проверь changed_vs_disk.",
-            "Историю patch/task/supervisor runs желательно сохранить после выполнения.",
+            "РџРѕСЃР»Рµ apply РїСЂРѕРІРµСЂСЊ changed_vs_disk.",
+            "РСЃС‚РѕСЂРёСЋ patch/task/supervisor runs Р¶РµР»Р°С‚РµР»СЊРЅРѕ СЃРѕС…СЂР°РЅРёС‚СЊ РїРѕСЃР»Рµ РІС‹РїРѕР»РЅРµРЅРёСЏ.",
         ],
     }
 
@@ -320,3 +320,4 @@ def get_phase20_history(id: int):
         return data
     finally:
         conn.close()
+

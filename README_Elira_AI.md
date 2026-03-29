@@ -1,167 +1,140 @@
-# Jarvis_Work — Personal AI Agent Platform
+# Elira AI
 
-> A local-first, self-hosted AI workspace built as a real engineering project — not a demo chatbot.
+Local AI workspace with:
+- FastAPI backend
+- React + Vite frontend
+- Tauri desktop shell
+- Ollama for local inference
 
-![Python](https://img.shields.io/badge/Python-78%25-3776AB?style=flat-square&logo=python&logoColor=white)
-![JavaScript](https://img.shields.io/badge/JavaScript-React%2FVite-F7DF1E?style=flat-square&logo=javascript&logoColor=black)
-![Rust](https://img.shields.io/badge/Rust-Tauri-000000?style=flat-square&logo=rust&logoColor=white)
-![Ollama](https://img.shields.io/badge/Inference-Ollama-black?style=flat-square)
-![Status](https://img.shields.io/badge/Status-Active%20Development-brightgreen?style=flat-square)
+## Documentation map
 
----
+Use the repo root README for:
+- dependencies;
+- startup order;
+- launchers;
+- smoke checks.
 
-## What Is This?
+Use `docs/` for:
+- current project status;
+- what is already done;
+- what still needs to be finished;
+- stabilization roadmap;
+- logging follow-up.
 
-Jarvis_Work is a local AI agent platform I built to combine **LLM inference, memory, tool execution, automation, and a usable interface** into a single working system — running entirely on my own hardware, without sending data to any cloud.
+Primary docs:
+- `README_Elira_AI.md` - setup, dependencies, startup, checks
+- `docs/README.md` - docs index
+- `docs/ROADMAP_STABILIZATION_2026-03-29.md` - active status and next work
 
-The goal was not to wrap an API in a chat window. The goal was to build something I actually use every day.
+## Dependencies
 
----
+### Core dependencies
+Core dependencies are enough to start the backend, frontend, dashboard, tasks, pipelines, Telegram panel, and desktop shell.
 
-## Core Stack
-
-| Layer | Technology |
-|---|---|
-| **Backend** | Python · FastAPI · SQLite · service orchestration |
-| **Frontend** | JavaScript · React · Vite |
-| **Desktop** | Tauri · Rust |
-| **Inference** | Ollama · local model workflows |
-| **Features** | Streaming responses · persistent memory · file operations · tool execution · plugins |
-
----
-
-## Architecture Overview
-
-```
-┌─────────────────────────────────────────┐
-│            Desktop (Tauri/Rust)         │
-│  ┌─────────────────────────────────┐    │
-│  │     Frontend (React / Vite)     │    │
-│  └──────────────┬──────────────────┘    │
-│                 │ HTTP / WebSocket      │
-│  ┌──────────────▼──────────────────┐    │
-│  │     Backend (Python / FastAPI)  │    │
-│  │   ┌──────────┐  ┌────────────┐  │    │
-│  │   │  Memory  │  │   Tools    │  │    │
-│  │   │ (SQLite) │  │ (Plugins)  │  │    │
-│  │   └──────────┘  └────────────┘  │    │
-│  └──────────────┬──────────────────┘    │
-│                 │                       │
-│  ┌──────────────▼──────────────────┐    │
-│  │    Inference (Ollama / local)   │    │
-│  └─────────────────────────────────┘    │
-└─────────────────────────────────────────┘
-```
-
----
-
-## Key Features
-
-- **Local-first inference** — Ollama backend, runs fully offline, no API keys required
-- **Persistent memory** — SQLite-based conversation and context storage across sessions
-- **Streaming responses** — real-time token streaming in the UI
-- **Tool execution** — pluggable tool system for file operations, search, and custom actions
-- **Plugin support** — extensible architecture for adding new capabilities
-- **Desktop packaging** — Tauri/Rust wrapper for native desktop experience
-
----
-
-## Getting Started
-
-### Prerequisites
-
-- Python 3.10+
-- Node.js 18+
-- [Ollama](https://ollama.ai) installed and running
-- Rust toolchain (for Tauri desktop build)
-
-### Quick Start (Backend + Frontend)
-
+Backend:
 ```bash
-# Clone the repository
-git clone https://github.com/johnivanov092-glitch/Jarvis_Work.git
-cd Jarvis_Work
-
-# Start backend
 cd backend
-pip install -r requirements.txt
-python main.py
+python -m venv .venv
+.venv\Scripts\pip install -r requirements.txt
+```
 
-# Start frontend (separate terminal)
+Frontend:
+```bash
 cd frontend
 npm install
+```
+
+### Optional dependencies
+Optional packages unlock degraded features that are now reported in `/api/project-brain/status`.
+
+Install them with:
+```bash
+cd backend
+.venv\Scripts\pip install -r requirements-optional.txt
+playwright install chromium
+```
+
+Optional packages and what they enable:
+- `sentence-transformers` + `faiss-cpu`: vector memory instead of keyword fallback
+- `playwright`: screenshot skill
+
+If optional packages are missing:
+- the app still starts
+- dashboard shows the missing capability
+- `/api/project-brain/status` reports `available`, `reason`, `missing_packages`, and `hint`
+
+## Startup order
+
+### Backend
+```bash
+cd backend
+.venv\Scripts\python.exe -m uvicorn app.main:app --host 127.0.0.1 --port 8000 --reload
+```
+
+### Frontend
+```bash
+cd frontend
 npm run dev
 ```
 
-### Desktop Build (Tauri)
+Frontend expects the backend at:
+- `http://127.0.0.1:8000`
+- or `VITE_API_BASE_URL` if set
 
+### Tauri desktop
+From the repo root:
 ```bash
-# From root
-npm install
-npm run tauri dev    # development
-npm run tauri build  # production binary
+npm run tauri dev
 ```
 
-### Windows Quick Launch
+Recommended local order:
+1. Start backend on `127.0.0.1:8000`
+2. Start frontend dev server on `5173` if you are testing the browser UI
+3. Start Tauri if you are testing the desktop shell
 
+## Windows launchers
+
+- `Elira.bat`: starts backend, prints capability notes, then opens Tauri
+- `run_tauri_dev.bat`: installs frontend packages if needed, starts backend, then runs Tauri dev
+- `Elira_Mobile.bat`: LAN/mobile launcher
+
+## Smoke checks
+
+Backend:
 ```bash
-# From repo root — starts backend + frontend together
-Jarvis.bat
-
-# Mobile-friendly variant
-Jarvis_Mobile.bat
+cd backend
+.venv\Scripts\python.exe -c "from app.main import app; print(len(app.routes), len(app.openapi().get('paths', {})))"
+.venv\Scripts\python.exe -m compileall app
 ```
 
----
-
-## Project Structure
-
-```
-Jarvis_Work/
-├── backend/          # Python / FastAPI — API, memory, tool orchestration
-├── frontend/         # React / Vite — UI, streaming, plugin views
-├── src-tauri/        # Rust / Tauri — desktop shell, native APIs
-├── scripts/          # Utility and build scripts
-├── data/             # Local data, SQLite databases
-├── docs/             # Project documentation
-├── Jarvis.bat        # Windows launcher
-└── build_exe.bat     # Standalone executable build
+Contract checks:
+```bash
+backend\.venv\Scripts\python.exe scripts\smoke_contract_check.py
+backend\.venv\Scripts\python.exe -m unittest discover -s backend/tests -p "test_*.py"
 ```
 
----
+Frontend build:
+```bash
+npm --prefix frontend run build
+```
 
-## Why I Built This
+## Runtime smoke checklist
 
-I wanted hands-on experience with **local AI infrastructure** — not just prompt engineering, but the full stack: model serving, orchestration, backend architecture, frontend integration, desktop packaging, and runtime control.
+In browser dev mode and in Tauri:
+- open `Dashboard`
+- open `Tasks`
+- open `Pipelines`
+- open `Telegram`
+- verify requests go to `127.0.0.1:8000`
+- stop backend and confirm panels show an error state instead of empty content
+- verify missing optional packages appear in the dashboard capability cards
 
-This project runs in my daily workflow. It handles real tasks. That forces production-minded thinking around reliability, extensibility, and performance — rather than just experimenting with prompts.
+## Project layout
 
-It directly informs my work in **infrastructure automation and AI operations**, and demonstrates capability that goes beyond classic systems administration.
+- `backend/`: API, services, storage, orchestration
+- `frontend/`: UI
+- `src-tauri/`: desktop shell
+- `scripts/`: smoke and utility scripts
+- `docs/`: project docs
 
----
-
-## Relevance to Engineering Roles
-
-This project covers:
-
-- Local model serving and runtime control (Ollama)
-- Backend service architecture (FastAPI, SQLite, async Python)
-- Frontend integration with streaming (React, Vite, WebSocket)
-- Desktop application packaging (Tauri, Rust)
-- Tool orchestration and plugin system design
-- Privacy-first, self-hosted deployment patterns
-
----
-
-## Status
-
-Active development. Core features working. Architecture evolving.
-
----
-
-## Author
-
-**Evgeny Ivanov** — Infrastructure & Automation Engineer  
-Almaty, Kazakhstan · [LinkedIn](https://www.linkedin.com/in/evgeny-ivanov-infra/) · [GitHub](https://github.com/johnivanov092-glitch)
-
-> Open to remote international roles in infrastructure, platform engineering, automation, and AI infrastructure.
+For current implementation status and remaining work, go to `docs/README.md` and `docs/ROADMAP_STABILIZATION_2026-03-29.md`.

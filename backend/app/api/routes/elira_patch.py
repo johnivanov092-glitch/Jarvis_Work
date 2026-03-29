@@ -274,11 +274,11 @@ def verify_patch(payload: VerifyPayload):
     diff_text = build_diff_text(payload.path, disk_content, compare_content)
 
     checks = [
-        "Файл существует",
-        "Файл читается как UTF-8",
-        f"Строк: {line_count}",
-        f"Размер: {file_size} байт",
-        "Совпадает с диском" if not changed else "Отличается от версии на диске",
+        "Р¤Р°Р№Р» СЃСѓС‰РµСЃС‚РІСѓРµС‚",
+        "Р¤Р°Р№Р» С‡РёС‚Р°РµС‚СЃСЏ РєР°Рє UTF-8",
+        f"РЎС‚СЂРѕРє: {line_count}",
+        f"Р Р°Р·РјРµСЂ: {file_size} Р±Р°Р№С‚",
+        "РЎРѕРІРїР°РґР°РµС‚ СЃ РґРёСЃРєРѕРј" if not changed else "РћС‚Р»РёС‡Р°РµС‚СЃСЏ РѕС‚ РІРµСЂСЃРёРё РЅР° РґРёСЃРєРµ",
     ]
 
     return {
@@ -386,3 +386,4 @@ def get_history_item(id: int):
         return data
     finally:
         conn.close()
+

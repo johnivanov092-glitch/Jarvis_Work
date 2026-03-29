@@ -69,9 +69,9 @@ def run_phase21(payload: Phase21RunPayload):
             "verify_allowed": bool(queue_items),
         },
         "notes": [
-            "Контроллер использует queue и execution state как вход.",
-            "Сначала завершается preview queue, затем apply, затем verify.",
-            "При проблемах используется rollback strategy из execution state.",
+            "РљРѕРЅС‚СЂРѕР»Р»РµСЂ РёСЃРїРѕР»СЊР·СѓРµС‚ queue Рё execution state РєР°Рє РІС…РѕРґ.",
+            "РЎРЅР°С‡Р°Р»Р° Р·Р°РІРµСЂС€Р°РµС‚СЃСЏ preview queue, Р·Р°С‚РµРј apply, Р·Р°С‚РµРј verify.",
+            "РџСЂРё РїСЂРѕР±Р»РµРјР°С… РёСЃРїРѕР»СЊР·СѓРµС‚СЃСЏ rollback strategy РёР· execution state.",
         ],
     }
 
@@ -151,3 +151,4 @@ def get_phase21_history(id: int):
         return data
     finally:
         conn.close()
+

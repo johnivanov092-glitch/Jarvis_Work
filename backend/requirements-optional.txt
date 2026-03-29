@@ -1,0 +1,10 @@
+# Elira AI optional capabilities
+# Install with:
+#   cd backend && .venv\Scripts\pip install -r requirements-optional.txt
+
+# Vector-memory semantic search
+sentence-transformers>=3.0
+faiss-cpu>=1.8
+
+# Website screenshots
+playwright>=1.45

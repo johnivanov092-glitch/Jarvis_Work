@@ -1,7 +1,7 @@
-/* ═══════════════════════════════════════════════════════════════
-   styles.css — Jarvis UI v2
+/* в•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђ
+   styles.css — Elira UI v2
    Claude-inspired dark theme. Compact sidebar, centered chat.
-   ═══════════════════════════════════════════════════════════════ */
+   в•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђ */
 
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&family=JetBrains+Mono:wght@400;500&display=swap');
 
@@ -83,16 +83,16 @@ select, option {
   color: var(--text-primary);
 }
 
-/* ── SHELL GRID ────────────────────────────────────────────── */
-.jarvis-shell {
+/* в"Ђв"Ђ SHELL GRID в"Ђв"Ђв"Ђв"Ђв"Ђв"Ђв"Ђв"Ђв"Ђв"Ђв"Ђв"Ђв"Ђв"Ђв"Ђв"Ђв"Ђв"Ђв"Ђв"Ђв"Ђв"Ђв"Ђв"Ђв"Ђв"Ђв"Ђв"Ђв"Ђв"Ђв"Ђв"Ђв"Ђв"Ђв"Ђв"Ђв"Ђв"Ђв"Ђв"Ђв"Ђв"Ђв"Ђв"Ђв"Ђв"Ђ */
+.elira-shell {
   display: grid;
   grid-template-columns: 200px 1fr;
   height: 100%;
   min-height: 0;
 }
 
-/* ── SIDEBAR ───────────────────────────────────────────────── */
-.jarvis-sidebar {
+/* в"Ђв"Ђ SIDEBAR в"Ђв"Ђв"Ђв"Ђв"Ђв"Ђв"Ђв"Ђв"Ђв"Ђв"Ђв"Ђв"Ђв"Ђв"Ђв"Ђв"Ђв"Ђв"Ђв"Ђв"Ђв"Ђв"Ђв"Ђв"Ђв"Ђв"Ђв"Ђв"Ђв"Ђв"Ђв"Ђв"Ђв"Ђв"Ђв"Ђв"Ђв"Ђв"Ђв"Ђв"Ђв"Ђв"Ђв"Ђв"Ђв"Ђв"Ђв"Ђв"Ђ */
+.elira-sidebar {
   background: var(--bg-sidebar);
   border-right: 1px solid var(--border);
   display: flex;
@@ -198,8 +198,8 @@ select, option {
 .chat-list-title { font-weight: 400; }
 .chat-list-title.truncate { display: block; width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
-/* ── MAIN AREA ─────────────────────────────────────────────── */
-.jarvis-main {
+/* в"Ђв"Ђ MAIN AREA в"Ђв"Ђв"Ђв"Ђв"Ђв"Ђв"Ђв"Ђв"Ђв"Ђв"Ђв"Ђв"Ђв"Ђв"Ђв"Ђв"Ђв"Ђв"Ђв"Ђв"Ђв"Ђв"Ђв"Ђв"Ђв"Ђв"Ђв"Ђв"Ђв"Ђв"Ђв"Ђв"Ђв"Ђв"Ђв"Ђв"Ђв"Ђв"Ђв"Ђв"Ђв"Ђв"Ђв"Ђв"Ђв"Ђв"Ђ */
+.elira-main {
   display: flex;
   flex-direction: column;
   min-width: 0;
@@ -208,7 +208,7 @@ select, option {
 }
 
 /* ── TOPBAR (slim — only brand + tabs) ─────────────────────── */
-.jarvis-topbar {
+.elira-topbar {
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -216,8 +216,8 @@ select, option {
   border-bottom: 1px solid var(--border);
   min-height: 42px;
 }
-.jarvis-topbar.slim { gap: 12px; }
-.jarvis-brand { font-size: 15px; font-weight: 600; letter-spacing: -0.01em; }
+.elira-topbar.slim { gap: 12px; }
+.elira-brand { font-size: 15px; font-weight: 600; letter-spacing: -0.01em; }
 .topbar-tabs { display: flex; gap: 2px; }
 
 .topbar-status { display: none; } /* Убраны чипы модели/профиля из бара */
@@ -236,7 +236,7 @@ select, option {
 .soft-btn:hover { background: var(--bg-surface-hover); color: var(--text-primary); }
 .soft-btn.active { background: var(--bg-surface-active); color: var(--text-primary); border-color: var(--border); }
 
-/* ── CHAT PAGE ─────────────────────────────────────────────── */
+/* в"Ђв"Ђ CHAT PAGE в"Ђв"Ђв"Ђв"Ђв"Ђв"Ђв"Ђв"Ђв"Ђв"Ђв"Ђв"Ђв"Ђв"Ђв"Ђв"Ђв"Ђв"Ђв"Ђв"Ђв"Ђв"Ђв"Ђв"Ђв"Ђв"Ђв"Ђв"Ђв"Ђв"Ђв"Ђв"Ђв"Ђв"Ђв"Ђв"Ђв"Ђв"Ђв"Ђв"Ђв"Ђв"Ђв"Ђв"Ђв"Ђв"Ђв"Ђ */
 .chat-page {
   flex: 1;
   display: flex;
@@ -276,7 +276,7 @@ select, option {
 }
 .export-dropdown .export-item:hover { background: var(--bg-surface-hover); }
 
-/* ── Thinking indicator (Claude-style) ── */
+/* в"Ђв"Ђ Thinking indicator (Claude-style) в"Ђв"Ђ */
 .thinking-bubble {
   background: transparent !important;
   border: none !important;
@@ -316,7 +316,7 @@ select, option {
   50% { opacity: 1; }
 }
 
-/* ── Typing cursor (streaming) ── */
+/* в"Ђв"Ђ Typing cursor (streaming) в"Ђв"Ђ */
 .streaming-active { position: relative; }
 .typing-cursor {
   display: inline-block;
@@ -352,7 +352,7 @@ select, option {
 }
 .mini-icon-btn { border: 0; background: transparent; color: inherit; cursor: pointer; font-size: 13px; }
 
-/* ── MESSAGE STREAM ────────────────────────────────────────── */
+/* в"Ђв"Ђ MESSAGE STREAM в"Ђв"Ђв"Ђв"Ђв"Ђв"Ђв"Ђв"Ђв"Ђв"Ђв"Ђв"Ђв"Ђв"Ђв"Ђв"Ђв"Ђв"Ђв"Ђв"Ђв"Ђв"Ђв"Ђв"Ђв"Ђв"Ђв"Ђв"Ђв"Ђв"Ђв"Ђв"Ђв"Ђв"Ђв"Ђв"Ђв"Ђв"Ђв"Ђв"Ђв"Ђв"Ђ */
 .message-stream {
   flex: 1;
   min-height: 0;
@@ -401,7 +401,7 @@ select, option {
   margin-top: auto;
 }
 
-/* ── CENTERED COMPOSER ─────────────────────────────────────── */
+/* в"Ђв"Ђ CENTERED COMPOSER в"Ђв"Ђв"Ђв"Ђв"Ђв"Ђв"Ђв"Ђв"Ђв"Ђв"Ђв"Ђв"Ђв"Ђв"Ђв"Ђв"Ђв"Ђв"Ђв"Ђв"Ђв"Ђв"Ђв"Ђв"Ђв"Ђв"Ђв"Ђв"Ђв"Ђв"Ђв"Ђв"Ђв"Ђв"Ђв"Ђв"Ђв"Ђв"Ђ */
 .composer-wrap {
   padding: 12px 20px 16px;
   display: flex;
@@ -484,7 +484,7 @@ select, option {
 }
 .composer-select:hover { border-color: var(--border-focus); color: var(--text-primary); }
 
-/* ── SETTINGS ──────────────────────────────────────────────── */
+/* в"Ђв"Ђ SETTINGS в"Ђв"Ђв"Ђв"Ђв"Ђв"Ђв"Ђв"Ђв"Ђв"Ђв"Ђв"Ђв"Ђв"Ђв"Ђв"Ђв"Ђв"Ђв"Ђв"Ђв"Ђв"Ђв"Ђв"Ђв"Ђв"Ђв"Ђв"Ђв"Ђв"Ђв"Ђв"Ђв"Ђв"Ђв"Ђв"Ђв"Ђв"Ђв"Ђв"Ђв"Ђв"Ђв"Ђв"Ђв"Ђв"Ђв"Ђв"Ђ */
 .settings-main-card {
   padding: 20px;
   overflow-y: auto;
@@ -532,7 +532,7 @@ select, option {
 .skill-chip:hover { background: var(--bg-surface-hover); color: var(--text-primary); }
 .skill-chip.active { background: var(--accent-dim); border-color: rgba(124,159,255,0.25); color: var(--accent); }
 
-/* ── LIBRARY / FILES ───────────────────────────────────────── */
+/* в"Ђв"Ђ LIBRARY / FILES в"Ђв"Ђв"Ђв"Ђв"Ђв"Ђв"Ђв"Ђв"Ђв"Ђв"Ђв"Ђв"Ђв"Ђв"Ђв"Ђв"Ђв"Ђв"Ђв"Ђв"Ђв"Ђв"Ђв"Ђв"Ђв"Ђв"Ђв"Ђв"Ђв"Ђв"Ђв"Ђв"Ђв"Ђв"Ђв"Ђв"Ђв"Ђв"Ђв"Ђв"Ђ */
 .library-table-view { display: flex; flex-direction: column; gap: 10px; padding: 16px 20px; overflow-y: auto; flex: 1; }
 .library-search-row { display: flex; align-items: center; gap: 8px; max-width: 400px; }
 .library-search-icon { opacity: 0.5; font-size: 13px; }
@@ -586,7 +586,7 @@ select, option {
 .context-tags { display: flex; flex-wrap: wrap; gap: 4px; }
 .context-tag { padding: 3px 8px; border-radius: var(--radius-full); background: var(--bg-surface); border: 1px solid var(--border); font-size: 10px; color: var(--text-secondary); }
 
-/* ── IDE / CODE WORKSPACE ──────────────────────────────────── */
+/* в"Ђв"Ђ IDE / CODE WORKSPACE в"Ђв"Ђв"Ђв"Ђв"Ђв"Ђв"Ђв"Ђв"Ђв"Ђв"Ђв"Ђв"Ђв"Ђв"Ђв"Ђв"Ђв"Ђв"Ђв"Ђв"Ђв"Ђв"Ђв"Ђв"Ђв"Ђв"Ђв"Ђв"Ђв"Ђв"Ђв"Ђв"Ђв"Ђв"Ђв"Ђ */
 .ide-shell { display: flex; flex-direction: column; height: 100%; padding: 14px; gap: 12px; }
 .ide-toolbar { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 .ide-grid { flex: 1; min-height: 0; display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
@@ -650,7 +650,7 @@ select, option {
 .file-preview-header { padding: 10px 12px; border-bottom: 1px solid var(--border); font-size: 12px; font-weight: 500; }
 .file-preview-body { padding: 12px; overflow: auto; flex: 1; font-family: var(--font-mono); font-size: 11px; line-height: 1.5; white-space: pre-wrap; word-break: break-word; color: var(--text-secondary); }
 
-/* ── CUSTOM SCROLLBAR ─────────────────────────────────────── */
+/* в"Ђв"Ђ CUSTOM SCROLLBAR в"Ђв"Ђв"Ђв"Ђв"Ђв"Ђв"Ђв"Ђв"Ђв"Ђв"Ђв"Ђв"Ђв"Ђв"Ђв"Ђв"Ђв"Ђв"Ђв"Ђв"Ђв"Ђв"Ђв"Ђв"Ђв"Ђв"Ђв"Ђв"Ђв"Ђв"Ђв"Ђв"Ђв"Ђв"Ђв"Ђв"Ђв"Ђв"Ђ */
 /* Тонкий, едва заметный скроллбар в цвет темы */
 .chat-list::-webkit-scrollbar,
 .message-stream::-webkit-scrollbar,
@@ -705,8 +705,8 @@ select, option {
   scrollbar-color: var(--scrollbar-thumb) transparent;
 }
 
-/* ── RESPONSIVE ────────────────────────────────────────────── */
-/* ── Mobile burger (hidden on desktop) ── */
+/* в"Ђв"Ђ RESPONSIVE в"Ђв"Ђв"Ђв"Ђв"Ђв"Ђв"Ђв"Ђв"Ђв"Ђв"Ђв"Ђв"Ђв"Ђв"Ђв"Ђв"Ђв"Ђв"Ђв"Ђв"Ђв"Ђв"Ђв"Ђв"Ђв"Ђв"Ђв"Ђв"Ђв"Ђв"Ђв"Ђв"Ђв"Ђв"Ђв"Ђв"Ђв"Ђв"Ђв"Ђв"Ђв"Ђв"Ђв"Ђв"Ђв"Ђ */
+/* в"Ђв"Ђ Mobile burger (hidden on desktop) в"Ђв"Ђ */
 .mobile-burger {
   display: none;
   background: none; border: none; color: var(--text);
@@ -718,10 +718,10 @@ select, option {
 }
 
 @media (max-width: 900px) {
-  .jarvis-shell { grid-template-columns: 1fr; }
+  .elira-shell { grid-template-columns: 1fr; }
 
   /* Sidebar — скрыт по умолчанию, выезжает overlay */
-  .jarvis-sidebar {
+  .elira-sidebar {
     display: none;
     position: fixed; top: 0; left: 0; bottom: 0;
     width: 280px; z-index: 200;
@@ -730,7 +730,7 @@ select, option {
     box-shadow: 4px 0 24px rgba(0,0,0,.4);
     animation: slideIn .2s ease;
   }
-  .jarvis-sidebar.mobile-open { display: flex; flex-direction: column; }
+  .elira-sidebar.mobile-open { display: flex; flex-direction: column; }
   @keyframes slideIn { from { transform: translateX(-100%); } to { transform: translateX(0); } }
 
   /* Overlay затемнение */
@@ -740,7 +740,7 @@ select, option {
     background: rgba(0,0,0,.5);
   }
 
-  /* Burger видима */
+  /* Burger РІРёРґРёРјР° */
   .mobile-burger { display: inline-flex; }
 
   /* Полноширинные элементы */
@@ -751,8 +751,8 @@ select, option {
   .library-table-row { grid-template-columns: 1.5fr 1fr 0.8fr 0.6fr 0.4fr; }
 
   /* Topbar компактнее */
-  .jarvis-topbar { padding: 0 8px; }
-  .jarvis-brand { font-size: 14px; }
+  .elira-topbar { padding: 0 8px; }
+  .elira-brand { font-size: 14px; }
   .topbar-tabs .soft-btn { font-size: 11px; padding: 4px 8px; }
 
   /* Bottom bar — модель/профиль компактнее */
@@ -762,3 +762,4 @@ select, option {
   .chat-header-actions { gap: 2px; }
   .icon-btn { width: 28px; min-width: 28px; height: 28px; font-size: 13px; }
 }
+

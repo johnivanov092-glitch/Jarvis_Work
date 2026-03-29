@@ -4,6 +4,7 @@ from pathlib import Path
 DB_PATH = Path("data/elira_state.db")
 DB_PATH.parent.mkdir(parents=True, exist_ok=True)
 
+
 def _connect():
     conn = sqlite3.connect(DB_PATH)
     conn.row_factory = sqlite3.Row
@@ -55,12 +56,12 @@ def init_db():
             "id INTEGER PRIMARY KEY CHECK (id = 1), "
             "ollama_context INTEGER NOT NULL DEFAULT 8192, "
             "default_model TEXT NOT NULL DEFAULT 'gemma3:4b', "
-            "agent_profile TEXT NOT NULL DEFAULT 'Универсальный'"
+            "agent_profile TEXT NOT NULL DEFAULT 'РЈРЅРёРІРµСЂСЃР°Р»СЊРЅС‹Р№'"
             ")"
         )
         cur.execute(
             "INSERT OR IGNORE INTO settings(id, ollama_context, default_model, agent_profile) "
-            "VALUES(1, 8192, 'gemma3:4b', 'Универсальный')"
+            "VALUES(1, 8192, 'gemma3:4b', 'РЈРЅРёРІРµСЂСЃР°Р»СЊРЅС‹Р№')"
         )
 
         conn.commit()
@@ -88,13 +89,13 @@ def list_chats():
     return [dict(r) for r in rows]
 
 
-def create_chat(title="Новый чат"):
+def create_chat(title="РќРѕРІС‹Р№ С‡Р°С‚"):
     conn = _connect()
     try:
         cur = conn.cursor()
         cur.execute(
             "INSERT INTO chats(title, pinned, memory_saved) VALUES (?, 0, 0)",
-            (title or "Новый чат",),
+            (title or "РќРѕРІС‹Р№ С‡Р°С‚",),
         )
         chat_id = cur.lastrowid
         row = _chat_row(conn, chat_id)
@@ -111,7 +112,7 @@ def update_chat(chat_id: int, title=None, pinned=None, memory_saved=None):
         if not current:
             return None
 
-        next_title = current["title"] if title is None else (title or "Новый чат")
+        next_title = current["title"] if title is None else (title or "РќРѕРІС‹Р№ С‡Р°С‚")
         next_pinned = current["pinned"] if pinned is None else int(bool(pinned))
         next_memory_saved = current["memory_saved"] if memory_saved is None else int(bool(memory_saved))
 
@@ -184,3 +185,5 @@ def add_message(chat_id, role, content):
     finally:
         conn.close()
     return dict(row)
+
+

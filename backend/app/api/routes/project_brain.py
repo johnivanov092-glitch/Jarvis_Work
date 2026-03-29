@@ -43,7 +43,7 @@ EXCLUDED_PARTS = {
     "tmp",
     "temp",
     "logs",
-    ".jarvis_chat_uploads",
+    ".elira_chat_uploads",
     "data/chat_uploads_tmp",
 }
 TEXT_SUFFIXES = {
@@ -68,31 +68,31 @@ LEGACY_AGENT_CATALOG = [
         "id": "chat_agent",
         "title": "Chat agent",
         "kind": "conversation",
-        "description": "Базовый диалоговый агент для обычных запросов.",
+        "description": "Р‘Р°Р·РѕРІС‹Р№ РґРёР°Р»РѕРіРѕРІС‹Р№ Р°РіРµРЅС‚ РґР»СЏ РѕР±С‹С‡РЅС‹С… Р·Р°РїСЂРѕСЃРѕРІ.",
     },
     {
         "id": "planner_agent",
         "title": "Planner agent",
         "kind": "planning",
-        "description": "Пошаговый план и orchestration поверх reasoning/browser/terminal.",
+        "description": "РџРѕС€Р°РіРѕРІС‹Р№ РїР»Р°РЅ Рё orchestration РїРѕРІРµСЂС… reasoning/browser/terminal.",
     },
     {
         "id": "browser_agent",
         "title": "Browser agent",
         "kind": "research",
-        "description": "Веб-поиск, чтение страниц и сбор контекста для ответа.",
+        "description": "Р’РµР±-РїРѕРёСЃРє, С‡С‚РµРЅРёРµ СЃС‚СЂР°РЅРёС† Рё СЃР±РѕСЂ РєРѕРЅС‚РµРєСЃС‚Р° РґР»СЏ РѕС‚РІРµС‚Р°.",
     },
     {
         "id": "coder_agent",
         "title": "Coder agent",
         "kind": "code",
-        "description": "Локальный кодовый агент для файла, diff-preview и безопасного patch-flow.",
+        "description": "Р›РѕРєР°Р»СЊРЅС‹Р№ РєРѕРґРѕРІС‹Р№ Р°РіРµРЅС‚ РґР»СЏ С„Р°Р№Р»Р°, diff-preview Рё Р±РµР·РѕРїР°СЃРЅРѕРіРѕ patch-flow.",
     },
     {
         "id": "task_graph",
         "title": "Task graph",
         "kind": "orchestration",
-        "description": "Граф выполнения шагов для research/code/file режимов.",
+        "description": "Р“СЂР°С„ РІС‹РїРѕР»РЅРµРЅРёСЏ С€Р°РіРѕРІ РґР»СЏ research/code/file СЂРµР¶РёРјРѕРІ.",
     },
     {
         "id": "multi_agent",
@@ -104,25 +104,25 @@ LEGACY_AGENT_CATALOG = [
         "id": "reflection_v2",
         "title": "Reflection v2",
         "kind": "quality",
-        "description": "Самопроверка ответа, groundedness, completeness, retry loop.",
+        "description": "РЎР°РјРѕРїСЂРѕРІРµСЂРєР° РѕС‚РІРµС‚Р°, groundedness, completeness, retry loop.",
     },
     {
         "id": "self_improve",
         "title": "Self-improving agent",
         "kind": "quality",
-        "description": "Повторное улучшение ответа после критики.",
+        "description": "РџРѕРІС‚РѕСЂРЅРѕРµ СѓР»СѓС‡С€РµРЅРёРµ РѕС‚РІРµС‚Р° РїРѕСЃР»Рµ РєСЂРёС‚РёРєРё.",
     },
     {
         "id": "terminal",
         "title": "Terminal",
         "kind": "tool",
-        "description": "Безопасный локальный терминальный контекст только для read-only анализа.",
+        "description": "Р‘РµР·РѕРїР°СЃРЅС‹Р№ Р»РѕРєР°Р»СЊРЅС‹Р№ С‚РµСЂРјРёРЅР°Р»СЊРЅС‹Р№ РєРѕРЅС‚РµРєСЃС‚ С‚РѕР»СЊРєРѕ РґР»СЏ read-only Р°РЅР°Р»РёР·Р°.",
     },
     {
         "id": "image_generation",
         "title": "Image generation",
         "kind": "media",
-        "description": "Наследуемый image-flow из старого Jarvis: routing и prompt prep для будущей генерации.",
+        "description": "РќР°СЃР»РµРґСѓРµРјС‹Р№ image-flow РёР· СЃС‚Р°СЂРѕРіРѕ Elira: routing Рё prompt prep РґР»СЏ Р±СѓРґСѓС‰РµР№ РіРµРЅРµСЂР°С†РёРё.",
     },
 ]
 
@@ -221,7 +221,7 @@ def _safe_filename(name: str) -> str:
 
 def _extract_text_from_docx(data: bytes) -> str:
     try:
-        with tempfile.TemporaryDirectory(prefix="jarvis_docx_") as tmp:
+        with tempfile.TemporaryDirectory(prefix="elira_docx_") as tmp:
             path = Path(tmp) / "file.docx"
             path.write_bytes(data)
             with zipfile.ZipFile(path, "r") as zf:
@@ -236,7 +236,7 @@ def _extract_text_from_docx(data: bytes) -> str:
 def _extract_text_from_pdf(data: bytes) -> str:
     text = data.decode("latin-1", errors="ignore")
     text = re.sub(r"<[^>]+>", " ", text)
-    text = re.sub(r"[^\x20-\x7E\n\rА-Яа-яЁё]", " ", text)
+    text = re.sub(r"[^\x20-\x7E\n\rРђ-РЇР°-СЏРЃС‘]", " ", text)
     text = re.sub(r"\s+", " ", text)
     return text.strip()
 
@@ -386,16 +386,16 @@ def _route_task(text: str, mode: str, attachments: list[dict[str, Any]], selecte
         return {"mode": mode, "reason": "manual"}
 
     low = (text or "").lower()
-    if any(x in low for x in ["нарисуй", "изображ", "image", "картин", "png", "sdxl", "flux"]):
+    if any(x in low for x in ["РЅР°СЂРёСЃСѓР№", "РёР·РѕР±СЂР°Р¶", "image", "РєР°СЂС‚РёРЅ", "png", "sdxl", "flux"]):
         return {"mode": "image", "reason": "image markers"}
     if selected_project_paths or any(a.get("suffix") in {".py", ".js", ".ts", ".tsx", ".jsx", ".json", ".css", ".html"} for a in attachments):
-        if any(x in low for x in ["исправ", "fix", "refactor", "patch", "endpoint", "код", "api", "функц", "ошибк", "bug", "добавь"]):
+        if any(x in low for x in ["РёСЃРїСЂР°РІ", "fix", "refactor", "patch", "endpoint", "РєРѕРґ", "api", "С„СѓРЅРєС†", "РѕС€РёР±Рє", "bug", "РґРѕР±Р°РІСЊ"]):
             return {"mode": "code", "reason": "code markers"}
-    if any(x in low for x in ["план", "roadmap", "шаг", "архитект", "strategy", "стратег"]):
+    if any(x in low for x in ["РїР»Р°РЅ", "roadmap", "С€Р°Рі", "Р°СЂС…РёС‚РµРєС‚", "strategy", "СЃС‚СЂР°С‚РµРі"]):
         return {"mode": "plan", "reason": "plan markers"}
     if attachments:
         return {"mode": "analyze", "reason": "attachments present"}
-    if web_enabled and any(x in low for x in ["кто", "когда", "новост", "latest", "найди", "search", "в интернете", "документац", "web", "веб", "research"]):
+    if web_enabled and any(x in low for x in ["РєС‚Рѕ", "РєРѕРіРґР°", "РЅРѕРІРѕСЃС‚", "latest", "РЅР°Р№РґРё", "search", "РІ РёРЅС‚РµСЂРЅРµС‚Рµ", "РґРѕРєСѓРјРµРЅС‚Р°С†", "web", "РІРµР±", "research"]):
         return {"mode": "research", "reason": "research markers"}
     return {"mode": "chat", "reason": "default"}
 
@@ -532,12 +532,19 @@ def _build_chat_prompt(message: str, route_mode: str, attachments: list[dict[str
 # ---------- routes ----------
 @router.get("/status")
 def project_brain_status():
+    from app.core.memory import vector_memory_capability_status
+    from app.services.skills_service import screenshot_capability_status
+
     return {
         "status": "ok",
         "project_root": str(PROJECT_ROOT),
         "excluded_parts": sorted(EXCLUDED_PARTS),
         "max_read_bytes": MAX_READ_BYTES,
         "chat_upload_root": str(UPLOAD_ROOT),
+        "capabilities": {
+            "vector_memory": vector_memory_capability_status(),
+            "screenshot": screenshot_capability_status(),
+        },
     }
 
 
@@ -710,7 +717,7 @@ def chat_send(payload: ChatRequest):
     answer = str(result.get("answer") or "")
     plan = result.get("plan") if isinstance(result.get("plan"), list) else []
     if not answer:
-        answer = "Не удалось получить содержательный ответ от модели."
+        answer = "РќРµ СѓРґР°Р»РѕСЃСЊ РїРѕР»СѓС‡РёС‚СЊ СЃРѕРґРµСЂР¶Р°С‚РµР»СЊРЅС‹Р№ РѕС‚РІРµС‚ РѕС‚ РјРѕРґРµР»Рё."
 
     response = {
         "status": "ok",
@@ -779,3 +786,4 @@ def ollama_agent_run(payload: LocalAgentRunRequest):
         "notes": str(result.get("notes") or ""),
         "references_used": [item["path"] for item in refs],
     }
+

@@ -66,7 +66,7 @@ def build_plan(goal: str, current_path: str | None, staged_paths: List[str]) -> 
             "action": "modify",
             "path": current_path,
             "agent": "planner",
-            "reason": "Текущий файл выбран как главный кандидат на изменение.",
+            "reason": "РўРµРєСѓС‰РёР№ С„Р°Р№Р» РІС‹Р±СЂР°РЅ РєР°Рє РіР»Р°РІРЅС‹Р№ РєР°РЅРґРёРґР°С‚ РЅР° РёР·РјРµРЅРµРЅРёРµ.",
         })
 
     for path in staged_paths[:10]:
@@ -76,29 +76,29 @@ def build_plan(goal: str, current_path: str | None, staged_paths: List[str]) -> 
                 "action": "modify",
                 "path": path,
                 "agent": "planner",
-                "reason": "Файл уже staged и включён в текущую задачу.",
+                "reason": "Р¤Р°Р№Р» СѓР¶Рµ staged Рё РІРєР»СЋС‡С‘РЅ РІ С‚РµРєСѓС‰СѓСЋ Р·Р°РґР°С‡Сѓ.",
             })
 
     goal_l = goal.lower()
 
-    if any(word in goal_l for word in ["create", "создай", "добав", "новый файл", "component", "компонент"]):
+    if any(word in goal_l for word in ["create", "СЃРѕР·РґР°Р№", "РґРѕР±Р°РІ", "РЅРѕРІС‹Р№ С„Р°Р№Р»", "component", "РєРѕРјРїРѕРЅРµРЅС‚"]):
         if not any(item["path"] == "frontend/src/components/NewTaskPanel.jsx" for item in items):
             items.append({
                 "step": "create",
                 "action": "create",
                 "path": "frontend/src/components/NewTaskPanel.jsx",
                 "agent": "coder",
-                "reason": "По формулировке задачи вероятно нужен новый UI-компонент.",
+                "reason": "РџРѕ С„РѕСЂРјСѓР»РёСЂРѕРІРєРµ Р·Р°РґР°С‡Рё РІРµСЂРѕСЏС‚РЅРѕ РЅСѓР¶РµРЅ РЅРѕРІС‹Р№ UI-РєРѕРјРїРѕРЅРµРЅС‚.",
             })
 
-    if any(word in goal_l for word in ["api", "route", "router", "роут", "эндпоинт", "backend"]):
+    if any(word in goal_l for word in ["api", "route", "router", "СЂРѕСѓС‚", "СЌРЅРґРїРѕРёРЅС‚", "backend"]):
         if not any(item["path"] == "backend/app/api/routes/new_task_route.py" for item in items):
             items.append({
                 "step": "create",
                 "action": "create",
                 "path": "backend/app/api/routes/new_task_route.py",
                 "agent": "coder",
-                "reason": "Задача выглядит как backend/API-изменение.",
+                "reason": "Р—Р°РґР°С‡Р° РІС‹РіР»СЏРґРёС‚ РєР°Рє backend/API-РёР·РјРµРЅРµРЅРёРµ.",
             })
 
     if not items:
@@ -107,7 +107,7 @@ def build_plan(goal: str, current_path: str | None, staged_paths: List[str]) -> 
             "action": "inspect",
             "path": current_path or "project",
             "agent": "planner",
-            "reason": "Сначала нужно уточнить область проекта и выбрать файлы.",
+            "reason": "РЎРЅР°С‡Р°Р»Р° РЅСѓР¶РЅРѕ СѓС‚РѕС‡РЅРёС‚СЊ РѕР±Р»Р°СЃС‚СЊ РїСЂРѕРµРєС‚Р° Рё РІС‹Р±СЂР°С‚СЊ С„Р°Р№Р»С‹.",
         })
 
     return items
@@ -115,10 +115,10 @@ def build_plan(goal: str, current_path: str | None, staged_paths: List[str]) -> 
 
 def build_supervisor_pipeline(mode: str) -> List[dict]:
     return [
-        {"agent": "planner", "status": "done", "description": f"Построил план для режима {mode}."},
-        {"agent": "coder", "status": "ready", "description": "Готовит preview patch и staged changes."},
-        {"agent": "reviewer", "status": "ready", "description": "Проверит diff, history и verify."},
-        {"agent": "tester", "status": "queued", "description": "Запустит verify pipeline после apply."},
+        {"agent": "planner", "status": "done", "description": f"РџРѕСЃС‚СЂРѕРёР» РїР»Р°РЅ РґР»СЏ СЂРµР¶РёРјР° {mode}."},
+        {"agent": "coder", "status": "ready", "description": "Р“РѕС‚РѕРІРёС‚ preview patch Рё staged changes."},
+        {"agent": "reviewer", "status": "ready", "description": "РџСЂРѕРІРµСЂРёС‚ diff, history Рё verify."},
+        {"agent": "tester", "status": "queued", "description": "Р—Р°РїСѓСЃС‚РёС‚ verify pipeline РїРѕСЃР»Рµ apply."},
     ]
 
 
@@ -180,10 +180,10 @@ def run_task(payload: TaskRunPayload):
         "preview_targets": preview_targets,
         "logs": logs,
         "next_steps": [
-            "Проверь plan.",
-            "Открой нужные файлы и подготовь preview patch.",
-            "Сделай apply для выбранных файлов.",
-            "Запусти verify.",
+            "РџСЂРѕРІРµСЂСЊ plan.",
+            "РћС‚РєСЂРѕР№ РЅСѓР¶РЅС‹Рµ С„Р°Р№Р»С‹ Рё РїРѕРґРіРѕС‚РѕРІСЊ preview patch.",
+            "РЎРґРµР»Р°Р№ apply РґР»СЏ РІС‹Р±СЂР°РЅРЅС‹С… С„Р°Р№Р»РѕРІ.",
+            "Р—Р°РїСѓСЃС‚Рё verify.",
         ],
     }
     run_id = persist_run(payload, "planned", plan_items, logs, result)
@@ -237,3 +237,4 @@ def get_task_history(id: int):
         return data
     finally:
         conn.close()
+

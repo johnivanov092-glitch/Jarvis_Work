@@ -1,12 +1,12 @@
 """
-agents.py — все агентные модули.
+agents.py вЂ” РІСЃРµ Р°РіРµРЅС‚РЅС‹Рµ РјРѕРґСѓР»Рё.
 
-Ключевые улучшения v7.1:
-  • execute_python_with_capture  — subprocess-изоляция + таймаут + matplotlib через файлы
-  • self_heal_python_code        — авто-исправление до N попыток
-  • run_build_loop               — изолированная temp-dir, улучшенный ok-check
-  • run_multi_agent              — прогресс-бар, надёжный fallback плана
-  • Browser / Terminal           — без изменений
+РљР»СЋС‡РµРІС‹Рµ СѓР»СѓС‡С€РµРЅРёСЏ v7.1:
+  вЂў execute_python_with_capture  вЂ” subprocess-РёР·РѕР»СЏС†РёСЏ + С‚Р°Р№РјР°СѓС‚ + matplotlib С‡РµСЂРµР· С„Р°Р№Р»С‹
+  вЂў self_heal_python_code        вЂ” Р°РІС‚Рѕ-РёСЃРїСЂР°РІР»РµРЅРёРµ РґРѕ N РїРѕРїС‹С‚РѕРє
+  вЂў run_build_loop               вЂ” РёР·РѕР»РёСЂРѕРІР°РЅРЅР°СЏ temp-dir, СѓР»СѓС‡С€РµРЅРЅС‹Р№ ok-check
+  вЂў run_multi_agent              вЂ” РїСЂРѕРіСЂРµСЃСЃ-Р±Р°СЂ, РЅР°РґС‘Р¶РЅС‹Р№ fallback РїР»Р°РЅР°
+  вЂў Browser / Terminal           вЂ” Р±РµР· РёР·РјРµРЅРµРЅРёР№
 """
 import io
 import json
@@ -33,13 +33,13 @@ except Exception:
     sync_playwright = None
 
 
-# ═══════════════════════════════════════════════════════════════════════════════
-# PYTHON LAB — изолированный subprocess
-# ═══════════════════════════════════════════════════════════════════════════════
+# в•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђ
+# PYTHON LAB вЂ” РёР·РѕР»РёСЂРѕРІР°РЅРЅС‹Р№ subprocess
+# в•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђ
 
-_PYTHON_EXEC_TIMEOUT = 30   # секунд на выполнение кода
+_PYTHON_EXEC_TIMEOUT = 30   # СЃРµРєСѓРЅРґ РЅР° РІС‹РїРѕР»РЅРµРЅРёРµ РєРѕРґР°
 
-# Враппер который сохраняет matplotlib-фигуры как PNG в рабочую папку
+# Р’СЂР°РїРїРµСЂ РєРѕС‚РѕСЂС‹Р№ СЃРѕС…СЂР°РЅСЏРµС‚ matplotlib-С„РёРіСѓСЂС‹ РєР°Рє PNG РІ СЂР°Р±РѕС‡СѓСЋ РїР°РїРєСѓ
 _FIGURE_SAVER = textwrap.dedent("""
 import matplotlib
 matplotlib.use("Agg")
@@ -65,26 +65,26 @@ def execute_python_with_capture(
     timeout: int = _PYTHON_EXEC_TIMEOUT,
 ) -> Dict[str, Any]:
     """
-    Запускает Python-код в изолированном subprocess.
-    Возвращает: {ok, output, traceback, figures}
-      figures — список bytes (PNG) для st.image()
+    Р—Р°РїСѓСЃРєР°РµС‚ Python-РєРѕРґ РІ РёР·РѕР»РёСЂРѕРІР°РЅРЅРѕРј subprocess.
+    Р’РѕР·РІСЂР°С‰Р°РµС‚: {ok, output, traceback, figures}
+      figures вЂ” СЃРїРёСЃРѕРє bytes (PNG) РґР»СЏ st.image()
 
-    Изоляция гарантирует:
-      - бесконечный цикл → убивается по таймауту
-      - sys.exit() / os._exit() → не роняет Streamlit
-      - импорт тяжёлых либ → отдельный процесс, не засоряет память
+    РР·РѕР»СЏС†РёСЏ РіР°СЂР°РЅС‚РёСЂСѓРµС‚:
+      - Р±РµСЃРєРѕРЅРµС‡РЅС‹Р№ С†РёРєР» в†’ СѓР±РёРІР°РµС‚СЃСЏ РїРѕ С‚Р°Р№РјР°СѓС‚Сѓ
+      - sys.exit() / os._exit() в†’ РЅРµ СЂРѕРЅСЏРµС‚ Streamlit
+      - РёРјРїРѕСЂС‚ С‚СЏР¶С‘Р»С‹С… Р»РёР± в†’ РѕС‚РґРµР»СЊРЅС‹Р№ РїСЂРѕС†РµСЃСЃ, РЅРµ Р·Р°СЃРѕСЂСЏРµС‚ РїР°РјСЏС‚СЊ
     """
-    with tempfile.TemporaryDirectory(prefix="jarvis_exec_") as tmp:
+    with tempfile.TemporaryDirectory(prefix="elira_exec_") as tmp:
         tmp_path  = Path(tmp)
         code_file = tmp_path / "_run.py"
 
-        # Если extra_globals содержат данные — сериализуем и передаём
+        # Р•СЃР»Рё extra_globals СЃРѕРґРµСЂР¶Р°С‚ РґР°РЅРЅС‹Рµ вЂ” СЃРµСЂРёР°Р»РёР·СѓРµРј Рё РїРµСЂРµРґР°С‘Рј
         prelude = _FIGURE_SAVER
         if extra_globals:
             serializable = {}
             for k, v in extra_globals.items():
                 try:
-                    json.dumps(v)   # только JSON-сериализуемые
+                    json.dumps(v)   # С‚РѕР»СЊРєРѕ JSON-СЃРµСЂРёР°Р»РёР·СѓРµРјС‹Рµ
                     serializable[k] = v
                 except Exception:
                     pass
@@ -111,10 +111,10 @@ def execute_python_with_capture(
             stdout = proc.stdout or ""
             stderr = proc.stderr or ""
 
-            # Разделяем настоящие ошибки от предупреждений
+            # Р Р°Р·РґРµР»СЏРµРј РЅР°СЃС‚РѕСЏС‰РёРµ РѕС€РёР±РєРё РѕС‚ РїСЂРµРґСѓРїСЂРµР¶РґРµРЅРёР№
             is_error = proc.returncode != 0 or "Traceback" in stderr
 
-            # Собираем PNG-фигуры
+            # РЎРѕР±РёСЂР°РµРј PNG-С„РёРіСѓСЂС‹
             figures = []
             for fig_file in sorted(tmp_path.glob("fig_*.png")):
                 try:
@@ -124,7 +124,7 @@ def execute_python_with_capture(
 
             return {
                 "ok":        not is_error,
-                "output":    stdout or ("Код выполнен без вывода" if not is_error else ""),
+                "output":    stdout or ("РљРѕРґ РІС‹РїРѕР»РЅРµРЅ Р±РµР· РІС‹РІРѕРґР°" if not is_error else ""),
                 "traceback": stderr if is_error else "",
                 "warnings":  stderr if not is_error and stderr else "",
                 "figures":   figures,
@@ -134,8 +134,8 @@ def execute_python_with_capture(
             return {
                 "ok":        False,
                 "output":    "",
-                "traceback": f"⏱ Превышен таймаут выполнения ({timeout} сек). "
-                             f"Проверь нет ли бесконечного цикла.",
+                "traceback": f"вЏ± РџСЂРµРІС‹С€РµРЅ С‚Р°Р№РјР°СѓС‚ РІС‹РїРѕР»РЅРµРЅРёСЏ ({timeout} СЃРµРє). "
+                             f"РџСЂРѕРІРµСЂСЊ РЅРµС‚ Р»Рё Р±РµСЃРєРѕРЅРµС‡РЅРѕРіРѕ С†РёРєР»Р°.",
                 "warnings":  "",
                 "figures":   [],
             }
@@ -156,8 +156,8 @@ def self_heal_python_code(
     num_ctx: int = 4096,
 ) -> Tuple[str, Dict, List]:
     """
-    Запускает код, при ошибке просит модель исправить, повторяет до max_retries раз.
-    Возвращает: (итоговый_код, последний_результат, история_попыток)
+    Р—Р°РїСѓСЃРєР°РµС‚ РєРѕРґ, РїСЂРё РѕС€РёР±РєРµ РїСЂРѕСЃРёС‚ РјРѕРґРµР»СЊ РёСЃРїСЂР°РІРёС‚СЊ, РїРѕРІС‚РѕСЂСЏРµС‚ РґРѕ max_retries СЂР°Р·.
+    Р’РѕР·РІСЂР°С‰Р°РµС‚: (РёС‚РѕРіРѕРІС‹Р№_РєРѕРґ, РїРѕСЃР»РµРґРЅРёР№_СЂРµР·СѓР»СЊС‚Р°С‚, РёСЃС‚РѕСЂРёСЏ_РїРѕРїС‹С‚РѕРє)
     """
     history, current_code, last_result = [], generated_code, None
 
@@ -178,19 +178,19 @@ def self_heal_python_code(
             break
 
         repair_prompt = (
-            f"Ты исправляешь Python-код после ошибки выполнения.\n"
-            f"Верни только исправленный Python-код без markdown и пояснений.\n\n"
-            f"Путь к файлу данных:\n{file_path}\n\n"
-            f"Задача:\n{task}\n\n"
-            f"Схема данных:\n{schema_text}\n\n"
-            f"Текущий код:\n{current_code}\n\n"
+            f"РўС‹ РёСЃРїСЂР°РІР»СЏРµС€СЊ Python-РєРѕРґ РїРѕСЃР»Рµ РѕС€РёР±РєРё РІС‹РїРѕР»РЅРµРЅРёСЏ.\n"
+            f"Р’РµСЂРЅРё С‚РѕР»СЊРєРѕ РёСЃРїСЂР°РІР»РµРЅРЅС‹Р№ Python-РєРѕРґ Р±РµР· markdown Рё РїРѕСЏСЃРЅРµРЅРёР№.\n\n"
+            f"РџСѓС‚СЊ Рє С„Р°Р№Р»Сѓ РґР°РЅРЅС‹С…:\n{file_path}\n\n"
+            f"Р—Р°РґР°С‡Р°:\n{task}\n\n"
+            f"РЎС…РµРјР° РґР°РЅРЅС‹С…:\n{schema_text}\n\n"
+            f"РўРµРєСѓС‰РёР№ РєРѕРґ:\n{current_code}\n\n"
             f"STDOUT:\n{result['output']}\n\n"
             f"TRACEBACK:\n{result['traceback']}\n\n"
-            f"Исправь код так, чтобы он выполнился успешно. "
-            f"Не используй markdown, верни только чистый Python."
+            f"РСЃРїСЂР°РІСЊ РєРѕРґ С‚Р°Рє, С‡С‚РѕР±С‹ РѕРЅ РІС‹РїРѕР»РЅРёР»СЃСЏ СѓСЃРїРµС€РЅРѕ. "
+            f"РќРµ РёСЃРїРѕР»СЊР·СѓР№ markdown, РІРµСЂРЅРё С‚РѕР»СЊРєРѕ С‡РёСЃС‚С‹Р№ Python."
         )
         fixed = ask_model(
-            model_name=model_name, profile_name="Аналитик",
+            model_name=model_name, profile_name="РђРЅР°Р»РёС‚РёРє",
             user_input=repair_prompt, temp=0.1,
             include_history=False, num_ctx=num_ctx,
         ).strip()
@@ -199,23 +199,23 @@ def self_heal_python_code(
     return current_code, last_result, history
 
 
-# ═══════════════════════════════════════════════════════════════════════════════
-# CODE BUILDER LOOP — изолированная temp-директория
-# ═══════════════════════════════════════════════════════════════════════════════
+# в•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђ
+# CODE BUILDER LOOP вЂ” РёР·РѕР»РёСЂРѕРІР°РЅРЅР°СЏ temp-РґРёСЂРµРєС‚РѕСЂРёСЏ
+# в•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђ
 
 def generate_file_code(
     target_file: str, task: str, model_name: str,
     project_context: str, file_context: str, num_ctx: int = 4096,
 ) -> str:
     prompt = (
-        f"Напиши полный рабочий код для файла {target_file}.\n"
-        f"Верни только содержимое файла без markdown.\n\n"
-        f"Задача:\n{task}\n\n"
-        f"Контекст проекта:\n{project_context[:20000]}\n\n"
-        f"Контекст файлов:\n{file_context[:8000]}"
+        f"РќР°РїРёС€Рё РїРѕР»РЅС‹Р№ СЂР°Р±РѕС‡РёР№ РєРѕРґ РґР»СЏ С„Р°Р№Р»Р° {target_file}.\n"
+        f"Р’РµСЂРЅРё С‚РѕР»СЊРєРѕ СЃРѕРґРµСЂР¶РёРјРѕРµ С„Р°Р№Р»Р° Р±РµР· markdown.\n\n"
+        f"Р—Р°РґР°С‡Р°:\n{task}\n\n"
+        f"РљРѕРЅС‚РµРєСЃС‚ РїСЂРѕРµРєС‚Р°:\n{project_context[:20000]}\n\n"
+        f"РљРѕРЅС‚РµРєСЃС‚ С„Р°Р№Р»РѕРІ:\n{file_context[:8000]}"
     )
     code = ask_model(
-        model_name, "Программист", prompt,
+        model_name, "РџСЂРѕРіСЂР°РјРјРёСЃС‚", prompt,
         project_context=project_context, file_context=file_context,
         include_history=False, num_ctx=num_ctx,
     )
@@ -224,17 +224,17 @@ def generate_file_code(
 
 def _ok_check(stdout: str, stderr: str, returncode: int) -> bool:
     """
-    Считает запуск успешным если:
+    РЎС‡РёС‚Р°РµС‚ Р·Р°РїСѓСЃРє СѓСЃРїРµС€РЅС‹Рј РµСЃР»Рё:
       - returncode == 0
-      - нет Traceback в stderr
-      - нет 'Error:' в начале строки stderr
-    Предупреждения (DeprecationWarning, UserWarning) НЕ считаются ошибкой.
+      - РЅРµС‚ Traceback РІ stderr
+      - РЅРµС‚ 'Error:' РІ РЅР°С‡Р°Р»Рµ СЃС‚СЂРѕРєРё stderr
+    РџСЂРµРґСѓРїСЂРµР¶РґРµРЅРёСЏ (DeprecationWarning, UserWarning) РќР• СЃС‡РёС‚Р°СЋС‚СЃСЏ РѕС€РёР±РєРѕР№.
     """
     if returncode != 0:
         return False
     if "Traceback (most recent call last)" in stderr:
         return False
-    # Ошибки типа "ModuleNotFoundError: ..." без Traceback
+    # РћС€РёР±РєРё С‚РёРїР° "ModuleNotFoundError: ..." Р±РµР· Traceback
     error_lines = [l for l in stderr.splitlines()
                    if re.match(r"^\w*Error:", l.strip())]
     return len(error_lines) == 0
@@ -251,31 +251,31 @@ def run_build_loop(
     num_ctx: int = 4096,
 ) -> Tuple[str, str, List]:
     """
-    Генерирует код, запускает в изолированной temp-директории, при ошибке — чинит.
+    Р“РµРЅРµСЂРёСЂСѓРµС‚ РєРѕРґ, Р·Р°РїСѓСЃРєР°РµС‚ РІ РёР·РѕР»РёСЂРѕРІР°РЅРЅРѕР№ temp-РґРёСЂРµРєС‚РѕСЂРёРё, РїСЂРё РѕС€РёР±РєРµ вЂ” С‡РёРЅРёС‚.
 
-    Изоляция: код пишется в tempdir, не в APP_DIR.
-    После успеха — копируется в GENERATED_DIR.
+    РР·РѕР»СЏС†РёСЏ: РєРѕРґ РїРёС€РµС‚СЃСЏ РІ tempdir, РЅРµ РІ APP_DIR.
+    РџРѕСЃР»Рµ СѓСЃРїРµС…Р° вЂ” РєРѕРїРёСЂСѓРµС‚СЃСЏ РІ GENERATED_DIR.
     """
     history = []
 
-    # Генерируем начальный код
+    # Р“РµРЅРµСЂРёСЂСѓРµРј РЅР°С‡Р°Р»СЊРЅС‹Р№ РєРѕРґ
     code = generate_file_code(
         target_file, task, model_name,
         project_context, file_context, num_ctx,
     )
 
-    with tempfile.TemporaryDirectory(prefix="jarvis_build_") as tmp:
+    with tempfile.TemporaryDirectory(prefix="elira_build_") as tmp:
         tmp_path    = Path(tmp)
         target_path = tmp_path / Path(target_file).name
 
         for attempt in range(1, max_retries + 2):
-            # Пишем код в temp-директорию
+            # РџРёС€РµРј РєРѕРґ РІ temp-РґРёСЂРµРєС‚РѕСЂРёСЋ
             target_path.write_text(code, encoding="utf-8")
 
-            # Запускаем команду в temp-директории
+            # Р—Р°РїСѓСЃРєР°РµРј РєРѕРјР°РЅРґСѓ РІ temp-РґРёСЂРµРєС‚РѕСЂРёРё
             output = _run_in_dir(run_command, cwd=tmp_path, timeout=60)
 
-            # Парсим stdout / stderr из вывода run_terminal
+            # РџР°СЂСЃРёРј stdout / stderr РёР· РІС‹РІРѕРґР° run_terminal
             stdout_part = ""
             stderr_part = ""
             if "STDOUT:\n" in output:
@@ -283,7 +283,7 @@ def run_build_loop(
             if "STDERR:\n" in output:
                 stderr_part = output.split("STDERR:\n", 1)[1]
 
-            # Получаем returncode (run_terminal не возвращает его, эвристика)
+            # РџРѕР»СѓС‡Р°РµРј returncode (run_terminal РЅРµ РІРѕР·РІСЂР°С‰Р°РµС‚ РµРіРѕ, СЌРІСЂРёСЃС‚РёРєР°)
             returncode = 0 if "Traceback" not in output and "Error" not in stderr_part else 1
 
             ok = _ok_check(stdout_part, stderr_part, returncode)
@@ -296,7 +296,7 @@ def run_build_loop(
             })
 
             if ok:
-                # Копируем результат в GENERATED_DIR
+                # РљРѕРїРёСЂСѓРµРј СЂРµР·СѓР»СЊС‚Р°С‚ РІ GENERATED_DIR
                 dest = GENERATED_DIR / Path(target_file).name
                 shutil.copy2(target_path, dest)
                 return code, output, history
@@ -304,19 +304,19 @@ def run_build_loop(
             if attempt >= max_retries + 1:
                 break
 
-            # Просим модель починить
+            # РџСЂРѕСЃРёРј РјРѕРґРµР»СЊ РїРѕС‡РёРЅРёС‚СЊ
             fix_prompt = (
-                f"Исправь код файла '{target_file}' после неудачного запуска.\n"
-                f"Верни только новый код без markdown.\n\n"
-                f"Задача:\n{task}\n\n"
-                f"Текущий код:\n{code}\n\n"
-                f"Команда запуска:\n{run_command}\n\n"
+                f"РСЃРїСЂР°РІСЊ РєРѕРґ С„Р°Р№Р»Р° '{target_file}' РїРѕСЃР»Рµ РЅРµСѓРґР°С‡РЅРѕРіРѕ Р·Р°РїСѓСЃРєР°.\n"
+                f"Р’РµСЂРЅРё С‚РѕР»СЊРєРѕ РЅРѕРІС‹Р№ РєРѕРґ Р±РµР· markdown.\n\n"
+                f"Р—Р°РґР°С‡Р°:\n{task}\n\n"
+                f"РўРµРєСѓС‰РёР№ РєРѕРґ:\n{code}\n\n"
+                f"РљРѕРјР°РЅРґР° Р·Р°РїСѓСЃРєР°:\n{run_command}\n\n"
                 f"STDOUT:\n{stdout_part}\n\n"
                 f"STDERR:\n{stderr_part}"
             )
             code = clean_code_fence(
                 ask_model(
-                    model_name, "Программист", fix_prompt,
+                    model_name, "РџСЂРѕРіСЂР°РјРјРёСЃС‚", fix_prompt,
                     project_context=project_context, file_context=file_context,
                     temp=0.1, include_history=False, num_ctx=num_ctx,
                 )
@@ -326,7 +326,7 @@ def run_build_loop(
 
 
 def _run_in_dir(cmd: str, cwd: Path, timeout: int = 60) -> str:
-    """Запускает команду в указанной директории."""
+    """Р—Р°РїСѓСЃРєР°РµС‚ РєРѕРјР°РЅРґСѓ РІ СѓРєР°Р·Р°РЅРЅРѕР№ РґРёСЂРµРєС‚РѕСЂРёРё."""
     try:
         proc = subprocess.run(
             cmd, shell=True, capture_output=True, text=True,
@@ -334,14 +334,14 @@ def _run_in_dir(cmd: str, cwd: Path, timeout: int = 60) -> str:
         )
         return f"$ {cmd}\n\nSTDOUT:\n{proc.stdout}\n\nSTDERR:\n{proc.stderr}"
     except subprocess.TimeoutExpired:
-        return f"$ {cmd}\n\nКоманда остановлена по таймауту ({timeout} сек.)"
+        return f"$ {cmd}\n\nРљРѕРјР°РЅРґР° РѕСЃС‚Р°РЅРѕРІР»РµРЅР° РїРѕ С‚Р°Р№РјР°СѓС‚Сѓ ({timeout} СЃРµРє.)"
     except Exception as e:
-        return f"Ошибка запуска: {e}"
+        return f"РћС€РёР±РєР° Р·Р°РїСѓСЃРєР°: {e}"
 
 
-# ═══════════════════════════════════════════════════════════════════════════════
+# в•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђ
 # MULTI-AGENT ORCHESTRATOR
-# ═══════════════════════════════════════════════════════════════════════════════
+# в•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђ
 
 def run_multi_agent(
     task: str,
@@ -353,14 +353,14 @@ def run_multi_agent(
     file_context: str = "",
 ) -> Dict[str, Any]:
     """
-    Запускает 5-шаговый Multi-Agent pipeline:
-      1. Planner     → структурированный план (JSON)
-      2. Researcher  → исследование и факты
-      3. Coder       → код и реализация
-      4. Reviewer    → проверка и критика
-      5. Orchestrator→ финальный deliverable
+    Р—Р°РїСѓСЃРєР°РµС‚ 5-С€Р°РіРѕРІС‹Р№ Multi-Agent pipeline:
+      1. Planner     в†’ СЃС‚СЂСѓРєС‚СѓСЂРёСЂРѕРІР°РЅРЅС‹Р№ РїР»Р°РЅ (JSON)
+      2. Researcher  в†’ РёСЃСЃР»РµРґРѕРІР°РЅРёРµ Рё С„Р°РєС‚С‹
+      3. Coder       в†’ РєРѕРґ Рё СЂРµР°Р»РёР·Р°С†РёСЏ
+      4. Reviewer    в†’ РїСЂРѕРІРµСЂРєР° Рё РєСЂРёС‚РёРєР°
+      5. Orchestratorв†’ С„РёРЅР°Р»СЊРЅС‹Р№ deliverable
 
-    progress_callback вызывается после каждого шага — используй для st.progress().
+    progress_callback РІС‹Р·С‹РІР°РµС‚СЃСЏ РїРѕСЃР»Рµ РєР°Р¶РґРѕРіРѕ С€Р°РіР° вЂ” РёСЃРїРѕР»СЊР·СѓР№ РґР»СЏ st.progress().
     """
     from .memory import build_memory_context
     memory_context = build_memory_context(task, memory_profile, top_k=5)
@@ -370,47 +370,47 @@ def run_multi_agent(
         if progress_callback:
             progress_callback(step, total_steps, label)
 
-    # ── Шаг 1: Planner ────────────────────────────────────────────────────────
-    _progress(1, "🗺 Planner: составляю план...")
+    # в”Ђв”Ђ РЁР°Рі 1: Planner в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
+    _progress(1, "рџ—є Planner: СЃРѕСЃС‚Р°РІР»СЏСЋ РїР»Р°РЅ...")
     planner_prompt = (
-        "Ты Planner агент. Разбей задачу на 4 блока и верни ТОЛЬКО JSON без пояснений:\n"
-        '{"research":"<что исследовать>","coding":"<что написать>","review":"<что проверить>",'
-        '"deliverable":"<итоговый результат>"}\n\n'
-        f"Задача:\n{task}"
+        "РўС‹ Planner Р°РіРµРЅС‚. Р Р°Р·Р±РµР№ Р·Р°РґР°С‡Сѓ РЅР° 4 Р±Р»РѕРєР° Рё РІРµСЂРЅРё РўРћР›Р¬РљРћ JSON Р±РµР· РїРѕСЏСЃРЅРµРЅРёР№:\n"
+        '{"research":"<С‡С‚Рѕ РёСЃСЃР»РµРґРѕРІР°С‚СЊ>","coding":"<С‡С‚Рѕ РЅР°РїРёСЃР°С‚СЊ>","review":"<С‡С‚Рѕ РїСЂРѕРІРµСЂРёС‚СЊ>",'
+        '"deliverable":"<РёС‚РѕРіРѕРІС‹Р№ СЂРµР·СѓР»СЊС‚Р°С‚>"}\n\n'
+        f"Р—Р°РґР°С‡Р°:\n{task}"
     )
     raw_plan = ask_model(
-        model_name=model_name, profile_name="Оркестратор",
+        model_name=model_name, profile_name="РћСЂРєРµСЃС‚СЂР°С‚РѕСЂ",
         user_input=planner_prompt, memory_context=memory_context,
         use_memory=True, temp=0.05, include_history=False, num_ctx=num_ctx,
     )
     plan = safe_json_parse(raw_plan)
 
-    # Надёжный fallback: если план не распарсился — создаём из задачи
+    # РќР°РґС‘Р¶РЅС‹Р№ fallback: РµСЃР»Рё РїР»Р°РЅ РЅРµ СЂР°СЃРїР°СЂСЃРёР»СЃСЏ вЂ” СЃРѕР·РґР°С‘Рј РёР· Р·Р°РґР°С‡Рё
     if not isinstance(plan, dict) or not plan.get("research"):
         plan = {
-            "research":    f"Исследуй тему: {task[:500]}",
-            "coding":      f"Напиши код или решение для: {task[:500]}",
-            "review":      f"Проверь корректность решения задачи: {task[:500]}",
-            "deliverable": "Собери итог: краткий вывод + практические шаги + код если нужен",
+            "research":    f"РСЃСЃР»РµРґСѓР№ С‚РµРјСѓ: {task[:500]}",
+            "coding":      f"РќР°РїРёС€Рё РєРѕРґ РёР»Рё СЂРµС€РµРЅРёРµ РґР»СЏ: {task[:500]}",
+            "review":      f"РџСЂРѕРІРµСЂСЊ РєРѕСЂСЂРµРєС‚РЅРѕСЃС‚СЊ СЂРµС€РµРЅРёСЏ Р·Р°РґР°С‡Рё: {task[:500]}",
+            "deliverable": "РЎРѕР±РµСЂРё РёС‚РѕРі: РєСЂР°С‚РєРёР№ РІС‹РІРѕРґ + РїСЂР°РєС‚РёС‡РµСЃРєРёРµ С€Р°РіРё + РєРѕРґ РµСЃР»Рё РЅСѓР¶РµРЅ",
         }
 
-    # ── Шаг 2: Researcher ─────────────────────────────────────────────────────
-    _progress(2, "🔬 Researcher: исследую...")
+    # в”Ђв”Ђ РЁР°Рі 2: Researcher в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
+    _progress(2, "рџ”¬ Researcher: РёСЃСЃР»РµРґСѓСЋ...")
     research = ask_model(
-        model_name=model_name, profile_name="Исследователь",
+        model_name=model_name, profile_name="РСЃСЃР»РµРґРѕРІР°С‚РµР»СЊ",
         user_input=plan["research"],
         memory_context=memory_context, use_memory=True,
         include_history=False, num_ctx=num_ctx,
     )
 
-    # ── Шаг 3: Coder ──────────────────────────────────────────────────────────
-    _progress(3, "👨‍💻 Coder: пишу решение...")
+    # в”Ђв”Ђ РЁР°Рі 3: Coder в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
+    _progress(3, "рџ‘ЁвЂЌрџ’» Coder: РїРёС€Сѓ СЂРµС€РµРЅРёРµ...")
     coding_input = (
         f"{plan['coding']}\n\n"
-        f"Контекст исследования:\n{research[:3000]}"
+        f"РљРѕРЅС‚РµРєСЃС‚ РёСЃСЃР»РµРґРѕРІР°РЅРёСЏ:\n{research[:3000]}"
     )
     coding = ask_model(
-        model_name=model_name, profile_name="Программист",
+        model_name=model_name, profile_name="РџСЂРѕРіСЂР°РјРјРёСЃС‚",
         user_input=coding_input,
         project_context=project_context,
         file_context=file_context,
@@ -418,39 +418,39 @@ def run_multi_agent(
         include_history=False, num_ctx=num_ctx,
     )
 
-    # ── Шаг 4: Reviewer ───────────────────────────────────────────────────────
-    _progress(4, "🔍 Reviewer: проверяю...")
+    # в”Ђв”Ђ РЁР°Рі 4: Reviewer в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
+    _progress(4, "рџ”Ќ Reviewer: РїСЂРѕРІРµСЂСЏСЋ...")
     review_input = (
-        f"Проверь результаты Research и Coding агентов.\n\n"
-        f"ИСХОДНАЯ ЗАДАЧА:\n{task}\n\n"
+        f"РџСЂРѕРІРµСЂСЊ СЂРµР·СѓР»СЊС‚Р°С‚С‹ Research Рё Coding Р°РіРµРЅС‚РѕРІ.\n\n"
+        f"РРЎРҐРћР”РќРђРЇ Р—РђР”РђР§Рђ:\n{task}\n\n"
         f"PLAN: {plan['review']}\n\n"
         f"RESEARCH:\n{research[:2000]}\n\n"
         f"CODING:\n{coding[:2000]}\n\n"
-        f"Укажи: что верно, что сомнительно, что нужно улучшить."
+        f"РЈРєР°Р¶Рё: С‡С‚Рѕ РІРµСЂРЅРѕ, С‡С‚Рѕ СЃРѕРјРЅРёС‚РµР»СЊРЅРѕ, С‡С‚Рѕ РЅСѓР¶РЅРѕ СѓР»СѓС‡С€РёС‚СЊ."
     )
     review = ask_model(
-        model_name=model_name, profile_name="Аналитик",
+        model_name=model_name, profile_name="РђРЅР°Р»РёС‚РёРє",
         user_input=review_input,
         memory_context=memory_context, use_memory=True,
         include_history=False, num_ctx=num_ctx,
     )
 
-    # ── Шаг 5: Orchestrator → финальный deliverable ───────────────────────────
-    _progress(5, "🎯 Orchestrator: собираю итог...")
+    # в”Ђв”Ђ РЁР°Рі 5: Orchestrator в†’ С„РёРЅР°Р»СЊРЅС‹Р№ deliverable в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
+    _progress(5, "рџЋЇ Orchestrator: СЃРѕР±РёСЂР°СЋ РёС‚РѕРі...")
     final_input = (
-        f"Собери финальный deliverable на основе работы всех агентов.\n\n"
-        f"ЗАДАЧА:\n{task}\n\n"
+        f"РЎРѕР±РµСЂРё С„РёРЅР°Р»СЊРЅС‹Р№ deliverable РЅР° РѕСЃРЅРѕРІРµ СЂР°Р±РѕС‚С‹ РІСЃРµС… Р°РіРµРЅС‚РѕРІ.\n\n"
+        f"Р—РђР”РђР§Рђ:\n{task}\n\n"
         f"RESEARCH:\n{research[:1500]}\n\n"
         f"CODING:\n{coding[:1500]}\n\n"
         f"REVIEW:\n{review[:1000]}\n\n"
-        f"ТРЕБОВАНИЕ К DELIVERABLE: {plan['deliverable']}\n\n"
-        f"Структура ответа:\n"
-        f"1. Краткий вывод (2-3 предложения)\n"
-        f"2. Основная часть (код / анализ / решение)\n"
-        f"3. Практические следующие шаги"
+        f"РўР Р•Р‘РћР’РђРќРР• Рљ DELIVERABLE: {plan['deliverable']}\n\n"
+        f"РЎС‚СЂСѓРєС‚СѓСЂР° РѕС‚РІРµС‚Р°:\n"
+        f"1. РљСЂР°С‚РєРёР№ РІС‹РІРѕРґ (2-3 РїСЂРµРґР»РѕР¶РµРЅРёСЏ)\n"
+        f"2. РћСЃРЅРѕРІРЅР°СЏ С‡Р°СЃС‚СЊ (РєРѕРґ / Р°РЅР°Р»РёР· / СЂРµС€РµРЅРёРµ)\n"
+        f"3. РџСЂР°РєС‚РёС‡РµСЃРєРёРµ СЃР»РµРґСѓСЋС‰РёРµ С€Р°РіРё"
     )
     final_draft = ask_model(
-        model_name=model_name, profile_name="Оркестратор",
+        model_name=model_name, profile_name="РћСЂРєРµСЃС‚СЂР°С‚РѕСЂ",
         user_input=final_input,
         include_history=False, num_ctx=num_ctx,
     )
@@ -472,29 +472,29 @@ def run_multi_agent(
 
 
 
-# ═══════════════════════════════════════════════════════════════════════════════
+# в•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђ
 # SELF-REFLECTION LOOP
-# ═══════════════════════════════════════════════════════════════════════════════
+# в•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђ
 
 def reflect_and_improve_answer(
     task: str,
     draft: str,
     model_name: str,
-    profile_name: str = "Оркестратор",
+    profile_name: str = "РћСЂРєРµСЃС‚СЂР°С‚РѕСЂ",
     extra_context: str = "",
     num_ctx: int = 4096,
 ) -> Dict[str, str]:
     critic_prompt = (
-        "Ты reflection-critic. Коротко проверь черновик ответа на: полноту, фактическую опору на контекст, "
-        "полезность и конкретность. Верни ТОЛЬКО JSON без markdown: "
+        "РўС‹ reflection-critic. РљРѕСЂРѕС‚РєРѕ РїСЂРѕРІРµСЂСЊ С‡РµСЂРЅРѕРІРёРє РѕС‚РІРµС‚Р° РЅР°: РїРѕР»РЅРѕС‚Сѓ, С„Р°РєС‚РёС‡РµСЃРєСѓСЋ РѕРїРѕСЂСѓ РЅР° РєРѕРЅС‚РµРєСЃС‚, "
+        "РїРѕР»РµР·РЅРѕСЃС‚СЊ Рё РєРѕРЅРєСЂРµС‚РЅРѕСЃС‚СЊ. Р’РµСЂРЅРё РўРћР›Р¬РљРћ JSON Р±РµР· markdown: "
         '{"score":0-10,"issues":["..."],"improve":"yes|no","brief":"..."}.\n\n'
-        f"ЗАДАЧА:\n{task}\n\n"
-        f"КОНТЕКСТ:\n{extra_context[:6000]}\n\n"
-        f"ЧЕРНОВИК:\n{draft[:8000]}"
+        f"Р—РђР”РђР§Рђ:\n{task}\n\n"
+        f"РљРћРќРўР•РљРЎРў:\n{extra_context[:6000]}\n\n"
+        f"Р§Р•Р РќРћР’РРљ:\n{draft[:8000]}"
     )
     raw = ask_model(
         model_name=model_name,
-        profile_name="Аналитик",
+        profile_name="РђРЅР°Р»РёС‚РёРє",
         user_input=critic_prompt,
         include_history=False,
         temp=0.05,
@@ -502,16 +502,16 @@ def reflect_and_improve_answer(
     )
     critique = safe_json_parse(clean_code_fence(raw))
     if not isinstance(critique, dict):
-        critique = {"score": 7, "issues": ["Не удалось распарсить critique"], "improve": "yes", "brief": str(raw)[:500]}
+        critique = {"score": 7, "issues": ["РќРµ СѓРґР°Р»РѕСЃСЊ СЂР°СЃРїР°СЂСЃРёС‚СЊ critique"], "improve": "yes", "brief": str(raw)[:500]}
 
     improve_flag = str(critique.get("improve", "yes")).lower() == "yes" or float(critique.get("score", 7)) < 8
     improved = draft
     if improve_flag:
         improve_prompt = (
-            "Улучши ответ после self-reflection. Сохрани факты, убери слабые места, сделай ответ точнее и практичнее.\n\n"
-            f"ЗАДАЧА:\n{task}\n\n"
-            f"КОНТЕКСТ:\n{extra_context[:6000]}\n\n"
-            f"ЧЕРНОВИК:\n{draft[:8000]}\n\n"
+            "РЈР»СѓС‡С€Рё РѕС‚РІРµС‚ РїРѕСЃР»Рµ self-reflection. РЎРѕС…СЂР°РЅРё С„Р°РєС‚С‹, СѓР±РµСЂРё СЃР»Р°Р±С‹Рµ РјРµСЃС‚Р°, СЃРґРµР»Р°Р№ РѕС‚РІРµС‚ С‚РѕС‡РЅРµРµ Рё РїСЂР°РєС‚РёС‡РЅРµРµ.\n\n"
+            f"Р—РђР”РђР§Рђ:\n{task}\n\n"
+            f"РљРћРќРўР•РљРЎРў:\n{extra_context[:6000]}\n\n"
+            f"Р§Р•Р РќРћР’РРљ:\n{draft[:8000]}\n\n"
             f"CRITIQUE:\n{json.dumps(critique, ensure_ascii=False, indent=2)}"
         )
         improved = ask_model(
@@ -527,9 +527,9 @@ def reflect_and_improve_answer(
         "final": improved,
         "critique": json.dumps(critique, ensure_ascii=False, indent=2),
     }
-# ═══════════════════════════════════════════════════════════════════════════════
-# PLANNER AGENT — orchestration поверх Browser / Terminal / Reasoning
-# ═══════════════════════════════════════════════════════════════════════════════
+# в•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђ
+# PLANNER AGENT вЂ” orchestration РїРѕРІРµСЂС… Browser / Terminal / Reasoning
+# в•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђ
 
 def _extract_first_url(text: str) -> str:
     if not text:
@@ -556,10 +556,10 @@ def _planner_default_steps(task: str) -> List[dict]:
     if url:
         steps.append({
             "tool": "browser",
-            "goal": "Прочитай страницу и извлеки факты, полезные для исходной задачи.",
+            "goal": "РџСЂРѕС‡РёС‚Р°Р№ СЃС‚СЂР°РЅРёС†Сѓ Рё РёР·РІР»РµРєРё С„Р°РєС‚С‹, РїРѕР»РµР·РЅС‹Рµ РґР»СЏ РёСЃС…РѕРґРЅРѕР№ Р·Р°РґР°С‡Рё.",
             "url": url,
         })
-    elif any(word in task.lower() for word in ["найди", "поиск", "веб", "сайт", "документац", "интернет", "страниц"]):
+    elif any(word in task.lower() for word in ["РЅР°Р№РґРё", "РїРѕРёСЃРє", "РІРµР±", "СЃР°Р№С‚", "РґРѕРєСѓРјРµРЅС‚Р°С†", "РёРЅС‚РµСЂРЅРµС‚", "СЃС‚СЂР°РЅРёС†"]):
         steps.append({
             "tool": "browser",
             "goal": task[:400],
@@ -567,7 +567,7 @@ def _planner_default_steps(task: str) -> List[dict]:
         })
     steps.append({
         "tool": "reasoning",
-        "goal": "Собери вывод и практические шаги на основе доступного контекста.",
+        "goal": "РЎРѕР±РµСЂРё РІС‹РІРѕРґ Рё РїСЂР°РєС‚РёС‡РµСЃРєРёРµ С€Р°РіРё РЅР° РѕСЃРЅРѕРІРµ РґРѕСЃС‚СѓРїРЅРѕРіРѕ РєРѕРЅС‚РµРєСЃС‚Р°.",
     })
     return steps[:4]
 
@@ -588,23 +588,23 @@ def run_planner_agent(
 
     memory_context = build_memory_context(task, memory_profile, top_k=8)
 
-    _progress(1, "🧭 Planner: строю план...")
+    _progress(1, "рџ§­ Planner: СЃС‚СЂРѕСЋ РїР»Р°РЅ...")
     planner_prompt = (
-        "Ты Planner agent. Разбей задачу на 2-4 шага и верни ТОЛЬКО JSON-массив без пояснений.\n"
-        "Формат шага:\n"
+        "РўС‹ Planner agent. Р Р°Р·Р±РµР№ Р·Р°РґР°С‡Сѓ РЅР° 2-4 С€Р°РіР° Рё РІРµСЂРЅРё РўРћР›Р¬РљРћ JSON-РјР°СЃСЃРёРІ Р±РµР· РїРѕСЏСЃРЅРµРЅРёР№.\n"
+        "Р¤РѕСЂРјР°С‚ С€Р°РіР°:\n"
         '[{"tool":"browser|terminal|reasoning","goal":"...","url":"optional","command":"optional"}]\n'
-        "Правила:\n"
-        "- browser: только если нужен веб/страница/документация/поиск.\n"
-        "- terminal: только для БЕЗОПАСНЫХ read-only команд локального анализа.\n"
-        "- reasoning: финальный аналитический шаг.\n"
-        "- Не предлагай опасные команды.\n"
-        "- Если в задаче есть URL, используй его в browser step.\n"
-        "- Последний шаг всегда reasoning.\n\n"
-        f"Задача:\n{task}"
+        "РџСЂР°РІРёР»Р°:\n"
+        "- browser: С‚РѕР»СЊРєРѕ РµСЃР»Рё РЅСѓР¶РµРЅ РІРµР±/СЃС‚СЂР°РЅРёС†Р°/РґРѕРєСѓРјРµРЅС‚Р°С†РёСЏ/РїРѕРёСЃРє.\n"
+        "- terminal: С‚РѕР»СЊРєРѕ РґР»СЏ Р‘Р•Р—РћРџРђРЎРќР«РҐ read-only РєРѕРјР°РЅРґ Р»РѕРєР°Р»СЊРЅРѕРіРѕ Р°РЅР°Р»РёР·Р°.\n"
+        "- reasoning: С„РёРЅР°Р»СЊРЅС‹Р№ Р°РЅР°Р»РёС‚РёС‡РµСЃРєРёР№ С€Р°Рі.\n"
+        "- РќРµ РїСЂРµРґР»Р°РіР°Р№ РѕРїР°СЃРЅС‹Рµ РєРѕРјР°РЅРґС‹.\n"
+        "- Р•СЃР»Рё РІ Р·Р°РґР°С‡Рµ РµСЃС‚СЊ URL, РёСЃРїРѕР»СЊР·СѓР№ РµРіРѕ РІ browser step.\n"
+        "- РџРѕСЃР»РµРґРЅРёР№ С€Р°Рі РІСЃРµРіРґР° reasoning.\n\n"
+        f"Р—Р°РґР°С‡Р°:\n{task}"
     )
     raw_plan = ask_model(
         model_name=model_name,
-        profile_name="Оркестратор",
+        profile_name="РћСЂРєРµСЃС‚СЂР°С‚РѕСЂ",
         user_input=planner_prompt,
         memory_context=memory_context,
         use_memory=True,
@@ -633,10 +633,10 @@ def run_planner_agent(
     if not normalized_plan:
         normalized_plan = _planner_default_steps(task)
     if normalized_plan[-1]["tool"] != "reasoning":
-        normalized_plan.append({"tool": "reasoning", "goal": "Собери финальный ответ по всем наблюдениям.", "url": "", "command": ""})
+        normalized_plan.append({"tool": "reasoning", "goal": "РЎРѕР±РµСЂРё С„РёРЅР°Р»СЊРЅС‹Р№ РѕС‚РІРµС‚ РїРѕ РІСЃРµРј РЅР°Р±Р»СЋРґРµРЅРёСЏРј.", "url": "", "command": ""})
     normalized_plan = normalized_plan[:5]
 
-    _progress(2, "🛠 Planner: выполняю шаги...")
+    _progress(2, "рџ›  Planner: РІС‹РїРѕР»РЅСЏСЋ С€Р°РіРё...")
     steps_log: List[dict] = []
     gathered_contexts: List[str] = []
 
@@ -678,7 +678,7 @@ def run_planner_agent(
                     "goal": step["goal"],
                     "command": cmd,
                     "ok": False,
-                    "output": "Шаг пропущен: команда не прошла safe-check planner-а.",
+                    "output": "РЁР°Рі РїСЂРѕРїСѓС‰РµРЅ: РєРѕРјР°РЅРґР° РЅРµ РїСЂРѕС€Р»Р° safe-check planner-Р°.",
                 })
                 continue
             output = run_terminal(cmd, timeout=20)
@@ -700,22 +700,22 @@ def run_planner_agent(
                 "output": "Reasoning step reserved for final synthesis.",
             })
 
-    _progress(3, "🎯 Planner: собираю итог...")
+    _progress(3, "рџЋЇ Planner: СЃРѕР±РёСЂР°СЋ РёС‚РѕРі...")
     context_blob = "\n\n".join(gathered_contexts)[:24000]
     final_prompt = (
-        "Ты Planner-Orchestrator. Собери финальный ответ пользователю на основе исходной задачи "
-        "и результатов шагов. Если данных недостаточно, честно укажи это.\n\n"
-        f"ЗАДАЧА:\n{task}\n\n"
-        f"ПЛАН:\n{json.dumps(normalized_plan, ensure_ascii=False, indent=2)}\n\n"
-        f"КОНТЕКСТ ШАГОВ:\n{context_blob}\n\n"
-        "Структура:\n"
-        "1. Краткий итог\n"
-        "2. Что удалось узнать / сделать\n"
-        "3. Практические следующие шаги"
+        "РўС‹ Planner-Orchestrator. РЎРѕР±РµСЂРё С„РёРЅР°Р»СЊРЅС‹Р№ РѕС‚РІРµС‚ РїРѕР»СЊР·РѕРІР°С‚РµР»СЋ РЅР° РѕСЃРЅРѕРІРµ РёСЃС…РѕРґРЅРѕР№ Р·Р°РґР°С‡Рё "
+        "Рё СЂРµР·СѓР»СЊС‚Р°С‚РѕРІ С€Р°РіРѕРІ. Р•СЃР»Рё РґР°РЅРЅС‹С… РЅРµРґРѕСЃС‚Р°С‚РѕС‡РЅРѕ, С‡РµСЃС‚РЅРѕ СѓРєР°Р¶Рё СЌС‚Рѕ.\n\n"
+        f"Р—РђР”РђР§Рђ:\n{task}\n\n"
+        f"РџР›РђРќ:\n{json.dumps(normalized_plan, ensure_ascii=False, indent=2)}\n\n"
+        f"РљРћРќРўР•РљРЎРў РЁРђР“РћР’:\n{context_blob}\n\n"
+        "РЎС‚СЂСѓРєС‚СѓСЂР°:\n"
+        "1. РљСЂР°С‚РєРёР№ РёС‚РѕРі\n"
+        "2. Р§С‚Рѕ СѓРґР°Р»РѕСЃСЊ СѓР·РЅР°С‚СЊ / СЃРґРµР»Р°С‚СЊ\n"
+        "3. РџСЂР°РєС‚РёС‡РµСЃРєРёРµ СЃР»РµРґСѓСЋС‰РёРµ С€Р°РіРё"
     )
     final_draft = ask_model(
         model_name=model_name,
-        profile_name="Оркестратор",
+        profile_name="РћСЂРєРµСЃС‚СЂР°С‚РѕСЂ",
         user_input=final_prompt,
         memory_context=memory_context,
         use_memory=True,
@@ -736,15 +736,15 @@ def run_planner_agent(
 
 
 
-# ═══════════════════════════════════════════════════════════════════════════════
-# TASK GRAPH — orchestration graph поверх Browser / Terminal / Memory / Reasoning
-# ═══════════════════════════════════════════════════════════════════════════════
+# в•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђ
+# TASK GRAPH вЂ” orchestration graph РїРѕРІРµСЂС… Browser / Terminal / Memory / Reasoning
+# в•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђ
 
 def _task_graph_default(task: str) -> List[dict]:
     url = _extract_first_url(task)
     nodes: List[dict] = []
 
-    if any(word in task.lower() for word in ["вспомни", "память", "что ты знаешь", "из памяти", "memory"]):
+    if any(word in task.lower() for word in ["РІСЃРїРѕРјРЅРё", "РїР°РјСЏС‚СЊ", "С‡С‚Рѕ С‚С‹ Р·РЅР°РµС€СЊ", "РёР· РїР°РјСЏС‚Рё", "memory"]):
         nodes.append({
             "id": "n1",
             "tool": "memory_lookup",
@@ -756,11 +756,11 @@ def _task_graph_default(task: str) -> List[dict]:
         nodes.append({
             "id": f"n{len(nodes)+1}",
             "tool": "browser",
-            "goal": "Прочитай страницу и извлеки факты, полезные для исходной задачи.",
+            "goal": "РџСЂРѕС‡РёС‚Р°Р№ СЃС‚СЂР°РЅРёС†Сѓ Рё РёР·РІР»РµРєРё С„Р°РєС‚С‹, РїРѕР»РµР·РЅС‹Рµ РґР»СЏ РёСЃС…РѕРґРЅРѕР№ Р·Р°РґР°С‡Рё.",
             "url": url,
             "depends_on": [],
         })
-    elif any(word in task.lower() for word in ["найди", "поиск", "веб", "сайт", "документац", "интернет", "страниц"]):
+    elif any(word in task.lower() for word in ["РЅР°Р№РґРё", "РїРѕРёСЃРє", "РІРµР±", "СЃР°Р№С‚", "РґРѕРєСѓРјРµРЅС‚Р°С†", "РёРЅС‚РµСЂРЅРµС‚", "СЃС‚СЂР°РЅРёС†"]):
         nodes.append({
             "id": f"n{len(nodes)+1}",
             "tool": "browser",
@@ -772,7 +772,7 @@ def _task_graph_default(task: str) -> List[dict]:
     nodes.append({
         "id": f"n{len(nodes)+1}",
         "tool": "reasoning",
-        "goal": "Собери финальный аналитический ответ по исходной задаче.",
+        "goal": "РЎРѕР±РµСЂРё С„РёРЅР°Р»СЊРЅС‹Р№ Р°РЅР°Р»РёС‚РёС‡РµСЃРєРёР№ РѕС‚РІРµС‚ РїРѕ РёСЃС…РѕРґРЅРѕР№ Р·Р°РґР°С‡Рµ.",
         "depends_on": [n["id"] for n in nodes],
     })
     return nodes[:6]
@@ -819,7 +819,7 @@ def _normalize_task_graph(raw_graph: Any, task: str) -> List[dict]:
         cleaned.append({
             "id": f"n{len(cleaned)+1}",
             "tool": "reasoning",
-            "goal": "Собери финальный аналитический ответ по исходной задаче.",
+            "goal": "РЎРѕР±РµСЂРё С„РёРЅР°Р»СЊРЅС‹Р№ Р°РЅР°Р»РёС‚РёС‡РµСЃРєРёР№ РѕС‚РІРµС‚ РїРѕ РёСЃС…РѕРґРЅРѕР№ Р·Р°РґР°С‡Рµ.",
             "url": "",
             "command": "",
             "depends_on": [n["id"] for n in cleaned],
@@ -842,24 +842,24 @@ def make_task_graph(
 
     memory_context = build_memory_context(task, memory_profile, top_k=8)
     planner_prompt = (
-        "Ты строишь task graph для локальной AI-системы. "
-        "Верни ТОЛЬКО JSON-массив узлов без пояснений. "
-        "Каждый узел должен иметь формат:\n"
+        "РўС‹ СЃС‚СЂРѕРёС€СЊ task graph РґР»СЏ Р»РѕРєР°Р»СЊРЅРѕР№ AI-СЃРёСЃС‚РµРјС‹. "
+        "Р’РµСЂРЅРё РўРћР›Р¬РљРћ JSON-РјР°СЃСЃРёРІ СѓР·Р»РѕРІ Р±РµР· РїРѕСЏСЃРЅРµРЅРёР№. "
+        "РљР°Р¶РґС‹Р№ СѓР·РµР» РґРѕР»Р¶РµРЅ РёРјРµС‚СЊ С„РѕСЂРјР°С‚:\n"
         '[{"id":"n1","tool":"browser|terminal|reasoning|memory_lookup","goal":"...","url":"optional","command":"optional","depends_on":["n0"]}]\n\n'
-        "Правила:\n"
-        "- Узлы должны быть короткими и практичными.\n"
-        "- browser: только если нужен веб/сайт/документация/страница.\n"
-        "- terminal: только для безопасных read-only команд локального анализа.\n"
-        "- memory_lookup: когда нужно поднять релевантную память профиля.\n"
-        "- reasoning: для аналитики и синтеза.\n"
-        "- Последний узел всегда reasoning.\n"
-        "- Максимум 6 узлов.\n"
-        "- Не придумывай опасные команды.\n\n"
-        f"Задача:\n{task}"
+        "РџСЂР°РІРёР»Р°:\n"
+        "- РЈР·Р»С‹ РґРѕР»Р¶РЅС‹ Р±С‹С‚СЊ РєРѕСЂРѕС‚РєРёРјРё Рё РїСЂР°РєС‚РёС‡РЅС‹РјРё.\n"
+        "- browser: С‚РѕР»СЊРєРѕ РµСЃР»Рё РЅСѓР¶РµРЅ РІРµР±/СЃР°Р№С‚/РґРѕРєСѓРјРµРЅС‚Р°С†РёСЏ/СЃС‚СЂР°РЅРёС†Р°.\n"
+        "- terminal: С‚РѕР»СЊРєРѕ РґР»СЏ Р±РµР·РѕРїР°СЃРЅС‹С… read-only РєРѕРјР°РЅРґ Р»РѕРєР°Р»СЊРЅРѕРіРѕ Р°РЅР°Р»РёР·Р°.\n"
+        "- memory_lookup: РєРѕРіРґР° РЅСѓР¶РЅРѕ РїРѕРґРЅСЏС‚СЊ СЂРµР»РµРІР°РЅС‚РЅСѓСЋ РїР°РјСЏС‚СЊ РїСЂРѕС„РёР»СЏ.\n"
+        "- reasoning: РґР»СЏ Р°РЅР°Р»РёС‚РёРєРё Рё СЃРёРЅС‚РµР·Р°.\n"
+        "- РџРѕСЃР»РµРґРЅРёР№ СѓР·РµР» РІСЃРµРіРґР° reasoning.\n"
+        "- РњР°РєСЃРёРјСѓРј 6 СѓР·Р»РѕРІ.\n"
+        "- РќРµ РїСЂРёРґСѓРјС‹РІР°Р№ РѕРїР°СЃРЅС‹Рµ РєРѕРјР°РЅРґС‹.\n\n"
+        f"Р—Р°РґР°С‡Р°:\n{task}"
     )
     raw_graph = ask_model(
         model_name=model_name,
-        profile_name="Оркестратор",
+        profile_name="РћСЂРєРµСЃС‚СЂР°С‚РѕСЂ",
         user_input=planner_prompt,
         memory_context=memory_context,
         use_memory=True,
@@ -879,7 +879,7 @@ def _task_graph_context_from_deps(node: dict, node_results: Dict[str, dict]) -> 
         if not res:
             continue
         snippet = truncate_text(str(res.get("output", "")), 6000)
-        parts.append(f"[{dep} · {res.get('tool', '')}]\n{snippet}")
+        parts.append(f"[{dep} В· {res.get('tool', '')}]\n{snippet}")
     return "\n\n".join(parts)
 
 
@@ -913,7 +913,7 @@ def run_task_graph(
                 continue
 
             step_idx += 1
-            _progress(step_idx, f"🕸 Выполняю {node['id']} · {node['tool']}")
+            _progress(step_idx, f"рџ•ё Р’С‹РїРѕР»РЅСЏСЋ {node['id']} В· {node['tool']}")
             dep_context = _task_graph_context_from_deps(node, node_results)
             tool = node["tool"]
 
@@ -954,7 +954,7 @@ def run_task_graph(
                         "goal": node["goal"],
                         "ok": False,
                         "command": cmd,
-                        "output": "Узел пропущен: команда не прошла safe-check Task Graph.",
+                        "output": "РЈР·РµР» РїСЂРѕРїСѓС‰РµРЅ: РєРѕРјР°РЅРґР° РЅРµ РїСЂРѕС€Р»Р° safe-check Task Graph.",
                     }
                 else:
                     out = run_terminal(cmd, timeout=20)
@@ -975,21 +975,21 @@ def run_task_graph(
                     "tool": tool,
                     "goal": node["goal"],
                     "ok": True,
-                    "output": mem[:12000] if mem else "Релевантная память не найдена.",
+                    "output": mem[:12000] if mem else "Р РµР»РµРІР°РЅС‚РЅР°СЏ РїР°РјСЏС‚СЊ РЅРµ РЅР°Р№РґРµРЅР°.",
                 }
 
             else:  # reasoning
                 reasoning_prompt = (
-                    "Ты reasoning-node в task graph. Выполни только задачу этого узла, "
-                    "опираясь на исходную задачу и контекст зависимостей. "
-                    "Если контекста мало — скажи об этом прямо.\n\n"
-                    f"ИСХОДНАЯ ЗАДАЧА:\n{task}\n\n"
-                    f"ЗАДАЧА УЗЛА:\n{node['goal']}\n\n"
-                    f"КОНТЕКСТ ЗАВИСИМОСТЕЙ:\n{dep_context or 'Нет контекста зависимостей.'}"
+                    "РўС‹ reasoning-node РІ task graph. Р’С‹РїРѕР»РЅРё С‚РѕР»СЊРєРѕ Р·Р°РґР°С‡Сѓ СЌС‚РѕРіРѕ СѓР·Р»Р°, "
+                    "РѕРїРёСЂР°СЏСЃСЊ РЅР° РёСЃС…РѕРґРЅСѓСЋ Р·Р°РґР°С‡Сѓ Рё РєРѕРЅС‚РµРєСЃС‚ Р·Р°РІРёСЃРёРјРѕСЃС‚РµР№. "
+                    "Р•СЃР»Рё РєРѕРЅС‚РµРєСЃС‚Р° РјР°Р»Рѕ вЂ” СЃРєР°Р¶Рё РѕР± СЌС‚РѕРј РїСЂСЏРјРѕ.\n\n"
+                    f"РРЎРҐРћР”РќРђРЇ Р—РђР”РђР§Рђ:\n{task}\n\n"
+                    f"Р—РђР”РђР§Рђ РЈР—Р›Рђ:\n{node['goal']}\n\n"
+                    f"РљРћРќРўР•РљРЎРў Р—РђР’РРЎРРњРћРЎРўР•Р™:\n{dep_context or 'РќРµС‚ РєРѕРЅС‚РµРєСЃС‚Р° Р·Р°РІРёСЃРёРјРѕСЃС‚РµР№.'}"
                 )
                 out = ask_model(
                     model_name=model_name,
-                    profile_name="Аналитик",
+                    profile_name="РђРЅР°Р»РёС‚РёРє",
                     user_input=reasoning_prompt,
                     memory_context=memory_context,
                     use_memory=True,
@@ -1015,12 +1015,12 @@ def run_task_graph(
                     "tool": node["tool"],
                     "goal": node["goal"],
                     "ok": False,
-                    "output": "Узел не выполнен: зависимости не разрешились или граф некорректен.",
+                    "output": "РЈР·РµР» РЅРµ РІС‹РїРѕР»РЅРµРЅ: Р·Р°РІРёСЃРёРјРѕСЃС‚Рё РЅРµ СЂР°Р·СЂРµС€РёР»РёСЃСЊ РёР»Рё РіСЂР°С„ РЅРµРєРѕСЂСЂРµРєС‚РµРЅ.",
                 }
                 execution_log.append(node_results[node["id"]])
             break
 
-    # Auto-retry graph: если browser/terminal шаги упали — пробуем fallback reasoning/safe browser
+    # Auto-retry graph: РµСЃР»Рё browser/terminal С€Р°РіРё СѓРїР°Р»Рё вЂ” РїСЂРѕР±СѓРµРј fallback reasoning/safe browser
     retried = []
     for item in list(execution_log):
         if item.get("ok"):
@@ -1056,34 +1056,34 @@ def run_task_graph(
                 "tool": "reasoning_retry",
                 "goal": item.get("goal", task),
                 "ok": True,
-                "output": "Terminal шаг не прошёл safe-check. Для сохранения прогресса граф переключён на reasoning fallback.",
+                "output": "Terminal С€Р°Рі РЅРµ РїСЂРѕС€С‘Р» safe-check. Р”Р»СЏ СЃРѕС…СЂР°РЅРµРЅРёСЏ РїСЂРѕРіСЂРµСЃСЃР° РіСЂР°С„ РїРµСЂРµРєР»СЋС‡С‘РЅ РЅР° reasoning fallback.",
             }
             retried.append(retry_node)
     execution_log.extend(retried)
 
-    _progress(total_steps, "🎯 Task Graph: собираю итог...")
+    _progress(total_steps, "рџЋЇ Task Graph: СЃРѕР±РёСЂР°СЋ РёС‚РѕРі...")
     state_blob = "\n\n".join(
-        f"[{item['id']} · {item['tool']} · {'OK' if item.get('ok') else 'FAIL'}]\n"
+        f"[{item['id']} В· {item['tool']} В· {'OK' if item.get('ok') else 'FAIL'}]\n"
         f"GOAL: {item.get('goal','')}\n"
         f"{truncate_text(str(item.get('output','')), 5000)}"
         for item in execution_log
     )[:30000]
 
     final_prompt = (
-        "Ты Task Graph Orchestrator. Собери финальный ответ пользователю на основе состояния графа. "
-        "Честно отмечай, если какой-то узел не сработал или данных не хватило.\n\n"
-        f"ИСХОДНАЯ ЗАДАЧА:\n{task}\n\n"
-        f"ГРАФ:\n{json.dumps(graph, ensure_ascii=False, indent=2)}\n\n"
+        "РўС‹ Task Graph Orchestrator. РЎРѕР±РµСЂРё С„РёРЅР°Р»СЊРЅС‹Р№ РѕС‚РІРµС‚ РїРѕР»СЊР·РѕРІР°С‚РµР»СЋ РЅР° РѕСЃРЅРѕРІРµ СЃРѕСЃС‚РѕСЏРЅРёСЏ РіСЂР°С„Р°. "
+        "Р§РµСЃС‚РЅРѕ РѕС‚РјРµС‡Р°Р№, РµСЃР»Рё РєР°РєРѕР№-С‚Рѕ СѓР·РµР» РЅРµ СЃСЂР°Р±РѕС‚Р°Р» РёР»Рё РґР°РЅРЅС‹С… РЅРµ С…РІР°С‚РёР»Рѕ.\n\n"
+        f"РРЎРҐРћР”РќРђРЇ Р—РђР”РђР§Рђ:\n{task}\n\n"
+        f"Р“Р РђР¤:\n{json.dumps(graph, ensure_ascii=False, indent=2)}\n\n"
         f"STATE:\n{state_blob}\n\n"
-        "Структура ответа:\n"
-        "1. Краткий итог\n"
-        "2. Что удалось узнать / сделать\n"
-        "3. Ограничения или сбои\n"
-        "4. Практические следующие шаги"
+        "РЎС‚СЂСѓРєС‚СѓСЂР° РѕС‚РІРµС‚Р°:\n"
+        "1. РљСЂР°С‚РєРёР№ РёС‚РѕРі\n"
+        "2. Р§С‚Рѕ СѓРґР°Р»РѕСЃСЊ СѓР·РЅР°С‚СЊ / СЃРґРµР»Р°С‚СЊ\n"
+        "3. РћРіСЂР°РЅРёС‡РµРЅРёСЏ РёР»Рё СЃР±РѕРё\n"
+        "4. РџСЂР°РєС‚РёС‡РµСЃРєРёРµ СЃР»РµРґСѓСЋС‰РёРµ С€Р°РіРё"
     )
     final_draft = ask_model(
         model_name=model_name,
-        profile_name="Оркестратор",
+        profile_name="РћСЂРєРµСЃС‚СЂР°С‚РѕСЂ",
         user_input=final_prompt,
         memory_context=memory_context,
         use_memory=True,
@@ -1103,9 +1103,9 @@ def run_task_graph(
     }
 
 
-# ═══════════════════════════════════════════════════════════════════════════════
-# IMAGE GENERATION — SDXL Turbo
-# ═══════════════════════════════════════════════════════════════════════════════
+# в•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђ
+# IMAGE GENERATION вЂ” SDXL Turbo
+# в•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђ
 
 def _torch_gc():
     try:
@@ -1129,7 +1129,7 @@ def _strip_ansi(text: str) -> str:
 
 
 def _contains_cyrillic(text: str) -> bool:
-    return bool(re.search(r"[А-Яа-яЁё]", text or ""))
+    return bool(re.search(r"[Рђ-РЇР°-СЏРЃС‘]", text or ""))
 
 
 def prepare_image_prompt(
@@ -1138,11 +1138,11 @@ def prepare_image_prompt(
     auto_translate: bool = True,
     num_ctx: int = 2048,
 ) -> Dict[str, str]:
-    """Готовит prompt для image model.
+    """Р“РѕС‚РѕРІРёС‚ prompt РґР»СЏ image model.
 
-    Возвращает dict:
+    Р’РѕР·РІСЂР°С‰Р°РµС‚ dict:
       {original_prompt, final_prompt, translated, log, ok}
-    Никогда не бросает исключение наружу — при сбое возвращает исходный prompt.
+    РќРёРєРѕРіРґР° РЅРµ Р±СЂРѕСЃР°РµС‚ РёСЃРєР»СЋС‡РµРЅРёРµ РЅР°СЂСѓР¶Сѓ вЂ” РїСЂРё СЃР±РѕРµ РІРѕР·РІСЂР°С‰Р°РµС‚ РёСЃС…РѕРґРЅС‹Р№ prompt.
     """
     original = (prompt or "").strip()
     if not original:
@@ -1151,7 +1151,7 @@ def prepare_image_prompt(
             "original_prompt": "",
             "final_prompt": "",
             "translated": "false",
-            "log": "Пустой prompt.",
+            "log": "РџСѓСЃС‚РѕР№ prompt.",
         }
 
     if not auto_translate:
@@ -1160,7 +1160,7 @@ def prepare_image_prompt(
             "original_prompt": original,
             "final_prompt": original,
             "translated": "false",
-            "log": "Автоперевод отключён.",
+            "log": "РђРІС‚РѕРїРµСЂРµРІРѕРґ РѕС‚РєР»СЋС‡С‘РЅ.",
         }
 
     if not _contains_cyrillic(original):
@@ -1169,20 +1169,20 @@ def prepare_image_prompt(
             "original_prompt": original,
             "final_prompt": original,
             "translated": "false",
-            "log": "Кириллица не найдена — использую prompt как есть.",
+            "log": "РљРёСЂРёР»Р»РёС†Р° РЅРµ РЅР°Р№РґРµРЅР° вЂ” РёСЃРїРѕР»СЊР·СѓСЋ prompt РєР°Рє РµСЃС‚СЊ.",
         }
 
     try:
         translate_prompt = (
-            "Преобразуй пользовательский запрос в короткий точный английский prompt "
-            "для генерации изображения в SDXL Turbo. "
-            "Сохрани смысл. Не добавляй пояснений, нумерации, markdown и кавычек. "
-            "Верни только одну строку готового prompt.\n\n"
-            f"Запрос пользователя:\n{original}"
+            "РџСЂРµРѕР±СЂР°Р·СѓР№ РїРѕР»СЊР·РѕРІР°С‚РµР»СЊСЃРєРёР№ Р·Р°РїСЂРѕСЃ РІ РєРѕСЂРѕС‚РєРёР№ С‚РѕС‡РЅС‹Р№ Р°РЅРіР»РёР№СЃРєРёР№ prompt "
+            "РґР»СЏ РіРµРЅРµСЂР°С†РёРё РёР·РѕР±СЂР°Р¶РµРЅРёСЏ РІ SDXL Turbo. "
+            "РЎРѕС…СЂР°РЅРё СЃРјС‹СЃР». РќРµ РґРѕР±Р°РІР»СЏР№ РїРѕСЏСЃРЅРµРЅРёР№, РЅСѓРјРµСЂР°С†РёРё, markdown Рё РєР°РІС‹С‡РµРє. "
+            "Р’РµСЂРЅРё С‚РѕР»СЊРєРѕ РѕРґРЅСѓ СЃС‚СЂРѕРєСѓ РіРѕС‚РѕРІРѕРіРѕ prompt.\n\n"
+            f"Р—Р°РїСЂРѕСЃ РїРѕР»СЊР·РѕРІР°С‚РµР»СЏ:\n{original}"
         )
         translated = ask_model(
             model_name=model_name,
-            profile_name="Аналитик",
+            profile_name="РђРЅР°Р»РёС‚РёРє",
             user_input=translate_prompt,
             include_history=False,
             num_ctx=num_ctx,
@@ -1197,7 +1197,7 @@ def prepare_image_prompt(
             "original_prompt": original,
             "final_prompt": translated,
             "translated": "true",
-            "log": f"RU → EN: {translated}",
+            "log": f"RU в†’ EN: {translated}",
         }
     except Exception as e:
         return {
@@ -1205,17 +1205,17 @@ def prepare_image_prompt(
             "original_prompt": original,
             "final_prompt": original,
             "translated": "fallback",
-            "log": f"Перевод не сработал, использую исходный prompt. Ошибка: {e}",
+            "log": f"РџРµСЂРµРІРѕРґ РЅРµ СЃСЂР°Р±РѕС‚Р°Р», РёСЃРїРѕР»СЊР·СѓСЋ РёСЃС…РѕРґРЅС‹Р№ prompt. РћС€РёР±РєР°: {e}",
         }
 
 
 def stop_ollama_model(model_name: str) -> Dict[str, Any]:
-    """Пытается выгрузить локальную модель Ollama из VRAM перед генерацией."""
+    """РџС‹С‚Р°РµС‚СЃСЏ РІС‹РіСЂСѓР·РёС‚СЊ Р»РѕРєР°Р»СЊРЅСѓСЋ РјРѕРґРµР»СЊ Ollama РёР· VRAM РїРµСЂРµРґ РіРµРЅРµСЂР°С†РёРµР№."""
     name = (model_name or "").strip()
     if not name:
-        return {"ok": True, "message": "Модель не указана — пропускаю выгрузку."}
+        return {"ok": True, "message": "РњРѕРґРµР»СЊ РЅРµ СѓРєР°Р·Р°РЅР° вЂ” РїСЂРѕРїСѓСЃРєР°СЋ РІС‹РіСЂСѓР·РєСѓ."}
     if "cloud" in name.lower():
-        return {"ok": True, "message": f"{name} — облачная модель, выгружать нечего."}
+        return {"ok": True, "message": f"{name} вЂ” РѕР±Р»Р°С‡РЅР°СЏ РјРѕРґРµР»СЊ, РІС‹РіСЂСѓР¶Р°С‚СЊ РЅРµС‡РµРіРѕ."}
 
     try:
         proc = subprocess.run(
@@ -1225,12 +1225,12 @@ def stop_ollama_model(model_name: str) -> Dict[str, Any]:
         stdout = _strip_ansi(proc.stdout or "")
         stderr = _strip_ansi(proc.stderr or "")
         if proc.returncode == 0:
-            msg = stdout or f"Локальная модель {name} остановлена."
+            msg = stdout or f"Р›РѕРєР°Р»СЊРЅР°СЏ РјРѕРґРµР»СЊ {name} РѕСЃС‚Р°РЅРѕРІР»РµРЅР°."
             return {"ok": True, "message": msg}
-        msg = stderr or stdout or f"Не удалось выгрузить модель {name}."
+        msg = stderr or stdout or f"РќРµ СѓРґР°Р»РѕСЃСЊ РІС‹РіСЂСѓР·РёС‚СЊ РјРѕРґРµР»СЊ {name}."
         return {"ok": False, "message": msg}
     except FileNotFoundError:
-        return {"ok": False, "message": "Команда ollama не найдена в PATH."}
+        return {"ok": False, "message": "РљРѕРјР°РЅРґР° ollama РЅРµ РЅР°Р№РґРµРЅР° РІ PATH."}
     except Exception as e:
         return {"ok": False, "message": str(e)}
 
@@ -1247,10 +1247,10 @@ def generate_image_sdxl_turbo(
     output_path: str | None = None,
     model_id: str | None = None,
 ) -> Dict[str, Any]:
-    """Генерация изображения через SDXL Turbo с аккуратной очисткой VRAM."""
+    """Р“РµРЅРµСЂР°С†РёСЏ РёР·РѕР±СЂР°Р¶РµРЅРёСЏ С‡РµСЂРµР· SDXL Turbo СЃ Р°РєРєСѓСЂР°С‚РЅРѕР№ РѕС‡РёСЃС‚РєРѕР№ VRAM."""
     prompt = (prompt or "").strip()
     if not prompt:
-        return {"ok": False, "error": "Промпт пуст.", "path": "", "log": ""}
+        return {"ok": False, "error": "РџСЂРѕРјРїС‚ РїСѓСЃС‚.", "path": "", "log": ""}
 
     logs = []
     model_id = (model_id or IMAGE_MODEL_ID).strip()
@@ -1264,8 +1264,8 @@ def generate_image_sdxl_turbo(
         return {
             "ok": False,
             "error": (
-                "Не удалось импортировать diffusers/torch. "
-                "Установи: pip install diffusers transformers accelerate safetensors"
+                "РќРµ СѓРґР°Р»РѕСЃСЊ РёРјРїРѕСЂС‚РёСЂРѕРІР°С‚СЊ diffusers/torch. "
+                "РЈСЃС‚Р°РЅРѕРІРё: pip install diffusers transformers accelerate safetensors"
             ),
             "path": "",
             "log": f"{logs[0]}\nImport error: {e}",
@@ -1350,8 +1350,8 @@ def _hf_access_hint(exc_text: str) -> str:
     low = (exc_text or "").lower()
     if any(x in low for x in ["gated", "401", "403", "access to model", "accept the conditions", "must be logged in"]):
         return (
-            "Для FLUX.1-schnell нужно принять условия модели на Hugging Face "
-            "и авторизоваться локально через `huggingface-cli login`."
+            "Р”Р»СЏ FLUX.1-schnell РЅСѓР¶РЅРѕ РїСЂРёРЅСЏС‚СЊ СѓСЃР»РѕРІРёСЏ РјРѕРґРµР»Рё РЅР° Hugging Face "
+            "Рё Р°РІС‚РѕСЂРёР·РѕРІР°С‚СЊСЃСЏ Р»РѕРєР°Р»СЊРЅРѕ С‡РµСЂРµР· `huggingface-cli login`."
         )
     return ""
 
@@ -1369,10 +1369,10 @@ def generate_image_flux_schnell(
     model_id: str | None = None,
     max_sequence_length: int = 160,
 ) -> Dict[str, Any]:
-    """Генерация изображения через FLUX.1-schnell с щадящим пресетом для 8 GB VRAM."""
+    """Р“РµРЅРµСЂР°С†РёСЏ РёР·РѕР±СЂР°Р¶РµРЅРёСЏ С‡РµСЂРµР· FLUX.1-schnell СЃ С‰Р°РґСЏС‰РёРј РїСЂРµСЃРµС‚РѕРј РґР»СЏ 8 GB VRAM."""
     prompt = (prompt or "").strip()
     if not prompt:
-        return {"ok": False, "error": "Промпт пуст.", "path": "", "log": ""}
+        return {"ok": False, "error": "РџСЂРѕРјРїС‚ РїСѓСЃС‚.", "path": "", "log": ""}
 
     logs = []
     model_id = (model_id or "black-forest-labs/FLUX.1-schnell").strip()
@@ -1388,8 +1388,8 @@ def generate_image_flux_schnell(
         return {
             "ok": False,
             "error": (
-                "Не удалось импортировать FLUX/diffusers. "
-                "Установи: pip install -U diffusers transformers accelerate safetensors sentencepiece protobuf"
+                "РќРµ СѓРґР°Р»РѕСЃСЊ РёРјРїРѕСЂС‚РёСЂРѕРІР°С‚СЊ FLUX/diffusers. "
+                "РЈСЃС‚Р°РЅРѕРІРё: pip install -U diffusers transformers accelerate safetensors sentencepiece protobuf"
             ),
             "path": "",
             "log": f"{logs[0]}\nImport error: {e}",
@@ -1412,7 +1412,7 @@ def generate_image_flux_schnell(
         if device == "cuda":
             os.environ.setdefault("PYTORCH_CUDA_ALLOC_CONF", "expandable_segments:True")
             _torch_gc()
-            logs.append("CUDA cache очищен")
+            logs.append("CUDA cache РѕС‡РёС‰РµРЅ")
 
         pipe = FluxPipeline.from_pretrained(
             model_id,
@@ -1473,7 +1473,7 @@ def generate_image_flux_schnell(
         if hint:
             logs.append(hint)
         if "cuda out of memory" in err.lower():
-            logs.append("Tip: для 8 GB VRAM попробуй ещё ниже: 768x512 и max_seq=128.")
+            logs.append("Tip: РґР»СЏ 8 GB VRAM РїРѕРїСЂРѕР±СѓР№ РµС‰С‘ РЅРёР¶Рµ: 768x512 Рё max_seq=128.")
         logs.append(f"Generation error: {err}")
         return {
             "ok": False,
@@ -1493,33 +1493,33 @@ def generate_image_flux_schnell(
         _torch_gc()
 
 
-# ═══════════════════════════════════════════════════════════════════════════════
+# в•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђ
 # BROWSER AGENT
-# ═══════════════════════════════════════════════════════════════════════════════
+# в•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђ
 
 def _browser_runtime_hint(exc: Exception | str) -> str:
     text = str(exc or "")
     low = text.lower()
     if isinstance(exc, NotImplementedError) or "_make_subprocess_transport" in low or "notimplementederror" in low:
         return (
-            "Playwright не смог запустить subprocess браузера. "
-            "На Windows для Streamlit нужно включить WindowsProactorEventLoopPolicy "
-            "до импорта streamlit и затем полностью перезапустить приложение."
+            "Playwright РЅРµ СЃРјРѕРі Р·Р°РїСѓСЃС‚РёС‚СЊ subprocess Р±СЂР°СѓР·РµСЂР°. "
+            "РќР° Windows РґР»СЏ Streamlit РЅСѓР¶РЅРѕ РІРєР»СЋС‡РёС‚СЊ WindowsProactorEventLoopPolicy "
+            "РґРѕ РёРјРїРѕСЂС‚Р° streamlit Рё Р·Р°С‚РµРј РїРѕР»РЅРѕСЃС‚СЊСЋ РїРµСЂРµР·Р°РїСѓСЃС‚РёС‚СЊ РїСЂРёР»РѕР¶РµРЅРёРµ."
         )
     if "executable doesn't exist" in low or "browsertype.launch" in low:
         return (
-            "Браузер Chromium для Playwright не установлен. "
-            "Запусти: playwright install chromium"
+            "Р‘СЂР°СѓР·РµСЂ Chromium РґР»СЏ Playwright РЅРµ СѓСЃС‚Р°РЅРѕРІР»РµРЅ. "
+            "Р—Р°РїСѓСЃС‚Рё: playwright install chromium"
         )
     return text
 
 
 def _goal_keywords(goal: str) -> List[str]:
-    words = re.findall(r"[\wа-яА-ЯёЁ-]+", (goal or "").lower())
+    words = re.findall(r"[\wР°-СЏРђ-РЇС‘РЃ-]+", (goal or "").lower())
     stop = {
-        "и", "или", "в", "на", "с", "по", "для", "о", "об", "не", "это", "как", "что",
+        "Рё", "РёР»Рё", "РІ", "РЅР°", "СЃ", "РїРѕ", "РґР»СЏ", "Рѕ", "РѕР±", "РЅРµ", "СЌС‚Рѕ", "РєР°Рє", "С‡С‚Рѕ",
         "the", "and", "for", "with", "from", "into", "about", "read", "page", "website",
-        "про", "страницу", "сайт", "сделай", "краткий", "анализ", "прочитай", "найди", "нужно",
+        "РїСЂРѕ", "СЃС‚СЂР°РЅРёС†Сѓ", "СЃР°Р№С‚", "СЃРґРµР»Р°Р№", "РєСЂР°С‚РєРёР№", "Р°РЅР°Р»РёР·", "РїСЂРѕС‡РёС‚Р°Р№", "РЅР°Р№РґРё", "РЅСѓР¶РЅРѕ",
     }
     return [w for w in words if len(w) >= 3 and w not in stop][:12]
 
@@ -1547,12 +1547,12 @@ def _extract_page_payload(page, max_chars: int = 9000) -> str:
 
     lines = []
     if title:
-        lines.append(f"Заголовок: {title}")
+        lines.append(f"Р—Р°РіРѕР»РѕРІРѕРє: {title}")
     lines.append(f"URL: {page.url}")
     if headings:
-        lines.append("Подзаголовки:\n- " + "\n- ".join(headings[:10]))
+        lines.append("РџРѕРґР·Р°РіРѕР»РѕРІРєРё:\n- " + "\n- ".join(headings[:10]))
     if body_text.strip():
-        lines.append("Текст страницы:\n" + truncate_text(body_text, max_chars))
+        lines.append("РўРµРєСЃС‚ СЃС‚СЂР°РЅРёС†С‹:\n" + truncate_text(body_text, max_chars))
     return "\n\n".join(lines)
 
 
@@ -1626,7 +1626,7 @@ def run_browser_agent(start_url: str, goal: str, max_pages: int = 3) -> Dict[str
     if sync_playwright is None:
         return {
             "ok": False,
-            "text": "Playwright не установлен.\nЗапусти: pip install playwright && playwright install",
+            "text": "Playwright РЅРµ СѓСЃС‚Р°РЅРѕРІР»РµРЅ.\nР—Р°РїСѓСЃС‚Рё: pip install playwright && playwright install",
             "trace": [],
         }
     try:
@@ -1638,7 +1638,7 @@ def run_browser_agent(start_url: str, goal: str, max_pages: int = 3) -> Dict[str
             page.wait_for_timeout(1200)
 
             trace.append({"step": 1, "action": "open", "url": page.url, "title": page.title()})
-            collected = ["=== Страница 1 ===\n" + _extract_page_payload(page, max_chars=10000)]
+            collected = ["=== РЎС‚СЂР°РЅРёС†Р° 1 ===\n" + _extract_page_payload(page, max_chars=10000)]
 
             ranked_links = _rank_links(_collect_links(page, page.url), goal, limit=max(0, max_pages - 1))
             visited = {page.url}
@@ -1653,7 +1653,7 @@ def run_browser_agent(start_url: str, goal: str, max_pages: int = 3) -> Dict[str
                     sub = context.new_page()
                     sub.goto(href, wait_until="load", timeout=25000)
                     sub.wait_for_timeout(1000)
-                    collected.append("\n\n=== Страница {idx} ===\n".format(idx=idx) + _extract_page_payload(sub, max_chars=8000))
+                    collected.append("\n\n=== РЎС‚СЂР°РЅРёС†Р° {idx} ===\n".format(idx=idx) + _extract_page_payload(sub, max_chars=8000))
                     trace.append({
                         "step": idx,
                         "action": "open_link",
@@ -1708,19 +1708,19 @@ def _sanitize_browser_actions(actions: List[dict]) -> List[dict]:
 
 def browser_actions_from_goal(goal: str, model_name: str) -> List[dict]:
     prompt = (
-        "Составь план действий браузера в JSON-массиве.\n"
-        "Разрешённые действия: open, click, fill, extract, wait.\n"
-        "Каждый шаг должен быть минимальным и безопасным.\n"
-        "Для чтения контента чаще используй extract с селекторами: main, article, body, h1.\n"
-        "Не используй неизвестные действия. Верни только JSON без пояснений.\n\n"
-        "Пример:\n"
+        "РЎРѕСЃС‚Р°РІСЊ РїР»Р°РЅ РґРµР№СЃС‚РІРёР№ Р±СЂР°СѓР·РµСЂР° РІ JSON-РјР°СЃСЃРёРІРµ.\n"
+        "Р Р°Р·СЂРµС€С‘РЅРЅС‹Рµ РґРµР№СЃС‚РІРёСЏ: open, click, fill, extract, wait.\n"
+        "РљР°Р¶РґС‹Р№ С€Р°Рі РґРѕР»Р¶РµРЅ Р±С‹С‚СЊ РјРёРЅРёРјР°Р»СЊРЅС‹Рј Рё Р±РµР·РѕРїР°СЃРЅС‹Рј.\n"
+        "Р”Р»СЏ С‡С‚РµРЅРёСЏ РєРѕРЅС‚РµРЅС‚Р° С‡Р°С‰Рµ РёСЃРїРѕР»СЊР·СѓР№ extract СЃ СЃРµР»РµРєС‚РѕСЂР°РјРё: main, article, body, h1.\n"
+        "РќРµ РёСЃРїРѕР»СЊР·СѓР№ РЅРµРёР·РІРµСЃС‚РЅС‹Рµ РґРµР№СЃС‚РІРёСЏ. Р’РµСЂРЅРё С‚РѕР»СЊРєРѕ JSON Р±РµР· РїРѕСЏСЃРЅРµРЅРёР№.\n\n"
+        "РџСЂРёРјРµСЂ:\n"
         '[{"action":"extract","selector":"main"},\n'
         ' {"action":"extract","selector":"body"}]\n\n'
-        f"Цель:\n{goal}"
+        f"Р¦РµР»СЊ:\n{goal}"
     )
     raw = ask_model(
         model_name=model_name,
-        profile_name="Оркестратор",
+        profile_name="РћСЂРєРµСЃС‚СЂР°С‚РѕСЂ",
         user_input=prompt,
         temp=0.1,
         include_history=False,
@@ -1733,7 +1733,7 @@ def browser_actions_from_goal(goal: str, model_name: str) -> List[dict]:
 def run_browser_actions(start_url: str, actions: List[dict]) -> Dict[str, Any]:
     trace, extracted = [], []
     if sync_playwright is None:
-        return {"ok": False, "text": "Playwright не установлен.", "trace": []}
+        return {"ok": False, "text": "Playwright РЅРµ СѓСЃС‚Р°РЅРѕРІР»РµРЅ.", "trace": []}
     actions = _sanitize_browser_actions(actions)
     try:
         with sync_playwright() as p:
@@ -1771,15 +1771,15 @@ def run_browser_actions(start_url: str, actions: List[dict]) -> Dict[str, Any]:
             browser.close()
             return {
                 "ok": True,
-                "text": "\n\n".join(extracted) if extracted else "Действия выполнены, но текста для извлечения не было.",
+                "text": "\n\n".join(extracted) if extracted else "Р”РµР№СЃС‚РІРёСЏ РІС‹РїРѕР»РЅРµРЅС‹, РЅРѕ С‚РµРєСЃС‚Р° РґР»СЏ РёР·РІР»РµС‡РµРЅРёСЏ РЅРµ Р±С‹Р»Рѕ.",
                 "trace": trace,
             }
     except Exception as e:
         return {"ok": False, "text": _browser_runtime_hint(e), "trace": trace}
 
-# ═══════════════════════════════════════════════════════════════════════════════
-# ТЕРМИНАЛ
-# ═══════════════════════════════════════════════════════════════════════════════
+# в•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђ
+# РўР•Р РњРРќРђР›
+# в•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђ
 
 def is_dangerous_command(cmd: str) -> bool:
     low = cmd.lower().strip()
@@ -1794,19 +1794,19 @@ def run_terminal(cmd: str, timeout: int = 25) -> str:
         )
         return f"$ {cmd}\n\nSTDOUT:\n{proc.stdout}\n\nSTDERR:\n{proc.stderr}"
     except subprocess.TimeoutExpired:
-        return f"$ {cmd}\n\nКоманда остановлена по таймауту ({timeout} сек.)"
+        return f"$ {cmd}\n\nРљРѕРјР°РЅРґР° РѕСЃС‚Р°РЅРѕРІР»РµРЅР° РїРѕ С‚Р°Р№РјР°СѓС‚Сѓ ({timeout} СЃРµРє.)"
     except Exception as e:
-        return f"Ошибка терминала: {e}"
+        return f"РћС€РёР±РєР° С‚РµСЂРјРёРЅР°Р»Р°: {e}"
 
 
-# ── Playwright sync helper ────────────────────────────────────────────────────
+# в”Ђв”Ђ Playwright sync helper в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
 def sync_playwright_available() -> bool:
     return sync_playwright is not None
 
 
 
 # ================================
-# Browser → RAG helpers
+# Browser в†’ RAG helpers
 # ================================
 
 def _clean_browser_text(text: str) -> str:
@@ -1940,21 +1940,21 @@ def persist_web_knowledge(
 
 def route_task(user_text: str, model_name: str = "", memory_profile: str = "", num_ctx: int = 4096) -> dict:
     """
-    Совместимый router для V8.
-    Возвращает mode / agent / use_graph / confidence / source / reason.
+    РЎРѕРІРјРµСЃС‚РёРјС‹Р№ router РґР»СЏ V8.
+    Р’РѕР·РІСЂР°С‰Р°РµС‚ mode / agent / use_graph / confidence / source / reason.
     """
     t = (user_text or "").lower()
 
-    if any(x in t for x in ["pdf", "docx", "txt", "csv", "excel", "xlsx", "файл", "документ", "таблица"]):
+    if any(x in t for x in ["pdf", "docx", "txt", "csv", "excel", "xlsx", "С„Р°Р№Р»", "РґРѕРєСѓРјРµРЅС‚", "С‚Р°Р±Р»РёС†Р°"]):
         return {"mode": "file", "agent": "file_agent", "use_graph": True, "confidence": 0.86, "source": "keyword", "reason": "file markers"}
 
-    if any(x in t for x in ["найди", "поищи", "исследуй", "research", "browser", "web", "веб", "документац", "сайт"]):
+    if any(x in t for x in ["РЅР°Р№РґРё", "РїРѕРёС‰Рё", "РёСЃСЃР»РµРґСѓР№", "research", "browser", "web", "РІРµР±", "РґРѕРєСѓРјРµРЅС‚Р°С†", "СЃР°Р№С‚"]):
         return {"mode": "research", "agent": "browser_agent", "use_graph": True, "confidence": 0.84, "source": "keyword", "reason": "research markers"}
 
-    if any(x in t for x in ["python", "код", "fastapi", "api", "streamlit", "bug", "ошибка", "рефактор", "скрипт"]):
+    if any(x in t for x in ["python", "РєРѕРґ", "fastapi", "api", "streamlit", "bug", "РѕС€РёР±РєР°", "СЂРµС„Р°РєС‚РѕСЂ", "СЃРєСЂРёРїС‚"]):
         return {"mode": "code", "agent": "coder_agent", "use_graph": True, "confidence": 0.85, "source": "keyword", "reason": "code markers"}
 
-    if any(x in t for x in ["план", "по шагам", "архитектур", "pipeline", "стратег", "roadmap"]):
+    if any(x in t for x in ["РїР»Р°РЅ", "РїРѕ С€Р°РіР°Рј", "Р°СЂС…РёС‚РµРєС‚СѓСЂ", "pipeline", "СЃС‚СЂР°С‚РµРі", "roadmap"]):
         return {"mode": "multi_step", "agent": "planner_agent", "use_graph": True, "confidence": 0.78, "source": "keyword", "reason": "planner markers"}
 
     return {"mode": "chat", "agent": "chat_agent", "use_graph": False, "confidence": 0.55, "source": "fallback", "reason": "default chat"}
@@ -1981,9 +1981,9 @@ def reflection_v2(task: str, answer: str, model_name: str, memory_context: str =
     from .memory import record_reflection
     context = "\n\n".join(x for x in [memory_context, kb_context] if x.strip())
     prompt = f"""
-Ты evaluator.
+РўС‹ evaluator.
 
-Верни ТОЛЬКО JSON-объект формата:
+Р’РµСЂРЅРё РўРћР›Р¬РљРћ JSON-РѕР±СЉРµРєС‚ С„РѕСЂРјР°С‚Р°:
 {{
   "answered": true,
   "grounded": true,
@@ -1991,31 +1991,31 @@ def reflection_v2(task: str, answer: str, model_name: str, memory_context: str =
   "actionable": true,
   "safe": true,
   "needs_retry": false,
-  "notes": "короткое объяснение",
-  "improved_answer": "улучшенная версия ответа"
+  "notes": "РєРѕСЂРѕС‚РєРѕРµ РѕР±СЉСЏСЃРЅРµРЅРёРµ",
+  "improved_answer": "СѓР»СѓС‡С€РµРЅРЅР°СЏ РІРµСЂСЃРёСЏ РѕС‚РІРµС‚Р°"
 }}
 
-Правила:
-- answered = ответил ли ответ на исходную задачу.
-- grounded = опирается ли ответ на доступный контекст.
-- complete = нет ли заметных пропусков.
-- actionable = есть ли полезный следующий шаг или практический вывод.
-- safe = нет ли явных галлюцинаций, опасных или необоснованных утверждений.
-- needs_retry = true, если ответ нужно пересобрать заново.
-- improved_answer = либо улучшенный ответ, либо исходный, если улучшение не требуется.
+РџСЂР°РІРёР»Р°:
+- answered = РѕС‚РІРµС‚РёР» Р»Рё РѕС‚РІРµС‚ РЅР° РёСЃС…РѕРґРЅСѓСЋ Р·Р°РґР°С‡Сѓ.
+- grounded = РѕРїРёСЂР°РµС‚СЃСЏ Р»Рё РѕС‚РІРµС‚ РЅР° РґРѕСЃС‚СѓРїРЅС‹Р№ РєРѕРЅС‚РµРєСЃС‚.
+- complete = РЅРµС‚ Р»Рё Р·Р°РјРµС‚РЅС‹С… РїСЂРѕРїСѓСЃРєРѕРІ.
+- actionable = РµСЃС‚СЊ Р»Рё РїРѕР»РµР·РЅС‹Р№ СЃР»РµРґСѓСЋС‰РёР№ С€Р°Рі РёР»Рё РїСЂР°РєС‚РёС‡РµСЃРєРёР№ РІС‹РІРѕРґ.
+- safe = РЅРµС‚ Р»Рё СЏРІРЅС‹С… РіР°Р»Р»СЋС†РёРЅР°С†РёР№, РѕРїР°СЃРЅС‹С… РёР»Рё РЅРµРѕР±РѕСЃРЅРѕРІР°РЅРЅС‹С… СѓС‚РІРµСЂР¶РґРµРЅРёР№.
+- needs_retry = true, РµСЃР»Рё РѕС‚РІРµС‚ РЅСѓР¶РЅРѕ РїРµСЂРµСЃРѕР±СЂР°С‚СЊ Р·Р°РЅРѕРІРѕ.
+- improved_answer = Р»РёР±Рѕ СѓР»СѓС‡С€РµРЅРЅС‹Р№ РѕС‚РІРµС‚, Р»РёР±Рѕ РёСЃС…РѕРґРЅС‹Р№, РµСЃР»Рё СѓР»СѓС‡С€РµРЅРёРµ РЅРµ С‚СЂРµР±СѓРµС‚СЃСЏ.
 
-ЗАДАЧА:
+Р—РђР”РђР§Рђ:
 {task}
 
-КОНТЕКСТ:
+РљРћРќРўР•РљРЎРў:
 {context[:7000]}
 
-ОТВЕТ:
+РћРўР’Р•Рў:
 {(answer or '')[:9000]}
 """
     raw = ask_model(
         model_name=model_name,
-        profile_name="Аналитик",
+        profile_name="РђРЅР°Р»РёС‚РёРє",
         user_input=prompt,
         memory_context=memory_context,
         use_memory=True,
@@ -2055,26 +2055,26 @@ def _count_false_flags(reflection: dict) -> int:
 
 def regenerate_answer_from_context(task: str, model_name: str, memory_context: str = "", kb_context: str = "", prior_answer: str = "", reflection_notes: str = "", num_ctx: int = 4096) -> str:
     prompt = f"""
-Пересобери ответ лучше.
+РџРµСЂРµСЃРѕР±РµСЂРё РѕС‚РІРµС‚ Р»СѓС‡С€Рµ.
 
-Исходная задача:
+РСЃС…РѕРґРЅР°СЏ Р·Р°РґР°С‡Р°:
 {task}
 
-Проблемы прошлого ответа:
+РџСЂРѕР±Р»РµРјС‹ РїСЂРѕС€Р»РѕРіРѕ РѕС‚РІРµС‚Р°:
 {reflection_notes}
 
-Прошлый ответ:
+РџСЂРѕС€Р»С‹Р№ РѕС‚РІРµС‚:
 {prior_answer[:4000]}
 
-Требования:
-- дай более точный и полезный ответ,
-- не выдумывай факты,
-- если данных не хватает — скажи это явно,
-- если уместно, дай следующий практический шаг.
+РўСЂРµР±РѕРІР°РЅРёСЏ:
+- РґР°Р№ Р±РѕР»РµРµ С‚РѕС‡РЅС‹Р№ Рё РїРѕР»РµР·РЅС‹Р№ РѕС‚РІРµС‚,
+- РЅРµ РІС‹РґСѓРјС‹РІР°Р№ С„Р°РєС‚С‹,
+- РµСЃР»Рё РґР°РЅРЅС‹С… РЅРµ С…РІР°С‚Р°РµС‚ вЂ” СЃРєР°Р¶Рё СЌС‚Рѕ СЏРІРЅРѕ,
+- РµСЃР»Рё СѓРјРµСЃС‚РЅРѕ, РґР°Р№ СЃР»РµРґСѓСЋС‰РёР№ РїСЂР°РєС‚РёС‡РµСЃРєРёР№ С€Р°Рі.
 """
     return ask_model(
         model_name=model_name,
-        profile_name="Оркестратор",
+        profile_name="РћСЂРєРµСЃС‚СЂР°С‚РѕСЂ",
         user_input=prompt,
         memory_context="\n\n".join(x for x in [memory_context, kb_context] if x.strip()),
         use_memory=True,
@@ -2175,19 +2175,19 @@ def choose_v8_strategy(
         scores["multi_agent"] += 0.35
         scores["task_graph"] += 0.25
 
-    if any(x in text for x in ["что такое", "объясни", "кратко", "простыми словами", "short", "summary"]):
+    if any(x in text for x in ["С‡С‚Рѕ С‚Р°РєРѕРµ", "РѕР±СЉСЏСЃРЅРё", "РєСЂР°С‚РєРѕ", "РїСЂРѕСЃС‚С‹РјРё СЃР»РѕРІР°РјРё", "short", "summary"]):
         scores["direct"] += 0.80
 
-    if any(x in text for x in ["план", "roadmap", "по шагам", "шаги внедрения", "стратегия внедрения"]):
+    if any(x in text for x in ["РїР»Р°РЅ", "roadmap", "РїРѕ С€Р°РіР°Рј", "С€Р°РіРё РІРЅРµРґСЂРµРЅРёСЏ", "СЃС‚СЂР°С‚РµРіРёСЏ РІРЅРµРґСЂРµРЅРёСЏ"]):
         scores["planner"] += 0.95
 
-    if any(x in text for x in ["исследуй", "сравни", "документац", "практики", "best practices", "найди", "langgraph", "crewai"]):
+    if any(x in text for x in ["РёСЃСЃР»РµРґСѓР№", "СЃСЂР°РІРЅРё", "РґРѕРєСѓРјРµРЅС‚Р°С†", "РїСЂР°РєС‚РёРєРё", "best practices", "РЅР°Р№РґРё", "langgraph", "crewai"]):
         scores["task_graph"] += 0.80
 
-    if any(x in text for x in ["архитектур", "рефактор", "проанализируй проект", "кодовые изменения", "review code"]):
+    if any(x in text for x in ["Р°СЂС…РёС‚РµРєС‚СѓСЂ", "СЂРµС„Р°РєС‚РѕСЂ", "РїСЂРѕР°РЅР°Р»РёР·РёСЂСѓР№ РїСЂРѕРµРєС‚", "РєРѕРґРѕРІС‹Рµ РёР·РјРµРЅРµРЅРёСЏ", "review code"]):
         scores["multi_agent"] += 0.95
 
-    if any(x in text for x in ["улучши ответ", "самоанализ", "self-improve", "перепроверь", "доработай ответ"]):
+    if any(x in text for x in ["СѓР»СѓС‡С€Рё РѕС‚РІРµС‚", "СЃР°РјРѕР°РЅР°Р»РёР·", "self-improve", "РїРµСЂРµРїСЂРѕРІРµСЂСЊ", "РґРѕСЂР°Р±РѕС‚Р°Р№ РѕС‚РІРµС‚"]):
         scores["self_improve"] += 1.10
 
     learned = []
@@ -2362,7 +2362,7 @@ def run_agent_v8(
     _refresh_working()
 
     def h_retrieve_memory(s: dict) -> dict:
-        _progress(1, "🧠 Память")
+        _progress(1, "рџ§  РџР°РјСЏС‚СЊ")
         s["memory_context"] = build_memory_context(task, memory_profile, top_k=8)
         if s["memory_context"].strip():
             _wm("retrieve_memory", "finding", s["memory_context"][:2000], score=0.9)
@@ -2370,7 +2370,7 @@ def run_agent_v8(
         return s
 
     def h_retrieve_kb(s: dict) -> dict:
-        _progress(2, "📚 KB")
+        _progress(2, "рџ“љ KB")
         s["kb_context"] = build_kb_context(task, profile_name=memory_profile, top_k=4)
         if s["kb_context"].strip():
             _wm("retrieve_kb", "source", s["kb_context"][:2000], score=0.85)
@@ -2378,12 +2378,12 @@ def run_agent_v8(
         return s
 
     def h_retrieve_working_memory(s: dict) -> dict:
-        _progress(3, "🧩 Working memory")
+        _progress(3, "рџ§© Working memory")
         _refresh_working()
         return s
 
     def h_tool_hint(s: dict) -> dict:
-        _progress(4, "🛠 Tool memory")
+        _progress(4, "рџ›  Tool memory")
         try:
             prefs = get_tool_preferences(task, profile_name=memory_profile, limit=3)
         except Exception:
@@ -2398,7 +2398,7 @@ def run_agent_v8(
                     success_rate = round(float(p.get("success", 0)) / runs, 2)
                 uses = p.get("uses", p.get("runs", 0))
                 lines.append(f"- {tool}: success_rate={success_rate}, uses={uses}")
-            s["tool_hint"] = "Предпочтительные инструменты по прошлому опыту:\n" + "\n".join(lines)
+            s["tool_hint"] = "РџСЂРµРґРїРѕС‡С‚РёС‚РµР»СЊРЅС‹Рµ РёРЅСЃС‚СЂСѓРјРµРЅС‚С‹ РїРѕ РїСЂРѕС€Р»РѕРјСѓ РѕРїС‹С‚Сѓ:\n" + "\n".join(lines)
             _wm("tool_hint", "decision", s["tool_hint"][:1800], score=0.75)
         else:
             s["tool_hint"] = ""
@@ -2406,7 +2406,7 @@ def run_agent_v8(
         return s
 
     def h_planner(s: dict) -> dict:
-        _progress(5, "🧭 Planner")
+        _progress(5, "рџ§­ Planner")
         plan = run_planner_agent(task, model_name, memory_profile, num_ctx=num_ctx, progress_callback=None)
         s["plan_result"] = plan
         s["answer"] = plan.get("final") or plan.get("summary") or ""
@@ -2417,7 +2417,7 @@ def run_agent_v8(
         return s
 
     def h_task_graph(s: dict) -> dict:
-        _progress(5, "🕸 Task Graph")
+        _progress(5, "рџ•ё Task Graph")
         result = run_task_graph(task, model_name, memory_profile, num_ctx=num_ctx, progress_callback=None)
         s["task_graph_result"] = result
         final_answer = ""
@@ -2435,7 +2435,7 @@ def run_agent_v8(
         return s
 
     def h_multi_agent(s: dict) -> dict:
-        _progress(5, "🤝 Multi-Agent")
+        _progress(5, "рџ¤ќ Multi-Agent")
         result = run_multi_agent(task, model_name, memory_profile, num_ctx=num_ctx, progress_callback=None)
         s["multi_agent_result"] = result
         s["answer"] = (result or {}).get("final", "") or s.get("answer", "")
@@ -2446,7 +2446,7 @@ def run_agent_v8(
         return s
 
     def h_self_improve(s: dict) -> dict:
-        _progress(5, "♻️ Self-Improving")
+        _progress(5, "в™»пёЏ Self-Improving")
         result = run_self_improving_agent(
             task,
             model_name,
@@ -2465,7 +2465,7 @@ def run_agent_v8(
         return s
 
     def h_reflection_v2(s: dict) -> dict:
-        _progress(6, "🪞 Reflection v2")
+        _progress(6, "рџЄћ Reflection v2")
         if s.get("selected_strategy") == "self_improve" and s.get("answer", "").strip():
             return s
         refl = reflection_v2(
@@ -2503,35 +2503,35 @@ def run_agent_v8(
         return s
 
     def h_finalize(s: dict) -> dict:
-        _progress(total_steps, "✅ Final")
+        _progress(total_steps, "вњ… Final")
         if not s.get("answer", "").strip():
             fallback_prompt = f"""
-Собери финальный ответ по задаче.
+РЎРѕР±РµСЂРё С„РёРЅР°Р»СЊРЅС‹Р№ РѕС‚РІРµС‚ РїРѕ Р·Р°РґР°С‡Рµ.
 
-Задача:
+Р—Р°РґР°С‡Р°:
 {task}
 
-Контекст памяти:
+РљРѕРЅС‚РµРєСЃС‚ РїР°РјСЏС‚Рё:
 {s.get("memory_context", "")[:5000]}
 
-Контекст KB:
+РљРѕРЅС‚РµРєСЃС‚ KB:
 {s.get("kb_context", "")[:4000]}
 
-Рабочая память:
+Р Р°Р±РѕС‡Р°СЏ РїР°РјСЏС‚СЊ:
 {s.get("working_context", "")[:4000]}
 
-Подсказка по инструментам:
+РџРѕРґСЃРєР°Р·РєР° РїРѕ РёРЅСЃС‚СЂСѓРјРµРЅС‚Р°Рј:
 {s.get("tool_hint", "")[:1500]}
 
-Требования:
-- ответ должен быть конкретным,
-- не выдумывай факты,
-- если данных мало, так и скажи,
-- дай следующий практический шаг.
+РўСЂРµР±РѕРІР°РЅРёСЏ:
+- РѕС‚РІРµС‚ РґРѕР»Р¶РµРЅ Р±С‹С‚СЊ РєРѕРЅРєСЂРµС‚РЅС‹Рј,
+- РЅРµ РІС‹РґСѓРјС‹РІР°Р№ С„Р°РєС‚С‹,
+- РµСЃР»Рё РґР°РЅРЅС‹С… РјР°Р»Рѕ, С‚Р°Рє Рё СЃРєР°Р¶Рё,
+- РґР°Р№ СЃР»РµРґСѓСЋС‰РёР№ РїСЂР°РєС‚РёС‡РµСЃРєРёР№ С€Р°Рі.
 """
             s["answer"] = ask_model(
                 model_name=model_name,
-                profile_name="Оркестратор",
+                profile_name="РћСЂРєРµСЃС‚СЂР°С‚РѕСЂ",
                 user_input=fallback_prompt,
                 memory_context="\n\n".join(x for x in [s.get("memory_context", ""), s.get("working_context", "")] if x.strip()),
                 use_memory=True,
@@ -2621,9 +2621,9 @@ def run_agent_v8(
     }
 
 
-# ═══════════════════════════════════════════════════════════════════════════════
+# в•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђ
 # SELF-IMPROVING AGENT
-# ═══════════════════════════════════════════════════════════════════════════════
+# в•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђ
 
 def run_self_improving_agent(
     task: str,
@@ -2648,7 +2648,7 @@ def run_self_improving_agent(
         if progress_callback:
             progress_callback(step, total_steps, label)
 
-    _progress(1, "🚀 Базовый запуск V8")
+    _progress(1, "рџљЂ Р‘Р°Р·РѕРІС‹Р№ Р·Р°РїСѓСЃРє V8")
     base = run_agent_v8(
         task=task,
         model_name=model_name,
@@ -2665,7 +2665,7 @@ def run_self_improving_agent(
     working_context = base.get("working_context", "") or ""
 
     for idx in range(1, max(0, int(max_iters)) + 1):
-        _progress(min(idx + 1, total_steps), f"🪞 Self-Improve {idx}")
+        _progress(min(idx + 1, total_steps), f"рџЄћ Self-Improve {idx}")
         mem_ctx = build_memory_context(task, memory_profile, top_k=8)
         kb_ctx = build_kb_context(task, profile_name=memory_profile, top_k=4)
         if run_id:
@@ -2676,30 +2676,30 @@ def run_self_improving_agent(
 
         combined_context = (mem_ctx or "") + "\n\n" + (kb_ctx or "") + "\n\n" + (working_context or "")
         critique_prompt = f"""
-Ты self-improve critic.
-Верни ТОЛЬКО JSON:
+РўС‹ self-improve critic.
+Р’РµСЂРЅРё РўРћР›Р¬РљРћ JSON:
 {{
   "improve": true,
   "score": 0.0,
   "issues": ["..."],
-  "focus": "что улучшить"
+  "focus": "С‡С‚Рѕ СѓР»СѓС‡С€РёС‚СЊ"
 }}
 
-ЗАДАЧА:
+Р—РђР”РђР§Рђ:
 {task}
 
-ТЕКУЩИЙ ОТВЕТ:
+РўР•РљРЈР©РР™ РћРўР’Р•Рў:
 {answer[:9000]}
 
 REFLECTION:
 {json.dumps(reflection, ensure_ascii=False)}
 
-КОНТЕКСТ:
+РљРћРќРўР•РљРЎРў:
 {combined_context[:9000]}
 """
         raw_crit = ask_model(
             model_name=model_name,
-            profile_name="Аналитик",
+            profile_name="РђРЅР°Р»РёС‚РёРє",
             user_input=critique_prompt,
             memory_context=mem_ctx,
             use_memory=True,
@@ -2728,38 +2728,38 @@ REFLECTION:
             break
 
         improve_prompt = f"""
-Улучши ответ после self-improving loop.
+РЈР»СѓС‡С€Рё РѕС‚РІРµС‚ РїРѕСЃР»Рµ self-improving loop.
 
-Исходная задача:
+РСЃС…РѕРґРЅР°СЏ Р·Р°РґР°С‡Р°:
 {task}
 
-Текущий ответ:
+РўРµРєСѓС‰РёР№ РѕС‚РІРµС‚:
 {answer[:9000]}
 
-Проблемы / focus:
+РџСЂРѕР±Р»РµРјС‹ / focus:
 {json.dumps(crit, ensure_ascii=False, indent=2)}
 
 Reflection:
 {json.dumps(reflection, ensure_ascii=False, indent=2)}
 
-Контекст памяти:
+РљРѕРЅС‚РµРєСЃС‚ РїР°РјСЏС‚Рё:
 {mem_ctx[:4000]}
 
-Контекст KB:
+РљРѕРЅС‚РµРєСЃС‚ KB:
 {kb_ctx[:3000]}
 
-Рабочая память:
+Р Р°Р±РѕС‡Р°СЏ РїР°РјСЏС‚СЊ:
 {working_context[:3000]}
 
-Требования:
-- Сделай ответ точнее и практичнее.
-- Не выдумывай факты.
-- Если данных не хватает — скажи это явно.
-- Сохрани сильные части прошлого ответа.
+РўСЂРµР±РѕРІР°РЅРёСЏ:
+- РЎРґРµР»Р°Р№ РѕС‚РІРµС‚ С‚РѕС‡РЅРµРµ Рё РїСЂР°РєС‚РёС‡РЅРµРµ.
+- РќРµ РІС‹РґСѓРјС‹РІР°Р№ С„Р°РєС‚С‹.
+- Р•СЃР»Рё РґР°РЅРЅС‹С… РЅРµ С…РІР°С‚Р°РµС‚ вЂ” СЃРєР°Р¶Рё СЌС‚Рѕ СЏРІРЅРѕ.
+- РЎРѕС…СЂР°РЅРё СЃРёР»СЊРЅС‹Рµ С‡Р°СЃС‚Рё РїСЂРѕС€Р»РѕРіРѕ РѕС‚РІРµС‚Р°.
 """
         improved = ask_model(
             model_name=model_name,
-            profile_name="Оркестратор",
+            profile_name="РћСЂРєРµСЃС‚СЂР°С‚РѕСЂ",
             user_input=improve_prompt,
             memory_context="\n\n".join(x for x in [mem_ctx, kb_ctx, working_context] if x.strip()),
             use_memory=True,
@@ -2821,3 +2821,4 @@ Reflection:
         "kb_context": base.get("kb_context", ""),
         "working_context": working_context or base.get("working_context", ""),
     }
+

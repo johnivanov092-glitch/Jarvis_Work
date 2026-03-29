@@ -66,9 +66,9 @@ function deriveChatTitle(t) { const c = String(t || "").trim().replace(/\s+/g, "
 
 function shortModelName(name) {
   if (!name) return "model";
-  // YandexGPT-5-Lite-8B-instruct-GGUF → YandexGPT
+  // YandexGPT-5-Lite-8B-instruct-GGUF в†' YandexGPT
   if (name.toLowerCase().includes("yandex")) return "YandexGPT";
-  // nemotron-mini → Nemotron Mini, etc.
+  // nemotron-mini в†' Nemotron Mini, etc.
   return name;
 }
 
@@ -81,21 +81,117 @@ function normalizeErrorMessage(e, fb = "Ошибка") {
   return String(v);
 }
 
-async function parseJsonSafe(resp) {
-  const raw = await resp.text();
-  try {
-    return raw ? JSON.parse(raw) : {};
-  } catch {
-    if (!resp.ok) throw new Error(`HTTP ${resp.status}: ${raw || resp.statusText || "Ошибка backend"}`);
-    throw new Error(raw || "Backend вернул некорректный JSON");
-  }
+function humanizeValue(value) {
+  return String(value || "")
+    .replace(/_/g, " ")
+    .replace(/\b\w/g, (char) => char.toUpperCase());
+}
+
+function capabilityLabel(key) {
+  return {
+    vector_memory: "Vector memory",
+    screenshot: "Screenshot",
+  }[key] || humanizeValue(key);
+}
+
+function capabilityStateText(capability = {}) {
+  if (capability.available) return "Available";
+  if (capability.reason) return humanizeValue(capability.reason);
+  return "Unavailable";
+}
+
+function PanelNotice({ title, message, onRetry, tone = "error" }) {
+  if (!message) return null;
+
+  const palette = {
+    error: {
+      border: "rgba(244,67,54,0.45)",
+      background: "rgba(244,67,54,0.08)",
+      title: "#f44336",
+    },
+    warning: {
+      border: "rgba(245,166,35,0.45)",
+      background: "rgba(245,166,35,0.08)",
+      title: "#f5a623",
+    },
+    info: {
+      border: "rgba(99,102,241,0.35)",
+      background: "rgba(99,102,241,0.08)",
+      title: "var(--accent)",
+    },
+  }[tone] || {
+    border: "rgba(244,67,54,0.45)",
+    background: "rgba(244,67,54,0.08)",
+    title: "#f44336",
+  };
+
+  return (
+    <div style={{ marginBottom: 12, padding: "10px 12px", borderRadius: 10, border: `1px solid ${palette.border}`, background: palette.background }}>
+      <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 12 }}>
+        <div style={{ minWidth: 0, flex: 1 }}>
+          <div style={{ fontSize: 12, fontWeight: 700, color: palette.title, marginBottom: 4 }}>{title}</div>
+          <div style={{ fontSize: 11, color: "var(--text)", wordBreak: "break-word", whiteSpace: "pre-wrap" }}>{message}</div>
+        </div>
+        {onRetry && (
+          <button className="soft-btn" style={{ fontSize: 10, padding: "3px 10px", border: "1px solid var(--border)", borderRadius: 6, flexShrink: 0 }} onClick={onRetry}>
+            Retry
+          </button>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function CapabilityStatusSection({ status }) {
+  const entries = Object.entries(status?.capabilities || {});
+  if (!entries.length) return null;
+
+  return (
+    <div style={{ marginBottom: 16 }}>
+      <div style={{ fontSize: 12, fontWeight: 600, color: "var(--text)", marginBottom: 8 }}>Project Brain capabilities</div>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(220px,1fr))", gap: 8 }}>
+        {entries.map(([key, capability]) => {
+          const packages = Array.isArray(capability?.missing_packages) ? capability.missing_packages.filter(Boolean) : [];
+          const available = Boolean(capability?.available);
+          const tone = available ? "#4caf50" : "#f5a623";
+          return (
+            <div key={key} style={{ padding: 12, borderRadius: 10, border: `1px solid ${available ? "rgba(76,175,80,0.28)" : "rgba(245,166,35,0.32)"}`, background: "var(--bg-surface)" }}>
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, marginBottom: 6 }}>
+                <div style={{ fontSize: 12, fontWeight: 600, color: "var(--text)" }}>{capabilityLabel(key)}</div>
+                <div style={{ fontSize: 10, fontWeight: 700, color: tone }}>{capabilityStateText(capability)}</div>
+              </div>
+              {capability?.mode && (
+                <div style={{ fontSize: 10, color: "var(--text-muted)", marginBottom: 4 }}>
+                  Mode: {humanizeValue(capability.mode)}
+                </div>
+              )}
+              {!available && capability?.reason && (
+                <div style={{ fontSize: 10, color: "var(--text-muted)", marginBottom: packages.length || capability?.hint ? 4 : 0 }}>
+                  Reason: {humanizeValue(capability.reason)}
+                </div>
+              )}
+              {packages.length > 0 && (
+                <div style={{ fontSize: 10, color: "var(--text-muted)", marginBottom: capability?.hint ? 4 : 0 }}>
+                  Missing: <code style={{ fontSize: 10 }}>{packages.join(", ")}</code>
+                </div>
+              )}
+              {capability?.hint && (
+                <div style={{ fontSize: 10, color: "var(--text-muted)", wordBreak: "break-word" }}>
+                  Hint: <code style={{ fontSize: 10 }}>{capability.hint}</code>
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
 }
 
 async function fileToLibraryRecord(file) {
   let preview = "";
   const name = file.name || "";
   const ext = name.split(".").pop().toLowerCase();
-  const API_URL = import.meta.env.VITE_API_BASE_URL || `http://${window.location.hostname}:8000`;
 
   // Текстовые файлы — читаем на клиенте
   // UTF-8 файлы — читаем на клиенте
@@ -106,9 +202,8 @@ async function fileToLibraryRecord(file) {
   // Бинарные + файлы с другими кодировками → на бекенд
   const serverExts = ["pdf","docx","doc","xlsx","xls","xlsm","zip","bas","vbs","vba","cls","frm","rsc"];
   if (serverExts.includes(ext)) try {
-    const fd = new FormData(); fd.append("file", file);
-    const r = await fetch(`${API_URL}/api/files/extract-text`, { method: "POST", body: fd });
-    if (r.ok) { const d = await r.json(); preview = (d.text || "").slice(0, 12000); }
+    const d = await api.extractUploadedFileText(file);
+    preview = (d.text || "").slice(0, 12000);
   } catch {}
 
   return { id: makeId("lib"), name: file.name, size: file.size, type: file.type || ext || "unknown", uploaded_at: new Date().toISOString(), preview, use_in_context: true, source: "upload" };
@@ -170,9 +265,13 @@ export default function EliraChatShell() {
   const [mobileSidebar, setMobileSidebar] = useState(false);
   const [pluginList, setPluginList] = useState([]);
   const [dashData, setDashData] = useState(null);
+  const [projectBrainStatus, setProjectBrainStatus] = useState(null);
+  const [dashboardError, setDashboardError] = useState("");
   const [pipelinesList, setPipelinesList] = useState([]);
+  const [pipelinesError, setPipelinesError] = useState("");
   const [pipeForm, setPipeForm] = useState({name:"",task_type:"prompt",interval_minutes:60,task_data:{prompt:""}});
   const [tasksList, setTasksList] = useState([]);
+  const [tasksError, setTasksError] = useState("");
   const [taskFilter, setTaskFilter] = useState("active");
   const [taskForm, setTaskForm] = useState({title:"",description:"",category:"general",priority:"medium",due_date:""});
   const [taskStats, setTaskStats] = useState(null);
@@ -180,6 +279,7 @@ export default function EliraChatShell() {
   const [tgConfig, setTgConfig] = useState(null);
   const [tgUsers, setTgUsers] = useState([]);
   const [tgLog, setTgLog] = useState([]);
+  const [telegramError, setTelegramError] = useState("");
   const [tgTokenInput, setTgTokenInput] = useState("");
   const [tgTab, setTgTab] = useState("setup");
   const [multiAgent, setMultiAgent] = useState(false);
@@ -194,10 +294,16 @@ export default function EliraChatShell() {
   const [routeMap, setRouteMap] = useState({ code: [], project: [], research: [], chat: [] });
   const [theme, setTheme] = useState(() => localStorage.getItem("elira_theme") || "dark");
 
-  const API_URL = import.meta.env.VITE_API_BASE_URL || `http://${window.location.hostname}:8000`;
 
   useEffect(() => { init(); return () => { if (streamRef.current) { streamRef.current.abort(); streamRef.current = null; } }; }, []);
   useEffect(() => { if (msgRef.current) msgRef.current.scrollTop = msgRef.current.scrollHeight; }, [messages, chatId]);
+  useEffect(() => {
+    if (!error) return;
+    if (error.startsWith("Tasks: ")) setTasksError(error.replace(/^Tasks:\s*/, ""));
+    if (error.startsWith("Telegram: ")) setTelegramError(error.replace(/^Telegram:\s*/, ""));
+    if (error.startsWith("Pipelines: ")) setPipelinesError(error.replace(/^Pipelines:\s*/, ""));
+    if (error.startsWith("Dashboard: ")) setDashboardError(error.replace(/^Dashboard:\s*/, ""));
+  }, [error]);
   useEffect(() => { if (streaming && msgRef.current) { const id = requestAnimationFrame(() => { msgRef.current && (msgRef.current.scrollTop = msgRef.current.scrollHeight); }); return () => cancelAnimationFrame(id); } }, [streamText, streaming]);
   useEffect(() => { if (!taRef.current) return; taRef.current.style.height = "36px"; taRef.current.style.height = `${Math.min(120, taRef.current.scrollHeight)}px`; }, [input]);
 
@@ -238,7 +344,7 @@ export default function EliraChatShell() {
 
   // Sync library from SQLite backend on mount (optional)
   useEffect(() => {
-    fetch(`${API_URL}/api/lib/list`).then(r => { if (!r.ok) return null; return r.json(); }).then(d => {
+    api.listLibraryFiles().then(d => {
       if (d?.ok && d.items?.length) {
         const ctxMap = loadChatContextMap();
         const activeIds = new Set(Object.values(ctxMap).flat());
@@ -304,43 +410,72 @@ export default function EliraChatShell() {
   }
 
   async function loadPipelines() {
-    try { const r = await fetch("/api/pipelines/list"); const d = await r.json(); setPipelinesList(d.pipelines || []); } catch {}
+    setPipelinesError("");
+    try {
+      setPipelinesList(await api.listPipelines());
+    } catch (e) {
+      const message = normalizeErrorMessage(e);
+      setPipelinesList([]);
+      setPipelinesError(message);
+      setError(`Pipelines: ${message}`);
+    }
   }
 
   async function loadTelegram() {
+    setTelegramError("");
     try {
-      const [rc, ru, rl] = await Promise.all([
-        fetch("/api/telegram/config"), fetch("/api/telegram/users"), fetch("/api/telegram/log?limit=30"),
-      ]);
-      const [dc, du, dl] = await Promise.all([rc.json(), ru.json(), rl.json()]);
-      setTgConfig(dc); setTgUsers(du.users || []); setTgLog(dl.log || []);
-    } catch {}
+      const data = await api.getTelegramOverview(30);
+      setTgConfig(data.config);
+      setTgUsers(data.users);
+      setTgLog(data.log);
+    } catch (e) {
+      const message = normalizeErrorMessage(e);
+      setTgConfig(null); setTgUsers([]); setTgLog([]);
+      setTelegramError(message);
+      setError(`Telegram: ${message}`);
+    }
   }
 
   async function loadTasks(filter) {
     const f = filter || taskFilter;
+    setTasksError("");
     try {
-      let items = [];
-      if (f === "active") {
-        const [r1, r2] = await Promise.all([fetch("/api/tasks/list?status=todo"), fetch("/api/tasks/list?status=in_progress")]);
-        const [d1, d2] = await Promise.all([r1.json(), r2.json()]);
-        items = [...(d1.tasks || []), ...(d2.tasks || [])];
-      } else if (f === "all") {
-        const r = await fetch("/api/tasks/list"); const d = await r.json(); items = d.tasks || [];
-      } else {
-        const r = await fetch(`/api/tasks/list?status=${f}`); const d = await r.json(); items = d.tasks || [];
-      }
-      setTasksList(items);
-      const sr = await fetch("/api/tasks/stats"); setTaskStats(await sr.json());
-    } catch {}
+      const data = await api.getTasksOverview(f);
+      setTasksList(data.tasks);
+      setTaskStats(data.stats);
+    } catch (e) {
+      const message = normalizeErrorMessage(e);
+      setTasksList([]); setTaskStats(null);
+      setTasksError(message);
+      setError(`Tasks: ${message}`);
+    }
   }
 
   async function loadDashboard() {
-    try { const r = await fetch("/api/dashboard/stats"); setDashData(await r.json()); } catch {}
+    setDashboardError("");
+    try {
+      const data = await api.getDashboardOverview();
+      setDashData(data.stats || null);
+      setProjectBrainStatus(data.projectBrainStatus || null);
+      const message = Array.isArray(data.errors) ? data.errors.filter(Boolean).join(" | ") : "";
+      setDashboardError(message);
+      setError(message ? `Dashboard: ${message}` : "");
+    } catch (e) {
+      const message = normalizeErrorMessage(e);
+      setDashData(null);
+      setProjectBrainStatus(null);
+      setDashboardError(message);
+      setError(`Dashboard: ${message}`);
+    }
   }
 
   async function loadPluginList() {
-    try { const r = await fetch("/api/extra/plugins/list"); const d = await r.json(); setPluginList(d.plugins || []); } catch {}
+    try {
+      setPluginList(await api.listPlugins());
+    } catch (e) {
+      setPluginList([]);
+      setError(`Plugins: ${normalizeErrorMessage(e)}`);
+    }
   }
 
   async function loadChats(sel = "") { setChats(await api.listChats() || []); if (sel) setChatId(sel); }
@@ -373,7 +508,7 @@ export default function EliraChatShell() {
       ext = ".json";
     } else if (fmt === "html") {
       const msgs = messages.map(m => {
-        const who = m.role==="user" ? "Вы" : "Elira";
+        const who = m.role==="user" ? "??" : "Elira";
         const bg = m.role==="user" ? "#e3f2fd" : "#f5f5f5";
         const content = m.content.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/\n/g,"<br>");
         return `<div style="margin:12px 0;padding:12px 16px;border-radius:10px;background:${bg}"><strong>${who}</strong><div style="margin-top:6px;white-space:pre-wrap">${content}</div></div>`;
@@ -382,7 +517,9 @@ export default function EliraChatShell() {
       blob = new Blob([html], {type:"text/html;charset=utf-8"});
       ext = ".html";
     } else {
-      const body = messages.map(m => `${m.role==="user"?"Вы":"Elira"}:\n${m.content}`).join("\n\n" + "─".repeat(40) + "\n\n");
+      const body = messages
+        .map((m) => `${m.role === "user" ? "Вы" : "Elira"}:\n${m.content}`)
+        .join("\n\n" + "═".repeat(40) + "\n\n");
       blob = new Blob([`${title}\nЭкспорт: ${ts} | Сообщений: ${messages.length}\n${"═".repeat(40)}\n\n${body}`], {type:"text/plain;charset=utf-8"});
       ext = ".txt";
     }
@@ -443,7 +580,7 @@ export default function EliraChatShell() {
       const wantsProjectContext = (
         tl.includes("проект") || tl.includes("project") ||
         tl.includes("repo") || tl.includes("repository") || tl.includes("репозитор") ||
-        tl.includes("код") || tl.includes("codebase") ||
+        tl.includes("РєРѕРґ") || tl.includes("codebase") ||
         tl.includes("backend") || tl.includes("frontend") ||
         tl.includes("структур") || tl.includes("tree") ||
         tl.includes("директор") || tl.includes("каталог") || tl.includes("папк") ||
@@ -453,9 +590,9 @@ export default function EliraChatShell() {
       // Контекст проекта — только для запросов про код/репозиторий
       if (wantsProjectContext) {
         try {
-          const projInfo = await fetch(`${API_URL}/api/advanced/project/info`).then(r => r.json());
+          const projInfo = await api.getAdvancedProjectInfo();
           if (projInfo.ok) {
-            const projTree = await fetch(`${API_URL}/api/advanced/project/tree?max_depth=2&max_items=50`).then(r => r.json());
+            const projTree = await api.getAdvancedProjectTree({ maxDepth: 2, maxItems: 50 });
             if (projTree.ok && projTree.items?.length) {
               const fileList = projTree.items.filter(i => i.type === "file").map(i => i.path).join(", ");
               cp += `\n\nОткрыт проект: ${projInfo.name} (${projTree.count} файлов)\nФайлы: ${fileList.slice(0, 800)}`;
@@ -469,14 +606,10 @@ export default function EliraChatShell() {
         const useOrch = profile === "Оркестратор";
         const useRefl = skills.includes("reflection");
         const modeLabel = [useOrch && "🎯 Оркестратор", "🔎→💻→📊 Агенты", useRefl && "🪞 Рефлексия"].filter(Boolean).join(" → ");
-        setPhase(`🤖 ${modeLabel}...`);
+        setPhase(`?? ${modeLabel}...`);
         try {
-          const resp = await fetch(`${API_URL}/api/advanced/multi-agent`, {
-            method: "POST", headers: {"Content-Type": "application/json"},
-            body: JSON.stringify({ query: `${text}${cp}`, model_name: model, context: "", agents: ["researcher","programmer","analyst"], use_reflection: useRefl, use_orchestrator: useOrch }),
-          });
-          const data = await parseJsonSafe(resp);
-          if (!resp.ok || data?.ok === false) throw new Error(normalizeErrorMessage(data?.error || data?.detail || `HTTP ${resp.status}`));
+          const data = await api.runAdvancedMultiAgent({ query: `${text}${cp}`, model_name: model, context: "", agents: ["researcher","programmer","analyst"], use_reflection: useRefl, use_orchestrator: useOrch });
+          if (data?.ok === false) throw new Error(normalizeErrorMessage(data?.error || data?.detail || "HTTP error"));
           const final = (data?.report || "").trim() || "Multi-agent не вернул результат";
           try { await api.addMessage({ chatId, role: "assistant", content: final }); } catch {}
           setMessages(prev => [...prev, { id: `a-${Date.now()}`, role: "assistant", content: final }]);
@@ -528,7 +661,7 @@ export default function EliraChatShell() {
     const recs = []; for (const f of files) {
       recs.push(await fileToLibraryRecord(f));
       // Сохраняем в SQLite бекенд
-      try { const fd = new FormData(); fd.append("file", f); fd.append("use_in_context", "false"); await fetch(`${API_URL}/api/lib/add`, { method: "POST", body: fd }); } catch {}
+      try { await api.uploadLibraryFile(f, { useInContext: false }); } catch {}
     }
     const next = [...recs, ...libraryFiles]; setLibraryFiles(next); saveLibraryFiles(next); setSideTab("library"); setSelLibId(recs[0]?.id || "");
     if (chatId) { const map = loadChatContextMap(); map[chatId] = Array.from(new Set([...recs.map(r => r.id), ...(map[chatId] || [])])); saveChatContextMap(map); }
@@ -540,7 +673,7 @@ export default function EliraChatShell() {
     try {
       if (String(id).startsWith("db-")) {
         const dbId = String(id).slice(3);
-        await fetch(`${API_URL}/api/lib/${dbId}`, { method: "DELETE" });
+        await api.deleteLibraryFile(dbId);
       }
     } catch {}
     const n = libraryFiles.filter(i => i.id !== id);
@@ -582,6 +715,231 @@ export default function EliraChatShell() {
     saveChatContextMap(m);
   }
 
+  async function submitTaskForm() {
+    if (!taskForm.title) return;
+    try {
+      if (editingTask) {
+        await api.updateTask(editingTask, taskForm);
+        setEditingTask(null);
+      } else {
+        await api.createTask(taskForm);
+      }
+      setTaskForm({ title:"", description:"", category:"general", priority:"medium", due_date:"" });
+      setTasksError("");
+      setError("");
+      await loadTasks();
+    } catch (e) {
+      const message = normalizeErrorMessage(e);
+      setTasksError(message);
+      setError(`Tasks: ${message}`);
+    }
+  }
+
+  async function updateTaskStatus(taskId, status) {
+    try {
+      await api.updateTask(taskId, { status });
+      setTasksError("");
+      setError("");
+      await loadTasks();
+    } catch (e) {
+      const message = normalizeErrorMessage(e);
+      setTasksError(message);
+      setError(`Tasks: ${message}`);
+    }
+  }
+
+  async function deleteTaskItem(taskId) {
+    if (!confirm("Удалить задачу?")) return;
+    try {
+      await api.deleteTask(taskId);
+      setTasksError("");
+      setError("");
+      await loadTasks();
+    } catch (e) {
+      const message = normalizeErrorMessage(e);
+      setTasksError(message);
+      setError(`Tasks: ${message}`);
+    }
+  }
+
+  async function startTelegramBot() {
+    try {
+      const data = await api.startTelegramBot();
+      setTelegramError("");
+      if (data?.ok === false) throw new Error(data.error || "Ошибка запуска");
+      setError("");
+      await loadTelegram();
+    } catch (e) {
+      const message = normalizeErrorMessage(e);
+      setTelegramError(message);
+      setError(`Telegram: ${message}`);
+    }
+  }
+
+  async function stopTelegramBot() {
+    try {
+      await api.stopTelegramBot();
+      setTelegramError("");
+      setError("");
+      await loadTelegram();
+    } catch (e) {
+      const message = normalizeErrorMessage(e);
+      setTelegramError(message);
+      setError(`Telegram: ${message}`);
+    }
+  }
+
+  async function testTelegramBot() {
+    try {
+      const data = await api.testTelegramBot();
+      setTelegramError("");
+      setError("");
+      if (data?.ok) alert(`✅ Бот: @${data.bot_username} (${data.bot_name})`);
+      else alert(`❌ ${data?.error || "Ошибка"}`);
+    } catch (e) {
+      const message = normalizeErrorMessage(e);
+      setTelegramError(message);
+      setError(`Telegram: ${message}`);
+      alert("Ошибка соединения");
+    }
+  }
+
+  async function saveTelegramToken() {
+    if (!tgTokenInput.trim()) return;
+    try {
+      await api.updateTelegramConfig({ bot_token: tgTokenInput.trim() });
+      setTelegramError("");
+      setTgTokenInput("");
+      setError("");
+      await loadTelegram();
+    } catch (e) {
+      const message = normalizeErrorMessage(e);
+      setTelegramError(message);
+      setError(`Telegram: ${message}`);
+    }
+  }
+
+  async function saveTelegramSettings() {
+    try {
+      const upd = {};
+      if (tgConfig?.model !== undefined) upd.model = tgConfig.model;
+      if (tgConfig?.profile) upd.profile = tgConfig.profile;
+      if (tgConfig?.use_memory !== undefined) upd.use_memory = tgConfig.use_memory;
+      if (tgConfig?.use_web_search !== undefined) upd.use_web_search = tgConfig.use_web_search;
+      if (tgConfig?.welcome_message) upd.welcome_message = tgConfig.welcome_message;
+      await api.updateTelegramConfig(upd);
+      setTelegramError("");
+      setError("");
+      await loadTelegram();
+    } catch (e) {
+      const message = normalizeErrorMessage(e);
+      setTelegramError(message);
+      setError(`Telegram: ${message}`);
+    }
+  }
+
+  async function updateTelegramAllowedUsers(val) {
+    try {
+      await api.updateTelegramConfig({ allowed_users: val });
+      setTelegramError("");
+      setError("");
+      await loadTelegram();
+    } catch (e) {
+      const message = normalizeErrorMessage(e);
+      setTelegramError(message);
+      setError(`Telegram: ${message}`);
+    }
+  }
+
+  async function toggleTelegramUserAccess(user) {
+    try {
+      await api.toggleTelegramUser({ chat_id: user.chat_id, allowed: !user.allowed });
+      setTelegramError("");
+      setError("");
+      await loadTelegram();
+    } catch (e) {
+      const message = normalizeErrorMessage(e);
+      setTelegramError(message);
+      setError(`Telegram: ${message}`);
+    }
+  }
+
+  async function createPipeline() {
+    if (!pipeForm.name) return;
+    try {
+      await api.createPipeline(pipeForm);
+      setPipelinesError("");
+      setPipeForm({ name:"", task_type:"prompt", interval_minutes:60, task_data:{prompt:""} });
+      setError("");
+      await loadPipelines();
+    } catch (e) {
+      const message = normalizeErrorMessage(e);
+      setPipelinesError(message);
+      setError(`Pipelines: ${message}`);
+    }
+  }
+
+  async function runPipelineNow(pipelineId) {
+    try {
+      await api.runPipeline(pipelineId);
+      setPipelinesError("");
+      setError("");
+      await loadPipelines();
+    } catch (e) {
+      const message = normalizeErrorMessage(e);
+      setPipelinesError(message);
+      setError(`Pipelines: ${message}`);
+    }
+  }
+
+  async function togglePipelineEnabled(pipeline) {
+    try {
+      await api.updatePipeline(pipeline.id, { enabled: !pipeline.enabled });
+      setPipelinesError("");
+      setError("");
+      await loadPipelines();
+    } catch (e) {
+      const message = normalizeErrorMessage(e);
+      setPipelinesError(message);
+      setError(`Pipelines: ${message}`);
+    }
+  }
+
+  async function deletePipeline(pipelineId) {
+    if (!confirm("Удалить?")) return;
+    try {
+      await api.deletePipeline(pipelineId);
+      setPipelinesError("");
+      setError("");
+      await loadPipelines();
+    } catch (e) {
+      const message = normalizeErrorMessage(e);
+      setPipelinesError(message);
+      setError(`Pipelines: ${message}`);
+    }
+  }
+
+  async function reloadPlugins() {
+    try {
+      const data = await api.reloadPlugins();
+      setPluginList(data.loaded?.map(n => ({ name:n, enabled:true })) || []);
+      setError("");
+      await loadPluginList();
+    } catch (e) {
+      setError(`Plugins: ${normalizeErrorMessage(e)}`);
+    }
+  }
+
+  async function togglePluginState(plugin) {
+    try {
+      await api.setPluginEnabled(plugin.name, !plugin.enabled);
+      setError("");
+      await loadPluginList();
+    } catch (e) {
+      setError(`Plugins: ${normalizeErrorMessage(e)}`);
+    }
+  }
+
   function handleKeyDown(e) { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); handleSend(); } }
 
   const fChats = useMemo(() => { const q = sideSearch.trim().toLowerCase(); return q ? chats.filter(c => (c.title||"").toLowerCase().includes(q)) : chats; }, [sideSearch, chats]);
@@ -605,8 +963,8 @@ export default function EliraChatShell() {
           ))}
         </div>
         <div className="sidebar-nav-item search-shell">
-          <span style={{opacity:0.4,fontSize:11}}>⌕</span>
-          <input className="sidebar-search-input" value={sideSearch} onChange={e => setSideSearch(e.target.value)} placeholder="Поиск" />
+          <span style={{opacity:0.65,fontSize:10,fontWeight:700}}>FIND</span>
+          <input className="sidebar-search-input" value={sideSearch} onChange={e => setSideSearch(e.target.value)} placeholder="Search" />
         </div>
         {sideTab === "chats" && (
           <div className="chat-list" style={{flex:1,minHeight:0}}>
@@ -644,18 +1002,18 @@ export default function EliraChatShell() {
             {sideTab === "chats" && chatId && (
               <div className="chat-header-actions icon-actions" style={{display:"flex"}}>
                 <div className="export-dropdown-wrap" style={{position:"relative"}}>
-                  <button className="soft-btn icon-btn" title="Экспорт чата" onClick={()=>setShowExportMenu(v=>!v)}>📥</button>
+                  <button className="soft-btn icon-btn" title="Export chat" onClick={()=>setShowExportMenu(v=>!v)}>EXP</button>
                   {showExportMenu && <div className="export-dropdown" style={{position:"absolute",top:"100%",right:0,zIndex:99,background:"var(--bg-card)",border:"1px solid var(--border)",borderRadius:8,padding:"4px 0",minWidth:140,boxShadow:"0 4px 16px rgba(0,0,0,.18)"}}>
-                    <button className="export-item" onClick={()=>{exportChat("md");setShowExportMenu(false)}}>📋 Markdown</button>
-                    <button className="export-item" onClick={()=>{exportChat("html");setShowExportMenu(false)}}>🌐 HTML</button>
-                    <button className="export-item" onClick={()=>{exportChat("json");setShowExportMenu(false)}}>📦 JSON</button>
-                    <button className="export-item" onClick={()=>{exportChat("txt");setShowExportMenu(false)}}>📄 Text</button>
+                    <button className="export-item" onClick={()=>{exportChat("md");setShowExportMenu(false)}}>MD</button>
+                    <button className="export-item" onClick={()=>{exportChat("html");setShowExportMenu(false)}}>HTML</button>
+                    <button className="export-item" onClick={()=>{exportChat("json");setShowExportMenu(false)}}>JSON</button>
+                    <button className="export-item" onClick={()=>{exportChat("txt");setShowExportMenu(false)}}>TXT</button>
                   </div>}
                 </div>
-                <button className="soft-btn icon-btn" onClick={() => saveToMemory(chatId, chats.find(c=>c.id===chatId)?.memory_saved)}>🧠</button>
-                <button className="soft-btn icon-btn" onClick={() => pinChat(chatId, chats.find(c=>c.id===chatId)?.pinned)}>📌</button>
-                <button className="soft-btn icon-btn" onClick={() => { setRenaming(true); setRenameVal(chats.find(c=>c.id===chatId)?.title||""); }}>✎</button>
-                <button className="soft-btn icon-btn" onClick={() => deleteChat(chatId)}>🗑</button>
+                <button className="soft-btn icon-btn" title="Save to memory" onClick={() => saveToMemory(chatId, chats.find(c=>c.id===chatId)?.memory_saved)}>MEM</button>
+                <button className="soft-btn icon-btn" title="Pin chat" onClick={() => pinChat(chatId, chats.find(c=>c.id===chatId)?.pinned)}>PIN</button>
+                <button className="soft-btn icon-btn" title="Rename chat" onClick={() => { setRenaming(true); setRenameVal(chats.find(c=>c.id===chatId)?.title||""); }}>EDIT</button>
+                <button className="soft-btn icon-btn" title="Delete chat" onClick={() => deleteChat(chatId)}>DEL</button>
               </div>
             )}
           </div>
@@ -668,6 +1026,7 @@ export default function EliraChatShell() {
                 <div style={{fontSize:15,fontWeight:700,color:"var(--text)"}}>📅 Задачи</div>
                 <button className="soft-btn" style={{fontSize:10,padding:"3px 10px",border:"1px solid var(--border)"}} onClick={loadTasks}>↻</button>
               </div>
+              <PanelNotice title="Tasks are unavailable" message={tasksError} onRetry={() => loadTasks()} />
 
               {/* Статистика */}
               {taskStats && (
@@ -696,12 +1055,12 @@ export default function EliraChatShell() {
 
               {/* Форма создания / редактирования */}
               <div style={{padding:12,borderRadius:10,border:"1px solid var(--border)",background:"var(--bg-surface)",marginBottom:14}}>
-                <div style={{fontSize:12,fontWeight:600,color:"var(--text)",marginBottom:8}}>{editingTask ? "✏️ Редактирование" : "＋ Новая задача"}</div>
+                <div style={{fontSize:12,fontWeight:600,color:"var(--text)",marginBottom:8}}>{editingTask ? "✏️ Редактирование" : "+ Новая задача"}</div>
                 <input placeholder="Название задачи" value={taskForm.title} onChange={e=>setTaskForm({...taskForm,title:e.target.value})} className="rename-input" style={{width:"100%",fontSize:11,padding:"5px 8px",marginBottom:6}}/>
                 <textarea placeholder="Описание (необязательно)" value={taskForm.description} onChange={e=>setTaskForm({...taskForm,description:e.target.value})} className="rename-input" style={{width:"100%",fontSize:11,padding:"5px 8px",marginBottom:6,minHeight:40,resize:"vertical",fontFamily:"inherit"}} rows={2}/>
                 <div style={{display:"flex",gap:6,flexWrap:"wrap",marginBottom:6}}>
                   <select value={taskForm.priority} onChange={e=>setTaskForm({...taskForm,priority:e.target.value})} className="topbar-select dark-select" style={{fontSize:11}}>
-                    <option value="low">🟢 Низкий</option>
+                    <option value="low">?? ??????</option>
                     <option value="medium">🟡 Средний</option>
                     <option value="high">🟠 Высокий</option>
                     <option value="urgent">🔴 Срочный</option>
@@ -721,21 +1080,22 @@ export default function EliraChatShell() {
                     if(!taskForm.title) return;
                     try {
                       if(editingTask) {
-                        await fetch(`/api/tasks/update/${editingTask}`,{method:"PUT",headers:{"Content-Type":"application/json"},body:JSON.stringify(taskForm)});
+                        await api.updateTask(editingTask, taskForm);
                         setEditingTask(null);
                       } else {
-                        await fetch("/api/tasks/create",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(taskForm)});
+                        await api.createTask(taskForm);
                       }
                       setTaskForm({title:"",description:"",category:"general",priority:"medium",due_date:""});
-                      loadTasks();
-                    } catch{}
+                      await loadTasks();
+                      setError("");
+                    } catch(e){setError(`Tasks: ${normalizeErrorMessage(e)}`)}
                   }}>{editingTask ? "Сохранить" : "Создать"}</button>
                   {editingTask && <button className="soft-btn" style={{fontSize:11,padding:"4px 10px",border:"1px solid var(--border)",borderRadius:6}} onClick={()=>{setEditingTask(null);setTaskForm({title:"",description:"",category:"general",priority:"medium",due_date:""});}}>Отмена</button>}
                 </div>
               </div>
 
               {/* Список задач */}
-              {tasksList.length===0 && <div style={{fontSize:11,color:"var(--text-muted)",padding:"12px 0",textAlign:"center"}}>Нет задач</div>}
+              {tasksList.length===0 && !tasksError && <div style={{fontSize:11,color:"var(--text-muted)",padding:"12px 0",textAlign:"center"}}>Нет задач</div>}
               {tasksList.map(t=>{
                 const prioColor = {urgent:"#f44336",high:"#ff9800",medium:"#f5a623",low:"#4caf50"}[t.priority]||"var(--text-muted)";
                 const prioIcon = {urgent:"🔴",high:"🟠",medium:"🟡",low:"🟢"}[t.priority]||"⚪";
@@ -747,8 +1107,8 @@ export default function EliraChatShell() {
                       <div style={{display:"flex",alignItems:"center",gap:6,flex:1,minWidth:0}}>
                         <span style={{cursor:"pointer",fontSize:16}} title={t.status==="done"?"Вернуть":"Выполнено"} onClick={async()=>{
                           const newStatus = t.status==="done" ? "todo" : "done";
-                          try{await fetch(`/api/tasks/update/${t.id}`,{method:"PUT",headers:{"Content-Type":"application/json"},body:JSON.stringify({status:newStatus})});loadTasks();}catch{}
-                        }}>{t.status==="done"?"✅":"⬜"}</span>
+                          await updateTaskStatus(t.id, newStatus);
+                        }}>{t.status==="done"?"UNDO":"DONE"}</span>
                         <div style={{flex:1,minWidth:0}}>
                           <div style={{fontWeight:600,fontSize:12,color:"var(--text)",textDecoration:t.status==="done"?"line-through":"none",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{t.title}</div>
                           {t.description && <div style={{fontSize:10,color:"var(--text-muted)",marginTop:2,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{t.description}</div>}
@@ -758,11 +1118,11 @@ export default function EliraChatShell() {
                         {t.status!=="done" && t.status!=="cancelled" && (
                           <button className="soft-btn" style={{fontSize:9,padding:"2px 6px"}} title="В работу" onClick={async()=>{
                             const newS = t.status==="in_progress"?"todo":"in_progress";
-                            try{await fetch(`/api/tasks/update/${t.id}`,{method:"PUT",headers:{"Content-Type":"application/json"},body:JSON.stringify({status:newS})});loadTasks();}catch{}
-                          }}>{t.status==="in_progress"?"⏸":"▶"}</button>
+                            await updateTaskStatus(t.id, newS);
+                          }}>{t.status==="in_progress"?"PAUSE":"START"}</button>
                         )}
                         <button className="soft-btn" style={{fontSize:9,padding:"2px 6px"}} title="Редактировать" onClick={()=>{setEditingTask(t.id);setTaskForm({title:t.title,description:t.description||"",category:t.category||"general",priority:t.priority||"medium",due_date:t.due_date||""});}}>✏️</button>
-                        <button className="soft-btn" style={{fontSize:9,padding:"2px 6px",color:"#f44336"}} title="Удалить" onClick={async()=>{if(!confirm("Удалить задачу?"))return;try{await fetch(`/api/tasks/delete/${t.id}`,{method:"DELETE"});loadTasks();}catch{}}}>✕</button>
+                        <button className="soft-btn" style={{fontSize:9,padding:"2px 6px",color:"#f44336"}} title="Удалить" onClick={() => deleteTaskItem(t.id)}>✕</button>
                       </div>
                     </div>
                     <div style={{display:"flex",gap:8,alignItems:"center",fontSize:10,color:"var(--text-muted)",marginTop:2}}>
@@ -770,7 +1130,7 @@ export default function EliraChatShell() {
                       <span>{catIcon} {t.category}</span>
                       {t.due_date && <span style={{color:isOverdue?"#f44336":"var(--text-muted)"}}>📅 {new Date(t.due_date).toLocaleDateString("ru-RU")}{isOverdue?" ⚠️ просрочено":""}</span>}
                       {t.status==="in_progress" && <span style={{color:"#f5a623"}}>⏳ в работе</span>}
-                      {t.status==="done" && t.completed_at && <span style={{color:"#4caf50"}}>✅ {new Date(t.completed_at).toLocaleDateString("ru-RU")}</span>}
+                      {t.status==="done" && t.completed_at && <span style={{color:"#4caf50"}}>Done {new Date(t.completed_at).toLocaleDateString("ru-RU")}</span>}
                     </div>
                   </div>
                 );
@@ -779,9 +1139,10 @@ export default function EliraChatShell() {
           ) : sideTab === "telegram" ? (
             <div className="settings-main-card" style={{overflow:"auto"}}>
               <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:12}}>
-                <div style={{fontSize:15,fontWeight:700,color:"var(--text)"}}>✈️ Telegram Bot</div>
+                <div style={{fontSize:15,fontWeight:700,color:"var(--text)"}}>Telegram Bot</div>
                 <button className="soft-btn" style={{fontSize:10,padding:"3px 10px",border:"1px solid var(--border)"}} onClick={loadTelegram}>↻</button>
               </div>
+              <PanelNotice title="Telegram panel is unavailable" message={telegramError} onRetry={loadTelegram} />
 
               {/* Внутренние табы */}
               <div style={{display:"flex",gap:4,marginBottom:14}}>
@@ -853,21 +1214,21 @@ export default function EliraChatShell() {
                     </div>
                     <div style={{display:"flex",gap:4}}>
                       {!tgConfig?.running ? (
-                        <button className="soft-btn" style={{fontSize:10,padding:"4px 12px",background:"#4caf50",color:"#fff",border:"none",borderRadius:6}} onClick={async()=>{try{const r=await fetch("/api/telegram/start",{method:"POST"});const d=await r.json();if(d.ok){loadTelegram();}else{alert(d.error||"Ошибка запуска");}}catch{}}}>▶ Запустить</button>
+<button className="soft-btn" style={{fontSize:10,padding:"4px 12px",background:"#4caf50",color:"#fff",border:"none",borderRadius:6}} onClick={startTelegramBot}>▶ Запустить</button>
                       ) : (
-                        <button className="soft-btn" style={{fontSize:10,padding:"4px 12px",background:"#f44336",color:"#fff",border:"none",borderRadius:6}} onClick={async()=>{try{await fetch("/api/telegram/stop",{method:"POST"});loadTelegram();}catch{}}}>⏹ Остановить</button>
+<button className="soft-btn" style={{fontSize:10,padding:"4px 12px",background:"#f44336",color:"#fff",border:"none",borderRadius:6}} onClick={stopTelegramBot}>⏹ Остановить</button>
                       )}
-                      <button className="soft-btn" style={{fontSize:10,padding:"4px 10px",border:"1px solid var(--border)"}} onClick={async()=>{try{const r=await fetch("/api/telegram/test");const d=await r.json();if(d.ok){alert(`✅ Бот: @${d.bot_username} (${d.bot_name})`)}else{alert(`❌ ${d.error}`)}}catch{alert("Ошибка соединения")}}}>🔍 Тест</button>
+<button className="soft-btn" style={{fontSize:10,padding:"4px 10px",border:"1px solid var(--border)"}} onClick={testTelegramBot}>🔍 Тест</button>
                     </div>
                   </div>
 
                   {/* Токен */}
                   <div style={{padding:12,borderRadius:10,border:"1px solid var(--border)",background:"var(--bg-surface)",marginBottom:12}}>
-                    <div style={{fontSize:12,fontWeight:600,marginBottom:6}}>🔑 Bot Token</div>
+                    <div style={{fontSize:12,fontWeight:600,marginBottom:6}}>Bot Token</div>
                     {tgConfig?.has_token && <div style={{fontSize:10,color:"var(--text-muted)",marginBottom:4}}>Текущий: {tgConfig.bot_token}</div>}
                     <div style={{display:"flex",gap:6}}>
                       <input type="password" placeholder="Вставь токен от @BotFather" value={tgTokenInput} onChange={e=>setTgTokenInput(e.target.value)} className="rename-input" style={{flex:1,fontSize:11,padding:"5px 8px"}}/>
-                      <button className="soft-btn" style={{fontSize:10,padding:"4px 12px",background:"var(--accent)",color:"#fff",border:"none",borderRadius:6}} onClick={async()=>{if(!tgTokenInput.trim())return;try{await fetch("/api/telegram/config",{method:"PUT",headers:{"Content-Type":"application/json"},body:JSON.stringify({bot_token:tgTokenInput.trim()})});setTgTokenInput("");loadTelegram();}catch{}}}>💾 Сохранить</button>
+<button className="soft-btn" style={{fontSize:10,padding:"4px 12px",background:"var(--accent)",color:"#fff",border:"none",borderRadius:6}} onClick={saveTelegramToken}>💾 Сохранить</button>
                     </div>
                   </div>
 
@@ -912,9 +1273,9 @@ export default function EliraChatShell() {
                         if(tgConfig?.use_memory !== undefined) upd.use_memory = tgConfig.use_memory;
                         if(tgConfig?.use_web_search !== undefined) upd.use_web_search = tgConfig.use_web_search;
                         if(tgConfig?.welcome_message) upd.welcome_message = tgConfig.welcome_message;
-                        await fetch("/api/telegram/config",{method:"PUT",headers:{"Content-Type":"application/json"},body:JSON.stringify(upd)});
-                        loadTelegram();
-                      }catch{}
+                        await api.updateTelegramConfig(upd);
+                        await loadTelegram(); setError("");
+                      }catch(e){setError(`Telegram: ${normalizeErrorMessage(e)}`)}
                     }}>💾 Сохранить настройки</button>
                   </div>
                 </div>
@@ -927,7 +1288,7 @@ export default function EliraChatShell() {
                     <label style={{fontSize:11,display:"flex",alignItems:"center",gap:4,cursor:"pointer"}}>
                       <input type="checkbox" checked={tgConfig?.allowed_users==="all"} onChange={async e=>{
                         const val = e.target.checked ? "all" : "whitelist";
-                        try{await fetch("/api/telegram/config",{method:"PUT",headers:{"Content-Type":"application/json"},body:JSON.stringify({allowed_users:val})});loadTelegram();}catch{}
+                        await updateTelegramAllowedUsers(val);
                       }}/>
                       Разрешить всем (иначе — только отмеченным)
                     </label>
@@ -942,7 +1303,9 @@ export default function EliraChatShell() {
                       </div>
                       <div style={{display:"flex",alignItems:"center",gap:6}}>
                         <span style={{fontSize:10,color:u.allowed?"#4caf50":"#f44336"}}>{u.allowed?"✅ Разрешён":"⛔ Заблокирован"}</span>
-                        <button className="soft-btn" style={{fontSize:9,padding:"2px 8px"}} onClick={async()=>{try{await fetch("/api/telegram/users/toggle",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({chat_id:u.chat_id,allowed:!u.allowed})});loadTelegram();}catch{}}}>{u.allowed?"🔒":"🔓"}</button>
+                        <button className="soft-btn" style={{fontSize:9,padding:"2px 8px"}} onClick={() => toggleTelegramUserAccess(u)}>
+                          {u.allowed ? "Запретить" : "Разрешить"}
+                        </button>
                       </div>
                     </div>
                   ))}
@@ -970,9 +1333,10 @@ export default function EliraChatShell() {
           ) : sideTab === "pipelines" ? (
             <div className="settings-main-card" style={{overflow:"auto"}}>
               <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:12}}>
-                <div style={{fontSize:15,fontWeight:700,color:"var(--text)"}}>🔄 Autopipelines</div>
+                <div style={{fontSize:15,fontWeight:700,color:"var(--text)"}}>Autopipelines</div>
                 <button className="soft-btn" style={{fontSize:10,padding:"3px 10px",border:"1px solid var(--border)"}} onClick={loadPipelines}>↻ Обновить</button>
               </div>
+              <PanelNotice title="Pipelines are unavailable" message={pipelinesError} onRetry={loadPipelines} />
               <div className="settings-desc" style={{marginBottom:12}}>Автоматические задачи по расписанию</div>
 
               {/* Форма создания */}
@@ -981,15 +1345,15 @@ export default function EliraChatShell() {
                 <div style={{display:"flex",gap:6,flexWrap:"wrap",marginBottom:6}}>
                   <input placeholder="Название" value={pipeForm.name} onChange={e=>setPipeForm({...pipeForm,name:e.target.value})} className="rename-input" style={{flex:1,minWidth:120,fontSize:11,padding:"4px 8px"}}/>
                   <select value={pipeForm.task_type} onChange={e=>setPipeForm({...pipeForm,task_type:e.target.value})} className="topbar-select dark-select" style={{fontSize:11}}>
-                    <option value="prompt">💬 Промпт</option>
+                    <option value="prompt">Prompt</option>
                     <option value="web_search">🔍 Веб-поиск</option>
                     <option value="plugin">🔌 Плагин</option>
-                    <option value="http">🌐 HTTP</option>
+                    <option value="http">HTTP</option>
                   </select>
                   <select value={pipeForm.interval_minutes} onChange={e=>setPipeForm({...pipeForm,interval_minutes:+e.target.value})} className="topbar-select dark-select" style={{fontSize:11}}>
-                    <option value={5}>5 мин</option>
-                    <option value={15}>15 мин</option>
-                    <option value={30}>30 мин</option>
+                    <option value={5}>5 min</option>
+                    <option value={15}>15 min</option>
+                    <option value={30}>30 min</option>
                     <option value={60}>1 час</option>
                     <option value={180}>3 часа</option>
                     <option value={360}>6 часов</option>
@@ -998,11 +1362,11 @@ export default function EliraChatShell() {
                   </select>
                 </div>
                 <input placeholder={pipeForm.task_type==="prompt"?"Промпт для LLM":pipeForm.task_type==="web_search"?"Поисковый запрос":pipeForm.task_type==="plugin"?"Имя плагина":"URL"} value={pipeForm.task_data.prompt||pipeForm.task_data.query||pipeForm.task_data.plugin_name||pipeForm.task_data.url||""} onChange={e=>{const key={prompt:"prompt",web_search:"query",plugin:"plugin_name",http:"url"}[pipeForm.task_type]||"prompt";setPipeForm({...pipeForm,task_data:{[key]:e.target.value}})}} className="rename-input" style={{width:"100%",fontSize:11,padding:"4px 8px",marginBottom:6}}/>
-                <button className="soft-btn" style={{fontSize:11,padding:"4px 14px",background:"var(--accent)",color:"#fff",border:"none",borderRadius:6}} onClick={async()=>{if(!pipeForm.name)return;try{await fetch("/api/pipelines/create",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(pipeForm)});setPipeForm({name:"",task_type:"prompt",interval_minutes:60,task_data:{prompt:""}});loadPipelines()}catch{}}}>Создать</button>
+<button className="soft-btn" style={{fontSize:11,padding:"4px 14px",background:"var(--accent)",color:"#fff",border:"none",borderRadius:6}} onClick={createPipeline}>Создать</button>
               </div>
 
-              {/* Список */}
-              {pipelinesList.length===0 && <div style={{fontSize:11,color:"var(--text-muted)",padding:"12px 0",textAlign:"center"}}>Нет pipelines</div>}
+              {/* РЎРїРёСЃРѕРє */}
+              {pipelinesList.length===0 && !pipelinesError && <div style={{fontSize:11,color:"var(--text-muted)",padding:"12px 0",textAlign:"center"}}>Нет pipelines</div>}
               {pipelinesList.map(p=>(
                 <div key={p.id} style={{padding:"10px 12px",borderRadius:10,border:"1px solid var(--border)",background:"var(--bg-surface)",marginBottom:6}}>
                   <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:4}}>
@@ -1012,9 +1376,9 @@ export default function EliraChatShell() {
                       <span style={{fontSize:9,color:p.enabled?"#4caf50":"#f44336",marginLeft:6}}>{p.enabled?"● вкл":"○ выкл"}</span>
                     </div>
                     <div style={{display:"flex",gap:4}}>
-                      <button className="soft-btn" style={{fontSize:9,padding:"2px 8px"}} onClick={async()=>{try{await fetch(`/api/pipelines/run/${p.id}`,{method:"POST"});loadPipelines()}catch{}}}>▶ Run</button>
-                      <button className="soft-btn" style={{fontSize:9,padding:"2px 8px"}} onClick={async()=>{try{await fetch(`/api/pipelines/update/${p.id}`,{method:"PUT",headers:{"Content-Type":"application/json"},body:JSON.stringify({enabled:!p.enabled})});loadPipelines()}catch{}}}>{p.enabled?"⏸":"▶"}</button>
-                      <button className="soft-btn" style={{fontSize:9,padding:"2px 8px",color:"#f44336"}} onClick={async()=>{if(!confirm("Удалить?"))return;try{await fetch(`/api/pipelines/delete/${p.id}`,{method:"DELETE"});loadPipelines()}catch{}}}>✕</button>
+                      <button className="soft-btn" style={{fontSize:9,padding:"2px 8px"}} onClick={() => runPipelineNow(p.id)}>?</button>
+                      <button className="soft-btn" style={{fontSize:9,padding:"2px 8px"}} onClick={() => togglePipelineEnabled(p)}>{p.enabled?"OFF":"ON"}</button>
+                      <button className="soft-btn" style={{fontSize:9,padding:"2px 8px",color:"#f44336"}} onClick={() => deletePipeline(p.id)}>DEL</button>
                     </div>
                   </div>
                   <div style={{fontSize:10,color:"var(--text-muted)"}}>
@@ -1029,10 +1393,12 @@ export default function EliraChatShell() {
           ) : sideTab === "dashboard" ? (
             <div className="settings-main-card" style={{overflow:"auto"}}>
               <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:16}}>
-                <div style={{fontSize:15,fontWeight:700,color:"var(--text)"}}>📊 Dashboard</div>
+                <div style={{fontSize:15,fontWeight:700,color:"var(--text)"}}>Dashboard</div>
                 <button className="soft-btn" style={{fontSize:10,padding:"3px 10px",border:"1px solid var(--border)"}} onClick={loadDashboard}>↻ Обновить</button>
               </div>
-              {!dashData ? <div style={{color:"var(--text-muted)",fontSize:12}}>Загрузка...</div> : (
+              <PanelNotice title="Dashboard sync issue" message={dashboardError} onRetry={loadDashboard} tone={dashData || projectBrainStatus ? "warning" : "error"} />
+              <CapabilityStatusSection status={projectBrainStatus} />
+              {!dashData && !dashboardError ? <div style={{color:"var(--text-muted)",fontSize:12}}>Загрузка...</div> : !dashData ? null : (
                 <>
                   {/* Карточки статистики */}
                   <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(130px,1fr))",gap:8,marginBottom:16}}>
@@ -1205,19 +1571,19 @@ export default function EliraChatShell() {
               <div style={{marginTop:18}}>
                 <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:8}}>
                   <div className="settings-title">Плагины</div>
-                  <button className="soft-btn" style={{fontSize:10,padding:"3px 10px",border:"1px solid var(--border)"}} onClick={async()=>{try{const r=await fetch("/api/extra/plugins/reload",{method:"POST"});const d=await r.json();setPluginList(d.loaded?.map(n=>({name:n,enabled:true}))||[]);await loadPluginList()}catch{}}}>↻ Перезагрузить</button>
+<button className="soft-btn" style={{fontSize:10,padding:"3px 10px",border:"1px solid var(--border)"}} onClick={reloadPlugins}>↻ Перезагрузить</button>
                 </div>
                 <div className="settings-desc" style={{marginBottom:10}}>Пользовательские .py скрипты в data/plugins/</div>
                 {pluginList.length===0 && <div style={{fontSize:11,color:"var(--text-muted)",padding:"8px 0"}}>Плагинов нет. Положи .py файлы в backend/data/plugins/</div>}
                 {pluginList.map(p=>(
                   <div key={p.name} style={{padding:"8px 10px",borderRadius:8,border:"1px solid var(--border)",background:"var(--bg-surface)",marginBottom:6,display:"flex",alignItems:"center",justifyContent:"space-between"}}>
                     <div>
-                      <span style={{fontSize:14,marginRight:6}}>{p.icon||"🔌"}</span>
+                      <span style={{fontSize:14,marginRight:6}}>{p.icon||"PLG"}</span>
                       <span style={{fontWeight:600,fontSize:12}}>{p.name}</span>
                       <span style={{fontSize:10,color:"var(--text-muted)",marginLeft:8}}>{p.description||""}</span>
                       {p.version && <span style={{fontSize:9,color:"var(--text-muted)",marginLeft:6}}>v{p.version}</span>}
                     </div>
-                    <button className={`skill-chip ${p.enabled?"active":""}`} style={{fontSize:10,padding:"2px 10px"}} onClick={async()=>{try{await fetch(`/api/extra/plugins/${p.enabled?"disable":"enable"}/${p.name}`,{method:"POST"});await loadPluginList()}catch{}}}>{p.enabled?"Вкл":"Выкл"}</button>
+                    <button className={`skill-chip ${p.enabled?"active":""}`} style={{fontSize:10,padding:"2px 10px"}} onClick={() => togglePluginState(p)}>{p.enabled?"Вкл":"Выкл"}</button>
                   </div>
                 ))}
               </div>
@@ -1226,7 +1592,7 @@ export default function EliraChatShell() {
             <div className="library-table-view">
               <div className={`upload-dropzone ${drag?"active":""}`} onDragOver={onDragOver} onDragLeave={onDragLeave} onDrop={onDrop} onClick={()=>fileRef.current?.click()}>Перетащи файлы (PDF, код, текст)</div>
               <div style={{display:"flex",gap:8,alignItems:"center",flexWrap:"wrap"}}>
-                <div className="library-search-row" style={{flex:1}}><span className="library-search-icon">⌕</span><input value={libSearch} onChange={e=>setLibSearch(e.target.value)} placeholder="Поиск" className="library-search-input"/></div>
+                <div className="library-search-row" style={{flex:1}}><span className="library-search-icon">FIND</span><input value={libSearch} onChange={e=>setLibSearch(e.target.value)} placeholder="Search" className="library-search-input"/></div>
                 <button className="soft-btn" style={{fontSize:11,padding:"4px 10px",border:"1px solid var(--border)"}} onClick={()=>selectAllLib(true)}>✓ Все в контекст</button>
                 <button className="soft-btn" style={{fontSize:11,padding:"4px 10px",border:"1px solid var(--border)"}} onClick={()=>selectAllLib(false)}>✕ Убрать все</button>
                 <span style={{fontSize:10,color:"var(--text-muted)"}}>{ctxF.length} из {libraryFiles.length} в контексте</span>
@@ -1265,8 +1631,8 @@ export default function EliraChatShell() {
               {chartData?.values?.length > 0 && !working && (
                 <div style={{background:"var(--bg-surface)",border:"1px solid var(--border)",borderRadius:8,padding:"10px 14px",marginTop:4}}>
                   <div style={{fontSize:11,color:"var(--text-muted)",marginBottom:6,display:"flex",justifyContent:"space-between"}}>
-                    <span>📊 {chartData.valueLabel}</span>
-                    <button className="soft-btn" style={{fontSize:10,padding:"1px 6px"}} onClick={()=>setChartData(null)}>✕</button>
+                    <span>?? {chartData.valueLabel}</span>
+                    <button className="soft-btn" style={{fontSize:10,padding:"1px 6px"}} onClick={()=>setChartData(null)}>X</button>
                   </div>
                   <div style={{display:"flex",gap:3,alignItems:"flex-end",height:72}}>
                     {chartData.values.map((v,i)=>{const mx=Math.max(...chartData.values)||1;return <div key={i} title={chartData.labels[i]+": "+v} style={{flex:1,minWidth:6,maxWidth:36,background:"var(--accent)",opacity:0.75,height:(v/mx*68)+"px",borderRadius:"3px 3px 0 0"}}></div>;})}
@@ -1281,13 +1647,13 @@ export default function EliraChatShell() {
                 <div className={`chat-input-shell ${drag?"drag-active":""}`}>
                   <button className="input-plus-btn" onClick={()=>fileRef.current?.click()}>+</button>
                   <textarea ref={taRef} value={input} onChange={e=>setInput(e.target.value)} onKeyDown={handleKeyDown} placeholder="Напиши сообщение..." className="chat-textarea"/>
-                  <button className="send-btn" onClick={working ? handleStop : handleSend} style={working ? {background:"rgba(255,70,70,0.15)",borderColor:"rgba(255,70,70,0.3)",color:"#ff9090"} : undefined}>{working?"■":"➤"}</button>
+                  <button className="send-btn" onClick={working ? handleStop : handleSend} style={working ? {background:"rgba(255,70,70,0.15)",borderColor:"rgba(255,70,70,0.3)",color:"#ff9090"} : undefined}>{working?"Stop":"Send"}</button>
                   <input ref={fileRef} type="file" multiple hidden onChange={e=>handleFiles(e.target.files)}/>
                 </div>
                 <div className="composer-selectors" style={{justifyContent:"center"}}>
                   <select value={model} onChange={e=>setModel(e.target.value)} className="composer-select">{(modelOpts?.length?modelOpts:[{name:model}]).map((i,idx)=>{const n=typeof i==="string"?i:(i.name||i.model||"model");return <option key={n+idx} value={n}>{shortModelName(n)}</option>})}</select>
                   <select value={profile} onChange={e=>setProfile(e.target.value)} className="composer-select">{Object.keys(PROFILE_DESCRIPTIONS).map(n=><option key={n} value={n}>{n}</option>)}</select>
-                  <button onClick={() => setMultiAgent(p => !p)} style={{padding:"2px 10px",borderRadius:99,fontSize:10,border:"1px solid " + (multiAgent ? "rgba(244,114,182,0.4)" : "var(--border)"),background:multiAgent ? "rgba(244,114,182,0.12)" : "transparent",color:multiAgent ? "#f472b6" : "var(--text-muted)",cursor:"pointer"}}>{multiAgent ? "🤖 Multi" : "🤖"}</button>
+                  <button onClick={() => setMultiAgent(p => !p)} style={{padding:"2px 10px",borderRadius:99,fontSize:10,border:"1px solid " + (multiAgent ? "rgba(244,114,182,0.4)" : "var(--border)"),background:multiAgent ? "rgba(244,114,182,0.12)" : "transparent",color:multiAgent ? "#f472b6" : "var(--text-muted)",cursor:"pointer"}}>{multiAgent ? "Multi ON" : "Multi"}</button>
                 </div>
               </div>
             </>

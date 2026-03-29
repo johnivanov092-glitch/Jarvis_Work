@@ -10,10 +10,10 @@
  *   7. Браузер файлов проекта
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { api } from "../api/ide";
 import TerminalPanel from "./TerminalPanel";
 
-const LIBRARY_KEY = "jarvis_library_files_v7";
-const API = import.meta.env.VITE_API_BASE_URL || `http://${window.location.hostname}:8000`;
+const LIBRARY_KEY = "elira_library_files_v7";
 
 function makeId(p="id"){return`${p}-${Date.now()}-${Math.random().toString(36).slice(2,8)}`;}
 function saveJson(k,v){try{localStorage.setItem(k,JSON.stringify(v));}catch{}}
@@ -37,7 +37,7 @@ async function fileToRecord(file){
   let preview="";
   const isText=file.type.startsWith("text/")||/\.(txt|md|json|js|jsx|ts|tsx|py|css|html|yml|yaml|xml|csv|log|ini|toml|rs|go|java|c|cpp|h|rb|sh|bat|sql)$/i.test(file.name);
   if(isText)try{preview=(await file.text()).slice(0,12000);}catch{}
-  if(/\.pdf$/i.test(file.name))try{const fd=new FormData();fd.append("file",file);const r=await fetch(`${API}/api/files/extract-text`,{method:"POST",body:fd});if(r.ok)preview=((await r.json()).text||"").slice(0,12000);}catch{}
+  if(/\.pdf$/i.test(file.name))try{const d=await api.extractUploadedFileText(file);preview=((d.text)||"").slice(0,12000);}catch{}
   return{id:makeId("lib"),name:file.name,size:file.size,type:file.type||"unknown",uploaded_at:new Date().toISOString(),preview,use_in_context:true,source:"code-upload"};
 }
 
@@ -135,8 +135,7 @@ export default function IdeWorkspaceShell({messages=[],libraryFiles:propLib,setL
   async function applyEdit(){
     setSaveStatus("saving");
     try{
-      const r=await fetch(`${API}/api/file-ops/write`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({path:selected.name,content:editVal,create_dirs:true})});
-      const d=await r.json();
+      const d=await api.writeFile({path:selected.name,content:editVal,create_dirs:true});
       setSaveStatus(d.ok?"ok":"error");
       if(d.ok){setEditing(false);setTimeout(()=>setSaveStatus(null),2500);}
     }catch{setSaveStatus("error");}
@@ -151,17 +150,16 @@ export default function IdeWorkspaceShell({messages=[],libraryFiles:propLib,setL
     setGitTab(tab);setGitLoading(true);
     try{
       let r,d;
-      if(tab==="status"){r=await fetch(`${API}/api/git/status`);d=await r.json();setGitData(p=>({...p,status:d}));}
-      else if(tab==="log"){r=await fetch(`${API}/api/git/log?limit=20`);d=await r.json();setGitData(p=>({...p,log:d}));}
-      else if(tab==="diff"){r=await fetch(`${API}/api/git/diff`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({repo_path:"",file_path:""})});d=await r.json();setGitData(p=>({...p,diff:d}));}
+      if(tab==="status"){r=await api.getGitStatus();d=r;setGitData(p=>({...p,status:d}));}
+      else if(tab==="log"){r=await api.getGitLog(20);d=r;setGitData(p=>({...p,log:d}));}
+      else if(tab==="diff"){r=await api.getGitDiff({repo_path:"",file_path:""});d=r;setGitData(p=>({...p,diff:d}));}
     }catch(e){setGitData(p=>({...p,[tab]:{ok:false,error:String(e)}}));}
     finally{setGitLoading(false);}
   }
   async function doCommit(){
     if(!commitMsg.trim())return;setGitLoading(true);
     try{
-      const r=await fetch(`${API}/api/git/commit`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({message:commitMsg,add_all:true})});
-      const d=await r.json();
+      const d=await api.createGitCommit({message:commitMsg,add_all:true});
       if(d.ok){setCommitMsg("");fetchGit("status");}else alert("Git error: "+d.error);
     }catch(e){alert(String(e));}finally{setGitLoading(false);}
   }
@@ -169,25 +167,32 @@ export default function IdeWorkspaceShell({messages=[],libraryFiles:propLib,setL
 
   useEffect(()=>{
     if(mainView!=="history"||runHistory!==null)return;
-    fetch(`${API}/api/tools/run-history?limit=50`).then(r=>r.json()).then(d=>setRunHistory(d.runs||[])).catch(()=>setRunHistory([]));
+    api.listToolRuns(50).then(d=>setRunHistory(d||[])).catch(()=>setRunHistory([]));
   },[mainView]);
 
   useEffect(()=>{
     if(mainView!=="filetree"||fileTree!==null)return;
     setFtLoading(true);
-    fetch(`${API}/api/advanced/project/tree?max_depth=3&max_items=300`).then(r=>r.json()).then(d=>{setFileTree(d.items||[]);setFtLoading(false);}).catch(()=>{setFileTree([]);setFtLoading(false);});
+    api.getAdvancedProjectTree({maxDepth:3,maxItems:300}).then(d=>{setFileTree(d.items||[]);setFtLoading(false);}).catch(()=>{setFileTree([]);setFtLoading(false);});
   },[mainView]);
 
   async function openFtFile(item){
     if(item.type!=="file")return;
     setFtSelected(item.path);setFtContent(null);
     try{
-      const r=await fetch(`${API}/api/advanced/project/read`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({path:item.path,max_chars:20000})});
+      const r={json: async()=>await api.readAdvancedProjectFile(item.path, 20000)};
       const d=await r.json();setFtContent(d.ok?d.content:"Ошибка: "+d.error);
     }catch(e){setFtContent("Ошибка: "+String(e));}
   }
 
-  const iconFor=a=>a.type==="code"?"◇":/\.pdf$/i.test(a.name||"")?"📑":/\.(js|jsx|ts|tsx|py|rs|go|java|c|cpp)$/i.test(a.name||"")?"◈":"📄";
+  const iconFor = (a) =>
+    a.type === "code"
+      ? "◇"
+      : /\.pdf$/i.test(a.name || "")
+        ? "PDF"
+        : /\.(js|jsx|ts|tsx|py|rs|go|java|c|cpp)$/i.test(a.name || "")
+          ? "⌘"
+          : "FILE";
   const gitColor=s=>({M:"#e2b93d",A:"#4ade80",D:"#ff6b6b","?":"#888"}[s?.[0]]||"#aaa");
 
   return(
@@ -195,7 +200,7 @@ export default function IdeWorkspaceShell({messages=[],libraryFiles:propLib,setL
 
       {/* Toolbar */}
       <div style={{display:"flex",alignItems:"center",gap:5,padding:"7px 12px",borderBottom:"1px solid var(--border)",flexWrap:"wrap"}}>
-        <button onClick={onBackToChat} className="soft-btn" style={{border:"1px solid var(--border)"}}>← Chat</button>
+        <button onClick={onBackToChat} className="soft-btn" style={{border:"1px solid var(--border)"}}>&lt; Chat</button>
         <span style={{fontSize:13,fontWeight:600}}>Code</span>
         <div style={{display:"flex",gap:2,marginLeft:6}}>
           {[["artifacts","Артефакты"],["git","🔀 Git"],["filetree","📁 Файлы"],["history","📋 История"]].map(([k,l])=>(
@@ -211,7 +216,7 @@ export default function IdeWorkspaceShell({messages=[],libraryFiles:propLib,setL
         )}
         <div style={{marginLeft:"auto"}}>
           <button onClick={()=>setShowTerminal(p=>!p)} className="soft-btn" style={{border:"1px solid var(--border)",fontSize:11,padding:"3px 9px",background:showTerminal?"var(--bg-surface-active)":"transparent"}}>
-            {showTerminal?"▼":"▶"} Terminal
+            {showTerminal?"Hide":"Show"} Terminal
           </button>
         </div>
       </div>
@@ -242,7 +247,7 @@ export default function IdeWorkspaceShell({messages=[],libraryFiles:propLib,setL
                     <div style={{overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",fontWeight:selectedId===a.id?500:400}}>{a.name}</div>
                     <div style={{fontSize:10,color:"var(--text-muted)",marginTop:1}}>{a.source==="chat"?"из чата":a.type==="file"?`${Math.round(a.size/1024)||0}K`:""}{a.lang?` · ${a.lang}`:""}</div>
                   </div>
-                  {a.source==="library"&&<button onClick={e=>{e.stopPropagation();removeFile(a.id);}} style={{border:"none",background:"transparent",color:"var(--text-muted)",cursor:"pointer",fontSize:11,padding:0}}>✕</button>}
+                  {a.source==="library"&&<button onClick={e=>{e.stopPropagation();removeFile(a.id);}} style={{border:"none",background:"transparent",color:"var(--text-muted)",cursor:"pointer",fontSize:11,padding:0}}>X</button>}
                 </button>
               ))}
             </div>
@@ -254,7 +259,7 @@ export default function IdeWorkspaceShell({messages=[],libraryFiles:propLib,setL
                 <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"7px 12px",borderBottom:"1px solid var(--border)",flexWrap:"wrap",gap:5}}>
                   <div style={{display:"flex",alignItems:"center",gap:8,minWidth:0,flex:1}}>
                     <span style={{fontWeight:500,fontSize:13,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{selected.name}</span>
-                    <span style={{fontSize:10,color:"var(--text-muted)",flexShrink:0}}>{selected.lang} · {selected.content?.length||0} ch</span>
+                    <span style={{fontSize:10,color:"var(--text-muted)",flexShrink:0}}>{selected.lang} | {selected.content?.length||0} ch</span>
                     {saveStatus==="ok"&&<span style={{fontSize:10,color:"#4ade80"}}>✓ Сохранено</span>}
                     {saveStatus==="error"&&<span style={{fontSize:10,color:"#ff6b6b"}}>✕ Ошибка</span>}
                   </div>
@@ -285,7 +290,7 @@ export default function IdeWorkspaceShell({messages=[],libraryFiles:propLib,setL
             ):(
               <div style={{flex:1,display:"flex",alignItems:"center",justifyContent:"center",color:"var(--text-muted)",fontSize:13}}>
                 <div style={{textAlign:"center"}}>
-                  <div style={{fontSize:32,opacity:0.12,marginBottom:8}}>◇</div>
+                  <div style={{fontSize:32,opacity:0.12,marginBottom:8}}>[]</div>
                   <div>Выбери артефакт слева</div>
                   <div style={{fontSize:11,marginTop:4,opacity:0.6}}>Код из ответов Elira появляется автоматически</div>
                 </div>
@@ -302,7 +307,7 @@ export default function IdeWorkspaceShell({messages=[],libraryFiles:propLib,setL
             {[["status","📊 Статус"],["log","📋 Log"],["diff","📄 Diff"]].map(([k,l])=>(
               <button key={k} className={`soft-btn ${gitTab===k?"active":""}`} onClick={()=>fetchGit(k)} style={{fontSize:11,padding:"4px 12px",marginBottom:-1}}>{l}</button>
             ))}
-            {gitLoading&&<span style={{fontSize:11,color:"var(--text-muted)",alignSelf:"center",marginLeft:8}}>⏳</span>}
+            {gitLoading&&<span style={{fontSize:11,color:"var(--text-muted)",alignSelf:"center",marginLeft:8}}>вЏі</span>}
           </div>
           <div style={{flex:1,padding:16,overflow:"auto"}}>
             {gitTab==="status"&&(()=>{const d=gitData.status;if(!d)return null;
@@ -330,7 +335,7 @@ export default function IdeWorkspaceShell({messages=[],libraryFiles:propLib,setL
                         style={{flex:1,padding:"6px 10px",borderRadius:6,border:"1px solid var(--border)",background:"var(--bg-input)",color:"var(--text-primary)",fontSize:12,outline:"none"}}
                       />
                       <button onClick={doCommit} disabled={!commitMsg.trim()||gitLoading} style={{...SBG,padding:"6px 14px",opacity:(!commitMsg.trim()||gitLoading)?0.45:1}}>
-                        {gitLoading?"⏳":"✓"} Commit
+                        {gitLoading?"...":"OK"} Commit
                       </button>
                     </div>
                     <div style={{fontSize:10,color:"var(--text-muted)",marginTop:5}}>git add -A && git commit</div>
@@ -379,7 +384,7 @@ export default function IdeWorkspaceShell({messages=[],libraryFiles:propLib,setL
             )}
             {(fileTree||[]).map((item,i)=>(
               <button key={i} onClick={()=>openFtFile(item)} style={{display:"flex",alignItems:"center",gap:5,width:"100%",padding:`4px ${6+(item.path.split("/").length-1)*10}px`,border:"none",background:ftSelected===item.path?"var(--bg-surface-active)":"transparent",color:ftSelected===item.path?"var(--text-primary)":"var(--text-secondary)",cursor:item.type==="file"?"pointer":"default",textAlign:"left",fontSize:11,borderRadius:4}}>
-                <span style={{fontSize:11,opacity:0.4,flexShrink:0}}>{item.type==="dir"?"▸":"·"}</span>
+                <span style={{fontSize:11,opacity:0.4,flexShrink:0}}>{item.type==="dir"?"DIR":"FILE"}</span>
                 <span style={{overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",flex:1}}>{item.name}</span>
                 {item.type==="file"&&<span style={{fontSize:10,color:"var(--text-muted)",flexShrink:0}}>{item.ext}</span>}
               </button>
@@ -405,7 +410,7 @@ export default function IdeWorkspaceShell({messages=[],libraryFiles:propLib,setL
             <div key={i} style={{padding:"10px 14px",marginBottom:6,borderRadius:8,border:"1px solid var(--border)",background:"var(--bg-surface)"}}>
               <div style={{display:"flex",alignItems:"center",gap:8,flexWrap:"wrap"}}>
                 <code style={{fontSize:10,fontFamily:"var(--font-mono)",color:"var(--accent)"}}>{r.run_id}</code>
-                <span style={{fontSize:10,padding:"1px 7px",borderRadius:20,background:r.ok?"rgba(74,222,128,0.15)":"rgba(255,107,107,0.15)",color:r.ok?"#4ade80":"#ff6b6b"}}>{r.ok?"✓ OK":"✕ Error"}</span>
+                <span style={{fontSize:10,padding:"1px 7px",borderRadius:20,background:r.ok?"rgba(74,222,128,0.15)":"rgba(255,107,107,0.15)",color:r.ok?"#4ade80":"#ff6b6b"}}>{r.ok?"OK":"Error"}</span>
                 {r.route&&<span style={{fontSize:10,color:"var(--text-muted)"}}>route: {r.route}</span>}
                 {r.model&&<span style={{fontSize:10,color:"var(--text-muted)"}}>model: {r.model}</span>}
                 {r.answer_len>0&&<span style={{fontSize:10,color:"var(--text-muted)"}}>{r.answer_len} chars</span>}

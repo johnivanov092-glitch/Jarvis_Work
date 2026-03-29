@@ -1,10 +1,10 @@
 """
-skills_service.py — 4 скилла Jarvis.
+skills_service.py вЂ” 4 СЃРєРёР»Р»Р° Elira.
 
-1. Генерация Word/Excel
-2. SQL запросы (SQLite)
-3. HTTP/API вызовы
-4. Скриншот сайта (playwright)
+1. Р“РµРЅРµСЂР°С†РёСЏ Word/Excel
+2. SQL Р·Р°РїСЂРѕСЃС‹ (SQLite)
+3. HTTP/API РІС‹Р·РѕРІС‹
+4. РЎРєСЂРёРЅС€РѕС‚ СЃР°Р№С‚Р° (playwright)
 """
 from __future__ import annotations
 import io
@@ -23,9 +23,29 @@ OUTPUT_DIR = Path("data/generated")
 OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 
 
-# ═══════════════════════════════════════════════════════════════
-# 1. ГЕНЕРАЦИЯ ФАЙЛОВ
-# ═══════════════════════════════════════════════════════════════
+def screenshot_capability_status() -> dict:
+    try:
+        from playwright.sync_api import sync_playwright  # noqa: F401
+    except ImportError:
+        return {
+            "feature": "screenshot",
+            "available": False,
+            "reason": "optional_dependency_missing",
+            "missing_packages": ["playwright"],
+            "hint": "pip install playwright && playwright install chromium",
+        }
+    return {
+        "feature": "screenshot",
+        "available": True,
+        "reason": None,
+        "missing_packages": [],
+        "hint": None,
+    }
+
+
+# в•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђ
+# 1. Р“Р•РќР•Р РђР¦РРЇ Р¤РђР™Р›РћР’
+# в•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђ
 
 def generate_word(title: str, content: str, filename: str = "") -> dict:
     try:
@@ -54,7 +74,7 @@ def generate_word(title: str, content: str, filename: str = "") -> dict:
         else:
             doc.add_paragraph(line)
 
-    fname = filename or f"jarvis_{int(time.time())}.docx"
+    fname = filename or f"elira_{int(time.time())}.docx"
     if not fname.endswith(".docx"):
         fname += ".docx"
     path = OUTPUT_DIR / fname
@@ -91,7 +111,7 @@ def generate_excel(title: str, data: list, headers: list = None, filename: str =
         max_len = max((len(str(cell.value or "")) for cell in col), default=8)
         ws.column_dimensions[col[0].column_letter].width = min(max_len + 4, 50)
 
-    fname = filename or f"jarvis_{int(time.time())}.xlsx"
+    fname = filename or f"elira_{int(time.time())}.xlsx"
     if not fname.endswith(".xlsx"):
         fname += ".xlsx"
     path = OUTPUT_DIR / fname
@@ -100,9 +120,9 @@ def generate_excel(title: str, data: list, headers: list = None, filename: str =
             "download_url": f"/api/skills/download/{fname}"}
 
 
-# ═══════════════════════════════════════════════════════════════
-# 2. SQL ЗАПРОСЫ
-# ═══════════════════════════════════════════════════════════════
+# в•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђ
+# 2. SQL Р—РђРџР РћРЎР«
+# в•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђ
 
 ALLOWED_DB_DIRS = [Path("data").resolve(), Path("backend/data").resolve()]
 
@@ -114,7 +134,7 @@ def _safe_db(db_path: str) -> Path:
             return p
         except ValueError:
             continue
-    raise ValueError(f"Запрещено: {db_path}. Только data/")
+    raise ValueError(f"Р—Р°РїСЂРµС‰РµРЅРѕ: {db_path}. РўРѕР»СЊРєРѕ data/")
 
 
 def run_sql(db_path: str, query: str, params: list = None, max_rows: int = 100) -> dict:
@@ -123,11 +143,11 @@ def run_sql(db_path: str, query: str, params: list = None, max_rows: int = 100) 
     except ValueError as e:
         return {"ok": False, "error": str(e)}
     if not safe.exists():
-        return {"ok": False, "error": f"Не найдена: {db_path}"}
+        return {"ok": False, "error": f"РќРµ РЅР°Р№РґРµРЅР°: {db_path}"}
 
     q_up = query.strip().upper()
     if any(q_up.startswith(c) for c in ["DROP ", "DELETE ", "TRUNCATE ", "ALTER "]):
-        return {"ok": False, "error": f"Заблокировано: {q_up.split()[0]}"}
+        return {"ok": False, "error": f"Р—Р°Р±Р»РѕРєРёСЂРѕРІР°РЅРѕ: {q_up.split()[0]}"}
 
     try:
         conn = sqlite3.connect(safe)
@@ -179,9 +199,9 @@ def describe_db(db_path: str) -> dict:
         return {"ok": False, "error": str(e)}
 
 
-# ═══════════════════════════════════════════════════════════════
+# в•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђ
 # 3. HTTP / API
-# ═══════════════════════════════════════════════════════════════
+# в•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђ
 
 BLOCKED_HOSTS = {"localhost", "127.0.0.1", "0.0.0.0", "169.254.169.254"}
 
@@ -189,7 +209,7 @@ def http_request(url: str, method: str = "GET", headers: dict = None, body: Any 
     from urllib.parse import urlparse
     parsed = urlparse(url)
     if parsed.hostname in BLOCKED_HOSTS:
-        return {"ok": False, "error": f"Заблокирован: {parsed.hostname}"}
+        return {"ok": False, "error": f"Р—Р°Р±Р»РѕРєРёСЂРѕРІР°РЅ: {parsed.hostname}"}
 
     try:
         kw = {"url": url, "headers": headers or {}, "timeout": timeout}
@@ -206,7 +226,7 @@ def http_request(url: str, method: str = "GET", headers: dict = None, body: Any 
         elif method == "DELETE":
             resp = http_lib.delete(**kw)
         else:
-            return {"ok": False, "error": f"Неизвестный метод: {method}"}
+            return {"ok": False, "error": f"РќРµРёР·РІРµСЃС‚РЅС‹Р№ РјРµС‚РѕРґ: {method}"}
 
         ct = resp.headers.get("content-type", "")
         try:
@@ -217,20 +237,28 @@ def http_request(url: str, method: str = "GET", headers: dict = None, body: Any 
         return {"ok": True, "status": resp.status_code, "body": rbody,
                 "url": str(resp.url), "elapsed_ms": int(resp.elapsed.total_seconds() * 1000)}
     except http_lib.Timeout:
-        return {"ok": False, "error": f"Таймаут ({timeout}с)"}
+        return {"ok": False, "error": f"РўР°Р№РјР°СѓС‚ ({timeout}СЃ)"}
     except Exception as e:
         return {"ok": False, "error": str(e)}
 
 
-# ═══════════════════════════════════════════════════════════════
-# 4. СКРИНШОТ САЙТА
-# ═══════════════════════════════════════════════════════════════
+# в•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђ
+# 4. РЎРљР РРќРЁРћРў РЎРђР™РўРђ
+# в•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђ
 
 def screenshot_url(url: str, width: int = 1280, height: int = 800, full_page: bool = False) -> dict:
     try:
         from playwright.sync_api import sync_playwright
     except ImportError:
-        return {"ok": False, "error": "pip install playwright && playwright install chromium"}
+        status = screenshot_capability_status()
+        return {
+            "ok": False,
+            "error": "Screenshot feature is unavailable",
+            "feature": status["feature"],
+            "reason": status["reason"],
+            "missing_packages": status["missing_packages"],
+            "hint": status["hint"],
+        }
 
     fname = f"screenshot_{int(time.time())}.png"
     path = OUTPUT_DIR / fname
@@ -246,3 +274,4 @@ def screenshot_url(url: str, width: int = 1280, height: int = 800, full_page: bo
                 "download_url": f"/api/skills/download/{fname}", "view_url": f"/api/skills/view/{fname}"}
     except Exception as e:
         return {"ok": False, "error": str(e)}
+

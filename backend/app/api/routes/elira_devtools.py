@@ -201,7 +201,7 @@ def patch_plan(payload: PatchPlanPayload):
         plan_items.append({
             "action": "modify",
             "path": current_path,
-            "reason": "Текущий открытый файл выбран как основной кандидат на изменение.",
+            "reason": "РўРµРєСѓС‰РёР№ РѕС‚РєСЂС‹С‚С‹Р№ С„Р°Р№Р» РІС‹Р±СЂР°РЅ РєР°Рє РѕСЃРЅРѕРІРЅРѕР№ РєР°РЅРґРёРґР°С‚ РЅР° РёР·РјРµРЅРµРЅРёРµ.",
         })
 
     for path in staged_paths[:10]:
@@ -209,39 +209,39 @@ def patch_plan(payload: PatchPlanPayload):
             plan_items.append({
                 "action": "modify",
                 "path": path,
-                "reason": "Файл уже staged, значит участвует в текущем наборе изменений.",
+                "reason": "Р¤Р°Р№Р» СѓР¶Рµ staged, Р·РЅР°С‡РёС‚ СѓС‡Р°СЃС‚РІСѓРµС‚ РІ С‚РµРєСѓС‰РµРј РЅР°Р±РѕСЂРµ РёР·РјРµРЅРµРЅРёР№.",
             })
 
     goal_l = goal.lower()
 
-    if any(word in goal_l for word in ["create", "создай", "добав", "новый файл", "component", "компонент"]):
+    if any(word in goal_l for word in ["create", "СЃРѕР·РґР°Р№", "РґРѕР±Р°РІ", "РЅРѕРІС‹Р№ С„Р°Р№Р»", "component", "РєРѕРјРїРѕРЅРµРЅС‚"]):
         suggested_name = "frontend/src/components/NewFeaturePanel.jsx"
         if not any(item["path"] == suggested_name for item in plan_items):
             plan_items.append({
                 "action": "create",
                 "path": suggested_name,
-                "reason": "Задача выглядит как добавление новой UI-функции или компонента.",
+                "reason": "Р—Р°РґР°С‡Р° РІС‹РіР»СЏРґРёС‚ РєР°Рє РґРѕР±Р°РІР»РµРЅРёРµ РЅРѕРІРѕР№ UI-С„СѓРЅРєС†РёРё РёР»Рё РєРѕРјРїРѕРЅРµРЅС‚Р°.",
             })
 
-    if any(word in goal_l for word in ["route", "router", "endpoint", "api", "backend", "роут", "эндпоинт"]):
+    if any(word in goal_l for word in ["route", "router", "endpoint", "api", "backend", "СЂРѕСѓС‚", "СЌРЅРґРїРѕРёРЅС‚"]):
         suggested_name = "backend/app/api/routes/new_feature.py"
         if not any(item["path"] == suggested_name for item in plan_items):
             plan_items.append({
                 "action": "create",
                 "path": suggested_name,
-                "reason": "Задача затрагивает backend API или роутинг.",
+                "reason": "Р—Р°РґР°С‡Р° Р·Р°С‚СЂР°РіРёРІР°РµС‚ backend API РёР»Рё СЂРѕСѓС‚РёРЅРі.",
             })
 
     if not plan_items:
         plan_items.append({
             "action": "inspect",
             "path": current_path or "project",
-            "reason": "Нужно сначала уточнить затронутую область проекта.",
+            "reason": "РќСѓР¶РЅРѕ СЃРЅР°С‡Р°Р»Р° СѓС‚РѕС‡РЅРёС‚СЊ Р·Р°С‚СЂРѕРЅСѓС‚СѓСЋ РѕР±Р»Р°СЃС‚СЊ РїСЂРѕРµРєС‚Р°.",
         })
 
-    notes.append("Сначала сделай preview diff до apply.")
-    notes.append("Для multi-file изменений лучше stage нужные файлы заранее.")
-    notes.append("После apply выполни verify и проверь history.")
+    notes.append("РЎРЅР°С‡Р°Р»Р° СЃРґРµР»Р°Р№ preview diff РґРѕ apply.")
+    notes.append("Р”Р»СЏ multi-file РёР·РјРµРЅРµРЅРёР№ Р»СѓС‡С€Рµ stage РЅСѓР¶РЅС‹Рµ С„Р°Р№Р»С‹ Р·Р°СЂР°РЅРµРµ.")
+    notes.append("РџРѕСЃР»Рµ apply РІС‹РїРѕР»РЅРё verify Рё РїСЂРѕРІРµСЂСЊ history.")
 
     return {
         "status": "ok",
@@ -249,3 +249,4 @@ def patch_plan(payload: PatchPlanPayload):
         "items": plan_items,
         "notes": notes,
     }
+

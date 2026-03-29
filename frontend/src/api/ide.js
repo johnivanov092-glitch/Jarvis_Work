@@ -1,45 +1,4 @@
-/**
- * ide.js — API-слой Jarvis.
- *
- * Изменения:
- *   • executeStream() — SSE-стриминг через fetch + ReadableStream
- *   • execute() — передаёт history
- *   • Всё остальное без изменений
- */
-
-const API_BASE = import.meta.env.VITE_API_BASE_URL || `http://${window.location.hostname}:8000`;
-
-function normalizeError(payload, status) {
-  if (typeof payload === "string") return payload;
-  if (Array.isArray(payload)) return payload.map((x) => x?.msg || JSON.stringify(x)).join("; ");
-  if (Array.isArray(payload?.detail)) return payload.detail.map((x) => x?.msg || JSON.stringify(x)).join("; ");
-  return payload?.detail || payload?.message || `Request failed: ${status}`;
-}
-
-async function parseResponse(res) {
-  const contentType = res.headers.get("content-type") || "";
-  if (contentType.includes("application/json")) return await res.json();
-  return await res.text();
-}
-
-async function request(path, options = {}) {
-  const res = await fetch(`${API_BASE}${path}`, {
-    method: options.method || "GET",
-    headers: { "Content-Type": "application/json", ...(options.headers || {}) },
-    body: options.body !== undefined ? JSON.stringify(options.body) : undefined,
-  });
-  const payload = await parseResponse(res);
-  if (!res.ok) throw new Error(normalizeError(payload, res.status));
-  return payload;
-}
-
-async function safeRequest(path, options = {}, fallback = null) {
-  try { return await request(path, options); }
-  catch (error) {
-    if (fallback !== null) return typeof fallback === "function" ? fallback(error) : fallback;
-    throw error;
-  }
-}
+import { buildApiUrl, request, safeRequest } from "./client";
 
 function normalizeArray(payload) {
   if (Array.isArray(payload)) return payload;
@@ -58,7 +17,7 @@ function normalizeChat(item = {}) {
   return {
     ...item,
     id: item.id ?? "",
-    title: item.title ?? "Новый чат",
+    title: item.title ?? "New chat",
     pinned: Boolean(item.pinned),
     memory_saved: Boolean(item.memory_saved),
   };
@@ -78,57 +37,84 @@ function extractAgentError(payload) {
   if (!payload || typeof payload !== "object") return "";
   if (payload.ok === false) {
     if (typeof payload?.meta?.error === "string" && payload.meta.error.trim()) return payload.meta.error;
-    return "run_agent вернул ошибку";
+    return "run_agent returned an error";
   }
   return "";
 }
 
+function formatRequestError(error, fallback = "Request failed") {
+  const value = error?.message ?? error?.detail ?? error;
+  if (!value) return fallback;
+  if (typeof value === "string") return value;
+  if (Array.isArray(value)) return value.map((item) => formatRequestError(item, "")).filter(Boolean).join(" | ") || fallback;
+  if (typeof value === "object") return value.message || value.msg || JSON.stringify(value);
+  return String(value);
+}
+
+function withParams(path, params = {}) {
+  const query = new URLSearchParams();
+  Object.entries(params).forEach(([key, value]) => {
+    if (value === undefined || value === null || value === "") return;
+    query.set(key, String(value));
+  });
+  const suffix = query.toString();
+  return suffix ? `${path}?${suffix}` : path;
+}
+
+export function isLocalApiAssetUrl(url = "") {
+  return typeof url === "string" && (
+    url.includes("/api/skills/download/") ||
+    url.includes("/api/skills/view/") ||
+    url.includes("/api/extra/")
+  );
+}
+
 export async function listChats() {
-  const payload = await safeRequest("/api/jarvis/chats", {}, []);
+  const payload = await safeRequest("/api/elira/chats", {}, []);
   return normalizeArray(payload).map(normalizeChat);
 }
 
 export async function createChat(body = {}) {
-  return normalizeChat(unwrapItem(await request("/api/jarvis/chats", { method: "POST", body })));
+  return normalizeChat(unwrapItem(await request("/api/elira/chats", { method: "POST", body })));
 }
 
 export async function renameChat(arg1, arg2) {
-  const p = typeof arg1 === "object" && arg1 !== null ? arg1 : { id: arg1, title: arg2 };
-  return normalizeChat(unwrapItem(await request(`/api/jarvis/chats/${encodeURIComponent(p.id)}`, {
+  const payload = typeof arg1 === "object" && arg1 !== null ? arg1 : { id: arg1, title: arg2 };
+  return normalizeChat(unwrapItem(await request(`/api/elira/chats/${encodeURIComponent(payload.id)}`, {
     method: "PATCH",
-    body: { title: p.title },
+    body: { title: payload.title },
   })));
 }
 
 export async function pinChat(arg1, arg2) {
-  const p = typeof arg1 === "object" && arg1 !== null ? arg1 : { id: arg1, pinned: arg2 };
-  return normalizeChat(unwrapItem(await request(`/api/jarvis/chats/${encodeURIComponent(p.id)}/pin`, {
+  const payload = typeof arg1 === "object" && arg1 !== null ? arg1 : { id: arg1, pinned: arg2 };
+  return normalizeChat(unwrapItem(await request(`/api/elira/chats/${encodeURIComponent(payload.id)}/pin`, {
     method: "PATCH",
-    body: { pinned: Boolean(p.pinned) },
+    body: { pinned: Boolean(payload.pinned) },
   })));
 }
 
 export async function saveChatToMemory(arg1, arg2) {
-  const p = typeof arg1 === "object" && arg1 !== null ? arg1 : { id: arg1, saved: arg2 };
-  return normalizeChat(unwrapItem(await request(`/api/jarvis/chats/${encodeURIComponent(p.id)}/memory`, {
+  const payload = typeof arg1 === "object" && arg1 !== null ? arg1 : { id: arg1, saved: arg2 };
+  return normalizeChat(unwrapItem(await request(`/api/elira/chats/${encodeURIComponent(payload.id)}/memory`, {
     method: "PATCH",
-    body: { memory_saved: Boolean(p.saved) },
+    body: { memory_saved: Boolean(payload.saved) },
   })));
 }
 
 export async function deleteChat(arg) {
   const id = typeof arg === "object" && arg !== null ? arg.id : arg;
-  return request(`/api/jarvis/chats/${encodeURIComponent(id)}`, { method: "DELETE" });
+  return request(`/api/elira/chats/${encodeURIComponent(id)}`, { method: "DELETE" });
 }
 
 export async function getMessages(arg) {
   const chatId = typeof arg === "object" && arg !== null ? arg.chatId : arg;
-  const payload = await safeRequest(`/api/jarvis/chats/${encodeURIComponent(chatId)}/messages`, {}, []);
+  const payload = await safeRequest(`/api/elira/chats/${encodeURIComponent(chatId)}/messages`, {}, []);
   return normalizeArray(payload).map(normalizeMessage);
 }
 
 export async function addMessage(body = {}) {
-  return normalizeMessage(unwrapItem(await request("/api/jarvis/messages", {
+  return normalizeMessage(unwrapItem(await request("/api/elira/messages", {
     method: "POST",
     body: {
       chat_id: body.chatId ?? body.chat_id ?? null,
@@ -138,7 +124,9 @@ export async function addMessage(body = {}) {
   })));
 }
 
-export async function sendMessage(body = {}) { return addMessage(body); }
+export async function sendMessage(body = {}) {
+  return addMessage(body);
+}
 
 export async function execute(body = {}) {
   const response = await request("/api/chat/send", {
@@ -156,25 +144,10 @@ export async function execute(body = {}) {
   const routeError = extractAgentError(response);
   if (routeError) throw new Error(routeError);
   const content = response?.content ?? response?.answer ?? response?.response ?? response?.message ?? "";
-  if (!String(content).trim()) throw new Error("Пустой ответ от /api/chat/send");
+  if (!String(content).trim()) throw new Error("Empty response from /api/chat/send");
   return { ...response, content: String(content) };
 }
 
-
-// ═══════════════════════════════════════════════════════════════
-// SSE-СТРИМИНГ
-// ═══════════════════════════════════════════════════════════════
-
-/**
- * Стриминг ответа через SSE.
- *
- * @param {Object}   body         — параметры запроса
- * @param {Function} onToken      — вызывается для каждого токена: onToken(token: string)
- * @param {Function} onDone       — вызывается по завершении: onDone({ full_text, meta, timeline })
- * @param {Function} onError      — вызывается при ошибке: onError(errorMessage: string)
- * @param {Function} [onPhase]    — опционально: вызывается при смене фазы (tools_done, reflection)
- * @returns {AbortController}     — для отмены запроса
- */
 export function executeStream(body = {}, { onToken, onDone, onError, onPhase } = {}) {
   const controller = new AbortController();
 
@@ -204,7 +177,7 @@ export function executeStream(body = {}, { onToken, onDone, onError, onPhase } =
     use_plugins: body.use_plugins ?? true,
   };
 
-  fetch(`${API_BASE}/api/chat/stream`, {
+  fetch(buildApiUrl("/api/chat/stream"), {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(payload),
@@ -226,10 +199,8 @@ export function executeStream(body = {}, { onToken, onDone, onError, onPhase } =
           if (done) break;
 
           buffer += decoder.decode(value, { stream: true });
-
-          // Парсим SSE-события из буфера
           const lines = buffer.split("\n");
-          buffer = lines.pop() || ""; // Неполная строка остаётся в буфере
+          buffer = lines.pop() || "";
 
           for (const line of lines) {
             const trimmed = line.trim();
@@ -243,19 +214,9 @@ export function executeStream(body = {}, { onToken, onDone, onError, onPhase } =
                 return;
               }
 
-              if (event.phase && onPhase) {
-                onPhase(event);
-              }
-
-              // Reflection заменяет весь текст
-              if (event.phase === "reflection_replace" && event.full_text) {
-                onPhase?.(event);
-                continue;
-              }
-
-              if (event.token) {
-                onToken?.(event.token);
-              }
+              if (event.phase && onPhase) onPhase(event);
+              if (event.phase === "reflection_replace" && event.full_text) continue;
+              if (event.token) onToken?.(event.token);
 
               if (event.done) {
                 onDone?.({
@@ -265,74 +226,418 @@ export function executeStream(body = {}, { onToken, onDone, onError, onPhase } =
                 });
                 return;
               }
-            } catch (parseErr) {
-              console.warn("SSE parse error:", trimmed.slice(0, 100), parseErr);
+            } catch (parseError) {
+              console.warn("SSE parse error:", trimmed.slice(0, 100), parseError);
             }
           }
         }
 
-        // Если стрим закончился без done-пакета
         onDone?.({ full_text: "", meta: {}, timeline: [] });
       } finally {
         reader.cancel().catch(() => {});
       }
     })
-    .catch((err) => {
-      if (err.name === "AbortError") return;
-      onError?.(err.message || "Stream error");
+    .catch((error) => {
+      if (error.name === "AbortError") return;
+      onError?.(error.message || "Stream error");
     });
 
   return controller;
 }
 
-
 export async function listOllamaModels() {
-  const payload = await safeRequest("/api/jarvis/models", {}, []);
+  const payload = await safeRequest("/api/elira/models", {}, []);
   if (Array.isArray(payload?.models)) return { models: payload.models };
   if (Array.isArray(payload?.items)) return { models: payload.items };
   if (Array.isArray(payload)) return { models: payload };
   return { models: [] };
 }
 
-export async function getSettings() { return safeRequest("/api/jarvis/settings", {}, {}); }
-export async function updateSettings(body = {}) {
-  return request("/api/jarvis/settings", { method: "PUT", body });
+export async function getSettings() {
+  return safeRequest("/api/elira/settings", {}, {});
 }
-export async function searchJarvis(query = "") { return normalizeArray(await safeRequest(`/api/jarvis/search?q=${encodeURIComponent(query)}`, {}, [])); }
-export async function listProjects() { return normalizeArray(await safeRequest("/api/jarvis/projects", {}, [])); }
+
+export async function updateSettings(body = {}) {
+  return request("/api/elira/settings", { method: "PUT", body });
+}
 
 export async function getProjectSnapshot() {
   const payload = await request("/api/project-brain/snapshot");
   return { ...payload, files: Array.isArray(payload?.files) ? payload.files : [] };
 }
-export async function getProjectFile(path) { return request(`/api/project-brain/file?path=${encodeURIComponent(path)}`); }
-export async function getProjectBrainStatus() { return safeRequest("/api/project-brain/status", {}, { status: "unknown" }); }
+
+export async function getProjectFile(path) {
+  return request(`/api/project-brain/file?path=${encodeURIComponent(path)}`);
+}
+
+export async function getProjectBrainStatus() {
+  return safeRequest("/api/project-brain/status", {}, { status: "unknown" });
+}
+
+export async function getDashboardOverview() {
+  const [statsResult, projectBrainStatusResult] = await Promise.allSettled([
+    request("/api/dashboard/stats"),
+    getProjectBrainStatus(),
+  ]);
+
+  const errors = [];
+  const stats = statsResult.status === "fulfilled" ? statsResult.value : null;
+  const projectBrainStatus = projectBrainStatusResult.status === "fulfilled" ? projectBrainStatusResult.value : null;
+
+  if (statsResult.status === "rejected") {
+    errors.push(`dashboard stats: ${formatRequestError(statsResult.reason)}`);
+  }
+  if (projectBrainStatusResult.status === "rejected") {
+    errors.push(`project brain status: ${formatRequestError(projectBrainStatusResult.reason)}`);
+  }
+  if (!stats && !projectBrainStatus && errors.length) {
+    throw new Error(errors.join(" | "));
+  }
+
+  return { stats, projectBrainStatus, errors };
+}
 
 export async function listPatchHistory({ path = "", limit = 20 } = {}) {
-  const query = new URLSearchParams();
-  if (path) query.set("path", path);
-  if (limit) query.set("limit", String(limit));
-  const payload = await safeRequest(`/api/jarvis/patch/history/list${query.toString() ? `?${query.toString()}` : ""}`, {}, { items: [] });
+  const payload = await safeRequest(withParams("/api/elira/patch/history/list", { path, limit }), {}, { items: [] });
   return { ...payload, items: normalizeArray(payload) };
 }
-export async function previewPatch(body = {}) { return request("/api/jarvis/patch/diff", { method: "POST", body }); }
-export async function applyPatch(body = {}) { return request("/api/jarvis/patch/apply", { method: "POST", body }); }
-export async function rollbackPatch(body = {}) { return request("/api/jarvis/patch/rollback", { method: "POST", body }); }
-export async function verifyPatch(body = {}) { return request("/api/jarvis/patch/verify", { method: "POST", body }); }
-export async function listRunHistory() {
-  const payload = await safeRequest("/api/jarvis/run-history/list", {}, { items: [] });
-  return { ...payload, items: normalizeArray(payload) };
+
+export async function previewPatch(body = {}) {
+  return request("/api/elira/patch/diff", { method: "POST", body });
 }
-export async function autocodeSuggest(body = {}) { return request("/api/jarvis/autocode/suggest", { method: "POST", body }); }
-export async function autocodeLoop(body = {}) { return request("/api/jarvis/autocode/loop", { method: "POST", body }); }
+
+export async function applyPatch(body = {}) {
+  return request("/api/elira/patch/apply", { method: "POST", body });
+}
+
+export async function rollbackPatch(body = {}) {
+  return request("/api/elira/patch/rollback", { method: "POST", body });
+}
+
+export async function verifyPatch(body = {}) {
+  return request("/api/elira/patch/verify", { method: "POST", body });
+}
+
+export async function extractUploadedFileText(file) {
+  const formData = new FormData();
+  formData.append("file", file);
+  return request("/api/files/extract-text", { method: "POST", body: formData });
+}
+
+export async function listLibraryFiles() {
+  return safeRequest("/api/lib/list", {}, null);
+}
+
+export async function uploadLibraryFile(file, { useInContext = false } = {}) {
+  const formData = new FormData();
+  formData.append("file", file);
+  formData.append("use_in_context", String(useInContext));
+  return request("/api/lib/add", { method: "POST", body: formData });
+}
+
+export async function deleteLibraryFile(id) {
+  return request(`/api/lib/${encodeURIComponent(id)}`, { method: "DELETE" });
+}
+
+export async function listTasks(status) {
+  return request(withParams("/api/tasks/list", { status }));
+}
+
+export async function getTaskStats() {
+  return request("/api/tasks/stats");
+}
+
+export async function getTasksOverview(filter = "active") {
+  let tasks = [];
+  if (filter === "active") {
+    const [todo, inProgress] = await Promise.all([
+      listTasks("todo"),
+      listTasks("in_progress"),
+    ]);
+    tasks = [...(todo?.tasks || []), ...(inProgress?.tasks || [])];
+  } else if (filter === "all") {
+    const data = await listTasks();
+    tasks = data?.tasks || [];
+  } else {
+    const data = await listTasks(filter);
+    tasks = data?.tasks || [];
+  }
+  const stats = await getTaskStats();
+  return { tasks, stats };
+}
+
+export async function createTask(body = {}) {
+  return request("/api/tasks/create", { method: "POST", body });
+}
+
+export async function updateTask(taskId, body = {}) {
+  return request(`/api/tasks/update/${encodeURIComponent(taskId)}`, { method: "PUT", body });
+}
+
+export async function deleteTask(taskId) {
+  return request(`/api/tasks/delete/${encodeURIComponent(taskId)}`, { method: "DELETE" });
+}
+
+export async function listPipelines() {
+  const payload = await request("/api/pipelines/list");
+  return payload?.pipelines || [];
+}
+
+export async function createPipeline(body = {}) {
+  return request("/api/pipelines/create", { method: "POST", body });
+}
+
+export async function runPipeline(pipelineId) {
+  return request(`/api/pipelines/run/${encodeURIComponent(pipelineId)}`, { method: "POST" });
+}
+
+export async function updatePipeline(pipelineId, body = {}) {
+  return request(`/api/pipelines/update/${encodeURIComponent(pipelineId)}`, { method: "PUT", body });
+}
+
+export async function deletePipeline(pipelineId) {
+  return request(`/api/pipelines/delete/${encodeURIComponent(pipelineId)}`, { method: "DELETE" });
+}
+
+export async function getTelegramConfig() {
+  return request("/api/telegram/config");
+}
+
+export async function listTelegramUsers() {
+  return request("/api/telegram/users");
+}
+
+export async function getTelegramLog(limit = 30) {
+  return request(withParams("/api/telegram/log", { limit }));
+}
+
+export async function getTelegramOverview(limit = 30) {
+  const [config, users, log] = await Promise.all([
+    getTelegramConfig(),
+    listTelegramUsers(),
+    getTelegramLog(limit),
+  ]);
+  return {
+    config,
+    users: users?.users || [],
+    log: log?.log || [],
+  };
+}
+
+export async function startTelegramBot() {
+  const payload = await request("/api/telegram/start", { method: "POST" });
+  if (payload?.ok === false) throw new Error(payload.error || "Failed to start Telegram bot");
+  return payload;
+}
+
+export async function stopTelegramBot() {
+  return request("/api/telegram/stop", { method: "POST" });
+}
+
+export async function testTelegramBot() {
+  return request("/api/telegram/test");
+}
+
+export async function updateTelegramConfig(body = {}) {
+  return request("/api/telegram/config", { method: "PUT", body });
+}
+
+export async function toggleTelegramUser(body = {}) {
+  return request("/api/telegram/users/toggle", { method: "POST", body });
+}
+
+export async function listPlugins() {
+  const payload = await request("/api/extra/plugins/list");
+  return payload?.plugins || [];
+}
+
+export async function reloadPlugins() {
+  return request("/api/extra/plugins/reload", { method: "POST" });
+}
+
+export async function setPluginEnabled(name, enabled) {
+  const action = enabled ? "enable" : "disable";
+  return request(`/api/extra/plugins/${action}/${encodeURIComponent(name)}`, { method: "POST" });
+}
+
+export async function getAdvancedProjectInfo() {
+  return request("/api/advanced/project/info");
+}
+
+export async function openAdvancedProject(path) {
+  return request("/api/advanced/project/open", { method: "POST", body: { path } });
+}
+
+export async function getAdvancedProjectTree({ maxDepth = 3, maxItems = 300 } = {}) {
+  return request(withParams("/api/advanced/project/tree", {
+    max_depth: maxDepth,
+    max_items: maxItems,
+  }));
+}
+
+export async function readAdvancedProjectFile(path, maxChars) {
+  const body = { path };
+  if (maxChars) body.max_chars = maxChars;
+  return request("/api/advanced/project/read", { method: "POST", body });
+}
+
+export async function searchAdvancedProject(query) {
+  return request("/api/advanced/project/search", { method: "POST", body: { query } });
+}
+
+export async function closeAdvancedProject() {
+  return request("/api/advanced/project/close");
+}
+
+export async function runAdvancedMultiAgent(body = {}) {
+  return request("/api/advanced/multi-agent", { method: "POST", body });
+}
+
+export async function getGitStatus() {
+  return request("/api/git/status");
+}
+
+export async function getGitLog(limit = 20) {
+  return request(withParams("/api/git/log", { limit }));
+}
+
+export async function getGitDiff(body = { repo_path: "", file_path: "" }) {
+  return request("/api/git/diff", { method: "POST", body });
+}
+
+export async function createGitCommit(body = {}) {
+  return request("/api/git/commit", { method: "POST", body });
+}
+
+export async function listToolRuns(limit = 50) {
+  const payload = await request(withParams("/api/tools/run-history", { limit }));
+  return payload?.runs || [];
+}
+
+export async function runPythonCode(code) {
+  return request("/api/tools/run-python", { method: "POST", body: { code } });
+}
+
+export async function analyzeCode(body = {}) {
+  return request("/api/tools/analyze-code", { method: "POST", body });
+}
+
+export async function diffFile(body = {}) {
+  return request("/api/file-ops/diff", { method: "POST", body });
+}
+
+export async function writeFile(body = {}) {
+  return request("/api/file-ops/write", { method: "POST", body });
+}
+
+export async function listSmartMemory(limit = 100) {
+  const payload = await request(withParams("/api/smart-memory/list", { limit }));
+  return payload?.items || [];
+}
+
+export async function getSmartMemoryStats() {
+  return request("/api/smart-memory/stats");
+}
+
+export async function addSmartMemory(body = {}) {
+  return request("/api/smart-memory/add", { method: "POST", body });
+}
+
+export async function deleteSmartMemory(id) {
+  return request(`/api/smart-memory/${encodeURIComponent(id)}`, { method: "DELETE" });
+}
+
+export async function searchSmartMemory(query, limit = 20) {
+  const payload = await request("/api/smart-memory/search", {
+    method: "POST",
+    body: { query, limit },
+  });
+  return payload?.items || [];
+}
+
+export async function getTerminalCwd() {
+  return safeRequest("/api/terminal/cwd", {}, null);
+}
+
+export async function executeTerminal(body = {}) {
+  return request("/api/terminal/exec", { method: "POST", body });
+}
 
 export const api = {
-  listChats, createChat, renameChat, pinChat, saveChatToMemory, deleteChat,
-  getMessages, addMessage, sendMessage, execute, executeStream, listOllamaModels,
-  getSettings, updateSettings, searchJarvis, listProjects,
-  getProjectSnapshot, getProjectFile, getProjectBrainStatus,
-  listPatchHistory, previewPatch, applyPatch, rollbackPatch, verifyPatch,
-  listRunHistory, autocodeSuggest, autocodeLoop,
+  listChats,
+  createChat,
+  renameChat,
+  pinChat,
+  saveChatToMemory,
+  deleteChat,
+  getMessages,
+  addMessage,
+  sendMessage,
+  execute,
+  executeStream,
+  listOllamaModels,
+  getSettings,
+  updateSettings,
+  getProjectSnapshot,
+  getProjectFile,
+  getProjectBrainStatus,
+  getDashboardOverview,
+  listPatchHistory,
+  previewPatch,
+  applyPatch,
+  rollbackPatch,
+  verifyPatch,
+  extractUploadedFileText,
+  listLibraryFiles,
+  uploadLibraryFile,
+  deleteLibraryFile,
+  listTasks,
+  getTaskStats,
+  getTasksOverview,
+  createTask,
+  updateTask,
+  deleteTask,
+  listPipelines,
+  createPipeline,
+  runPipeline,
+  updatePipeline,
+  deletePipeline,
+  getTelegramConfig,
+  listTelegramUsers,
+  getTelegramLog,
+  getTelegramOverview,
+  startTelegramBot,
+  stopTelegramBot,
+  testTelegramBot,
+  updateTelegramConfig,
+  toggleTelegramUser,
+  listPlugins,
+  reloadPlugins,
+  setPluginEnabled,
+  getAdvancedProjectInfo,
+  openAdvancedProject,
+  getAdvancedProjectTree,
+  readAdvancedProjectFile,
+  searchAdvancedProject,
+  closeAdvancedProject,
+  runAdvancedMultiAgent,
+  getGitStatus,
+  getGitLog,
+  getGitDiff,
+  createGitCommit,
+  listToolRuns,
+  runPythonCode,
+  analyzeCode,
+  diffFile,
+  writeFile,
+  listSmartMemory,
+  getSmartMemoryStats,
+  addSmartMemory,
+  deleteSmartMemory,
+  searchSmartMemory,
+  getTerminalCwd,
+  executeTerminal,
+  isLocalApiAssetUrl,
 };
 
 export default api;

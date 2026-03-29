@@ -1,6 +1,7 @@
-import JarvisChatShell from "./components/JarvisChatShell";
+import EliraChatShell from "./components/EliraChatShell";
 import "./styles.css";
 
 export default function App() {
-  return <JarvisChatShell />;
+  return <EliraChatShell />;
 }
+

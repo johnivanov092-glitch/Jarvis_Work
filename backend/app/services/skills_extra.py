@@ -1,13 +1,13 @@
 """
-skills_extra.py — дополнительные скиллы Jarvis.
+skills_extra.py вЂ” РґРѕРїРѕР»РЅРёС‚РµР»СЊРЅС‹Рµ СЃРєРёР»Р»С‹ Elira.
 
-1. 🔐 Шифрование заметок (AES через Fernet)
-2. 📦 Архиватор (ZIP создание/распаковка)
-3. 🔄 Конвертер файлов (MD→DOCX, CSV→XLSX, JSON→CSV)
-4. 📐 Regex помощник
-5. 🌍 Переводчик (Ollama)
-6. 📈 CSV/данные анализ
-7. 📡 Webhook (хранилище входящих)
+1. рџ”ђ РЁРёС„СЂРѕРІР°РЅРёРµ Р·Р°РјРµС‚РѕРє (AES С‡РµСЂРµР· Fernet)
+2. рџ“¦ РђСЂС…РёРІР°С‚РѕСЂ (ZIP СЃРѕР·РґР°РЅРёРµ/СЂР°СЃРїР°РєРѕРІРєР°)
+3. рџ”„ РљРѕРЅРІРµСЂС‚РµСЂ С„Р°Р№Р»РѕРІ (MDв†’DOCX, CSVв†’XLSX, JSONв†’CSV)
+4. рџ“ђ Regex РїРѕРјРѕС‰РЅРёРє
+5. рџЊЌ РџРµСЂРµРІРѕРґС‡РёРє (Ollama)
+6. рџ“€ CSV/РґР°РЅРЅС‹Рµ Р°РЅР°Р»РёР·
+7. рџ“Ў Webhook (С…СЂР°РЅРёР»РёС‰Рµ РІС…РѕРґСЏС‰РёС…)
 """
 from __future__ import annotations
 import csv
@@ -31,11 +31,11 @@ LEGACY_UPLOADS = PROJECT_ROOT / "data" / "uploads"
 BACKEND_UPLOADS = Path("data/uploads")
 
 
-# ═══════════════════════════════════════════════════════════════
-# 1. ШИФРОВАНИЕ (Fernet = AES-128-CBC)
-# ═══════════════════════════════════════════════════════════════
+# в•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђ
+# 1. РЁРР¤Р РћР’РђРќРР• (Fernet = AES-128-CBC)
+# в•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђ
 
-_KEY_FILE = Path("data/jarvis_secret.key")
+_KEY_FILE = Path("data/elira_secret.key")
 
 
 def _get_fernet():
@@ -67,21 +67,21 @@ def decrypt_text(token: str) -> dict:
         plain = f.decrypt(token.encode("utf-8"))
         return {"ok": True, "decrypted": plain.decode("utf-8")}
     except Exception as e:
-        return {"ok": False, "error": f"Расшифровка не удалась: {e}"}
+        return {"ok": False, "error": f"Р Р°СЃС€РёС„СЂРѕРІРєР° РЅРµ СѓРґР°Р»Р°СЃСЊ: {e}"}
 
 
-# ═══════════════════════════════════════════════════════════════
-# 2. АРХИВАТОР
-# ═══════════════════════════════════════════════════════════════
+# в•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђ
+# 2. РђР РҐРР’РђРўРћР 
+# в•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђ
 
 def create_zip(source_path: str, output_name: str = "") -> dict:
-    """Запаковывает файл/папку в ZIP."""
+    """Р—Р°РїР°РєРѕРІС‹РІР°РµС‚ С„Р°Р№Р»/РїР°РїРєСѓ РІ ZIP."""
     src = Path(source_path)
     if not src.exists():
-        # Попробуем в workspace
+        # РџРѕРїСЂРѕР±СѓРµРј РІ workspace
         src = WORKSPACE / source_path
     if not src.exists():
-        return {"ok": False, "error": f"Не найдено: {source_path}"}
+        return {"ok": False, "error": f"РќРµ РЅР°Р№РґРµРЅРѕ: {source_path}"}
 
     fname = output_name or f"{src.stem}_{int(time.time())}.zip"
     if not fname.endswith(".zip"):
@@ -101,10 +101,10 @@ def create_zip(source_path: str, output_name: str = "") -> dict:
 
 
 def extract_zip(zip_path: str, dest: str = "") -> dict:
-    """Распаковывает ZIP."""
+    """Р Р°СЃРїР°РєРѕРІС‹РІР°РµС‚ ZIP."""
     zp = Path(zip_path)
     if not zp.exists():
-        return {"ok": False, "error": f"Не найден: {zip_path}"}
+        return {"ok": False, "error": f"РќРµ РЅР°Р№РґРµРЅ: {zip_path}"}
     dest_dir = Path(dest) if dest else WORKSPACE / zp.stem
     dest_dir.mkdir(parents=True, exist_ok=True)
 
@@ -115,12 +115,12 @@ def extract_zip(zip_path: str, dest: str = "") -> dict:
     return {"ok": True, "dest": str(dest_dir), "files": names[:50], "count": len(names)}
 
 
-# ═══════════════════════════════════════════════════════════════
-# 3. КОНВЕРТЕР ФАЙЛОВ
-# ═══════════════════════════════════════════════════════════════
+# в•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђ
+# 3. РљРћРќР’Р•Р РўР•Р  Р¤РђР™Р›РћР’
+# в•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђ
 
 def convert_file(source_path: str, target_format: str) -> dict:
-    """Конвертирует: CSV→XLSX, JSON→CSV, MD→DOCX, XLSX→CSV."""
+    """РљРѕРЅРІРµСЂС‚РёСЂСѓРµС‚: CSVв†’XLSX, JSONв†’CSV, MDв†’DOCX, XLSXв†’CSV."""
     src = Path(source_path)
     if not src.exists():
         src = WORKSPACE / source_path
@@ -129,7 +129,7 @@ def convert_file(source_path: str, target_format: str) -> dict:
             if not src.exists():
                 src = LEGACY_UPLOADS / source_path
     if not src.exists():
-        return {"ok": False, "error": f"Не найден: {source_path}"}
+        return {"ok": False, "error": f"РќРµ РЅР°Р№РґРµРЅ: {source_path}"}
 
     ext = src.suffix.lower()
     target = target_format.lower().strip(".")
@@ -146,7 +146,7 @@ def convert_file(source_path: str, target_format: str) -> dict:
         elif ext in (".xlsx", ".xls") and target == "csv":
             return _xlsx_to_csv(src, out, fname)
         else:
-            return {"ok": False, "error": f"Конвертация {ext} → .{target} не поддерживается"}
+            return {"ok": False, "error": f"РљРѕРЅРІРµСЂС‚Р°С†РёСЏ {ext} в†’ .{target} РЅРµ РїРѕРґРґРµСЂР¶РёРІР°РµС‚СЃСЏ"}
     except Exception as e:
         return {"ok": False, "error": str(e)}
 
@@ -173,7 +173,7 @@ def _json_to_csv(src, out, fname):
     if isinstance(data, dict):
         data = [data]
     if not isinstance(data, list) or not data:
-        return {"ok": False, "error": "JSON должен быть массивом объектов"}
+        return {"ok": False, "error": "JSON РґРѕР»Р¶РµРЅ Р±С‹С‚СЊ РјР°СЃСЃРёРІРѕРј РѕР±СЉРµРєС‚РѕРІ"}
     keys = list(data[0].keys())
     with open(out, "w", encoding="utf-8", newline="") as f:
         writer = csv.DictWriter(f, fieldnames=keys)
@@ -215,12 +215,12 @@ def _xlsx_to_csv(src, out, fname):
     return {"ok": True, "filename": fname, "download_url": f"/api/skills/download/{fname}"}
 
 
-# ═══════════════════════════════════════════════════════════════
-# 4. REGEX ПОМОЩНИК
-# ═══════════════════════════════════════════════════════════════
+# в•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђ
+# 4. REGEX РџРћРњРћР©РќРРљ
+# в•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђ
 
 def test_regex(pattern: str, text: str, flags: str = "") -> dict:
-    """Тестирует regex на строке."""
+    """РўРµСЃС‚РёСЂСѓРµС‚ regex РЅР° СЃС‚СЂРѕРєРµ."""
     try:
         fl = 0
         if "i" in flags:
@@ -248,15 +248,15 @@ def test_regex(pattern: str, text: str, flags: str = "") -> dict:
             "has_match": len(matches) > 0,
         }
     except re.error as e:
-        return {"ok": False, "error": f"Невалидный regex: {e}"}
+        return {"ok": False, "error": f"РќРµРІР°Р»РёРґРЅС‹Р№ regex: {e}"}
 
 
-# ═══════════════════════════════════════════════════════════════
-# 5. ПЕРЕВОДЧИК (через Ollama)
-# ═══════════════════════════════════════════════════════════════
+# в•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђ
+# 5. РџР•Р Р•Р’РћР”Р§РРљ (С‡РµСЂРµР· Ollama)
+# в•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђ
 
 def translate_text(text: str, target_lang: str = "english", model: str = "qwen3:8b") -> dict:
-    """Перевод через LLM."""
+    """РџРµСЂРµРІРѕРґ С‡РµСЂРµР· LLM."""
     try:
         import ollama
         resp = ollama.chat(
@@ -273,12 +273,12 @@ def translate_text(text: str, target_lang: str = "english", model: str = "qwen3:
         return {"ok": False, "error": str(e)}
 
 
-# ═══════════════════════════════════════════════════════════════
-# 6. CSV / ДАННЫЕ АНАЛИЗ
-# ═══════════════════════════════════════════════════════════════
+# в•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђ
+# 6. CSV / Р”РђРќРќР«Р• РђРќРђР›РР—
+# в•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђ
 
 def analyze_csv(file_path: str, query: str = "") -> dict:
-    """Анализирует CSV файл: статистика, первые строки, агрегации."""
+    """РђРЅР°Р»РёР·РёСЂСѓРµС‚ CSV С„Р°Р№Р»: СЃС‚Р°С‚РёСЃС‚РёРєР°, РїРµСЂРІС‹Рµ СЃС‚СЂРѕРєРё, Р°РіСЂРµРіР°С†РёРё."""
     fp = Path(file_path)
     if not fp.exists():
         fp = WORKSPACE / file_path
@@ -287,7 +287,7 @@ def analyze_csv(file_path: str, query: str = "") -> dict:
             if not fp.exists():
                 fp = LEGACY_UPLOADS / file_path
     if not fp.exists():
-        return {"ok": False, "error": f"Не найден: {file_path}"}
+        return {"ok": False, "error": f"РќРµ РЅР°Р№РґРµРЅ: {file_path}"}
 
     try:
         import pandas as pd
@@ -304,13 +304,13 @@ def analyze_csv(file_path: str, query: str = "") -> dict:
             "nulls": df.isnull().sum().to_dict(),
         }
 
-        # Статистика по числовым колонкам
+        # РЎС‚Р°С‚РёСЃС‚РёРєР° РїРѕ С‡РёСЃР»РѕРІС‹Рј РєРѕР»РѕРЅРєР°Рј
         num_cols = df.select_dtypes(include=["int64", "float64"]).columns
         if len(num_cols) > 0:
             desc = df[num_cols].describe()
             result["describe"] = desc.to_dict()
 
-        # Если есть запрос — выполняем eval
+        # Р•СЃР»Рё РµСЃС‚СЊ Р·Р°РїСЂРѕСЃ вЂ” РІС‹РїРѕР»РЅСЏРµРј eval
         if query.strip():
             try:
                 eval_result = df.eval(query) if not query.strip().startswith("df") else eval(query, {"df": df, "pd": pd})
@@ -328,9 +328,9 @@ def analyze_csv(file_path: str, query: str = "") -> dict:
         return {"ok": False, "error": str(e)}
 
 
-# ═══════════════════════════════════════════════════════════════
-# 7. WEBHOOK ХРАНИЛИЩЕ
-# ═══════════════════════════════════════════════════════════════
+# в•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђ
+# 7. WEBHOOK РҐР РђРќРР›РР©Р•
+# в•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђ
 
 _webhooks: list[dict] = []
 _MAX_WEBHOOKS = 100
@@ -358,3 +358,4 @@ def clear_webhooks() -> dict:
     global _webhooks
     _webhooks = []
     return {"ok": True}
+

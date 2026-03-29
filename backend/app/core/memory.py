@@ -63,10 +63,33 @@ def _get_embedder():
 
 try:
     import faiss
-    import numpy as np
 except Exception:
     faiss = None
+
+try:
+    import numpy as np
+except Exception:
     np = None
+
+
+def vector_memory_capability_status() -> Dict[str, Any]:
+    missing: List[str] = []
+    if SentenceTransformer is None:
+        missing.append("sentence-transformers")
+    if faiss is None:
+        missing.append("faiss-cpu")
+    if np is None:
+        missing.append("numpy")
+
+    available = not missing
+    return {
+        "feature": "vector_memory",
+        "available": available,
+        "mode": "vector" if available else "keyword_fallback",
+        "reason": None if available else "optional_dependency_missing",
+        "missing_packages": missing,
+        "hint": None if available else "pip install -r requirements-optional.txt",
+    }
 
 
 # ── Дедупликация ──────────────────────────────────────────────────────────────
@@ -539,7 +562,7 @@ def semantic_search_memory(query: str, top_k: int = 5, profile_name: str = "") -
         return []
 
     # Fallback если нет FAISS/SentenceTransformer
-    if SentenceTransformer is None or faiss is None or np is None:
+    if not vector_memory_capability_status()["available"]:
         scored = [(sum(1 for w in query.lower().split() if w in t.lower()), t) for t in texts]
         scored.sort(reverse=True)
         return [t for s, t in scored[:top_k] if s > 0]
