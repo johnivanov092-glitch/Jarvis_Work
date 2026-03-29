@@ -29,7 +29,7 @@
     "bundle": {
       "active": true,
       "targets": ["nsis"],
-      "identifier": "com.elira.ai",
+      "identifier": "com.jarvis.ai",
       "icon": ["icons/icon.ico"],
       "windows": {
         "digestAlgorithm": "sha256"

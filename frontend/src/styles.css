@@ -84,7 +84,7 @@ select, option {
 }
 
 /* ── SHELL GRID ────────────────────────────────────────────── */
-.elira-shell {
+.jarvis-shell {
   display: grid;
   grid-template-columns: 200px 1fr;
   height: 100%;
@@ -92,7 +92,7 @@ select, option {
 }
 
 /* ── SIDEBAR ───────────────────────────────────────────────── */
-.elira-sidebar {
+.jarvis-sidebar {
   background: var(--bg-sidebar);
   border-right: 1px solid var(--border);
   display: flex;
@@ -199,7 +199,7 @@ select, option {
 .chat-list-title.truncate { display: block; width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
 /* ── MAIN AREA ─────────────────────────────────────────────── */
-.elira-main {
+.jarvis-main {
   display: flex;
   flex-direction: column;
   min-width: 0;
@@ -208,7 +208,7 @@ select, option {
 }
 
 /* ── TOPBAR (slim — only brand + tabs) ─────────────────────── */
-.elira-topbar {
+.jarvis-topbar {
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -216,8 +216,8 @@ select, option {
   border-bottom: 1px solid var(--border);
   min-height: 42px;
 }
-.elira-topbar.slim { gap: 12px; }
-.elira-brand { font-size: 15px; font-weight: 600; letter-spacing: -0.01em; }
+.jarvis-topbar.slim { gap: 12px; }
+.jarvis-brand { font-size: 15px; font-weight: 600; letter-spacing: -0.01em; }
 .topbar-tabs { display: flex; gap: 2px; }
 
 .topbar-status { display: none; } /* Убраны чипы модели/профиля из бара */
@@ -584,9 +584,7 @@ select, option {
 .context-bar { padding: 8px 20px; }
 .context-bar-title { font-weight: 600; margin-bottom: 6px; font-size: 11px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.04em; }
 .context-tags { display: flex; flex-wrap: wrap; gap: 4px; }
-.context-tag { padding: 3px 8px; border-radius: var(--radius-full); background: var(--bg-surface); border: 1px solid var(--border); font-size: 10px; color: var(--text-secondary); display: inline-flex; align-items: center; gap: 4px; }
-.context-tag-remove { background: none; border: none; color: var(--text-muted); cursor: pointer; font-size: 9px; padding: 0 2px; line-height: 1; opacity: 0.6; transition: opacity 0.15s; }
-.context-tag-remove:hover { opacity: 1; color: #f44336; }
+.context-tag { padding: 3px 8px; border-radius: var(--radius-full); background: var(--bg-surface); border: 1px solid var(--border); font-size: 10px; color: var(--text-secondary); }
 
 /* ── IDE / CODE WORKSPACE ──────────────────────────────────── */
 .ide-shell { display: flex; flex-direction: column; height: 100%; padding: 14px; gap: 12px; }
@@ -720,10 +718,10 @@ select, option {
 }
 
 @media (max-width: 900px) {
-  .elira-shell { grid-template-columns: 1fr; }
+  .jarvis-shell { grid-template-columns: 1fr; }
 
   /* Sidebar — скрыт по умолчанию, выезжает overlay */
-  .elira-sidebar {
+  .jarvis-sidebar {
     display: none;
     position: fixed; top: 0; left: 0; bottom: 0;
     width: 280px; z-index: 200;
@@ -732,7 +730,7 @@ select, option {
     box-shadow: 4px 0 24px rgba(0,0,0,.4);
     animation: slideIn .2s ease;
   }
-  .elira-sidebar.mobile-open { display: flex; flex-direction: column; }
+  .jarvis-sidebar.mobile-open { display: flex; flex-direction: column; }
   @keyframes slideIn { from { transform: translateX(-100%); } to { transform: translateX(0); } }
 
   /* Overlay затемнение */
@@ -753,8 +751,8 @@ select, option {
   .library-table-row { grid-template-columns: 1.5fr 1fr 0.8fr 0.6fr 0.4fr; }
 
   /* Topbar компактнее */
-  .elira-topbar { padding: 0 8px; }
-  .elira-brand { font-size: 14px; }
+  .jarvis-topbar { padding: 0 8px; }
+  .jarvis-brand { font-size: 14px; }
   .topbar-tabs .soft-btn { font-size: 11px; padding: 4px 8px; }
 
   /* Bottom bar — модель/профиль компактнее */

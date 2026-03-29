@@ -1,4 +1,4 @@
-# Elira AI — Personal AI Agent Platform
+# Jarvis_Work — Personal AI Agent Platform
 
 > A local-first, self-hosted AI workspace built as a real engineering project — not a demo chatbot.
 
@@ -12,9 +12,9 @@
 
 ## What Is This?
 
-Elira AI is a local AI agent platform built to combine **LLM inference, memory, tool execution, automation, and a usable interface** into a single working system — running entirely on local hardware, without sending data to any cloud.
+Jarvis_Work is a local AI agent platform I built to combine **LLM inference, memory, tool execution, automation, and a usable interface** into a single working system — running entirely on my own hardware, without sending data to any cloud.
 
-The goal was not to wrap an API in a chat window. The goal was to build something actually used every day.
+The goal was not to wrap an API in a chat window. The goal was to build something I actually use every day.
 
 ---
 
@@ -26,7 +26,7 @@ The goal was not to wrap an API in a chat window. The goal was to build somethin
 | **Frontend** | JavaScript · React · Vite |
 | **Desktop** | Tauri · Rust |
 | **Inference** | Ollama · local model workflows |
-| **Features** | Streaming responses · persistent memory · file operations · tool execution · plugins · web search · Telegram bot |
+| **Features** | Streaming responses · persistent memory · file operations · tool execution · plugins |
 
 ---
 
@@ -60,15 +60,9 @@ The goal was not to wrap an API in a chat window. The goal was to build somethin
 - **Local-first inference** — Ollama backend, runs fully offline, no API keys required
 - **Persistent memory** — SQLite-based conversation and context storage across sessions
 - **Streaming responses** — real-time token streaming in the UI
-- **Multi-engine web search** — DuckDuckGo, SearXNG, Wikipedia, Bing, Google
 - **Tool execution** — pluggable tool system for file operations, search, and custom actions
-- **Plugin support** — extensible architecture with triggers, hooks, and config
-- **Task Planner** — priorities, categories, due dates, status tracking
-- **Dashboard** — stats, activity charts, model usage
-- **Autopipelines** — scheduled cron tasks (prompt, web search, plugin, HTTP)
-- **Telegram bot** — full integration with user management and logging
+- **Plugin support** — extensible architecture for adding new capabilities
 - **Desktop packaging** — Tauri/Rust wrapper for native desktop experience
-- **Mobile access** — LAN mode with responsive UI
 
 ---
 
@@ -85,8 +79,8 @@ The goal was not to wrap an API in a chat window. The goal was to build somethin
 
 ```bash
 # Clone the repository
-git clone https://github.com/johnivanov092-glitch/Elira_AI.git
-cd Elira_AI
+git clone https://github.com/johnivanov092-glitch/Jarvis_Work.git
+cd Jarvis_Work
 
 # Start backend
 cd backend
@@ -112,10 +106,10 @@ npm run tauri build  # production binary
 
 ```bash
 # From repo root — starts backend + frontend together
-Elira.bat
+Jarvis.bat
 
 # Mobile-friendly variant
-Elira_Mobile.bat
+Jarvis_Mobile.bat
 ```
 
 ---
@@ -123,14 +117,14 @@ Elira_Mobile.bat
 ## Project Structure
 
 ```
-Elira_AI/
+Jarvis_Work/
 ├── backend/          # Python / FastAPI — API, memory, tool orchestration
 ├── frontend/         # React / Vite — UI, streaming, plugin views
 ├── src-tauri/        # Rust / Tauri — desktop shell, native APIs
 ├── scripts/          # Utility and build scripts
 ├── data/             # Local data, SQLite databases
 ├── docs/             # Project documentation
-├── Elira.bat         # Windows launcher
+├── Jarvis.bat        # Windows launcher
 └── build_exe.bat     # Standalone executable build
 ```
 
@@ -167,7 +161,7 @@ Active development. Core features working. Architecture evolving.
 
 ## Author
 
-**Evgeny Ivanov** — Infrastructure & Automation Engineer
+**Evgeny Ivanov** — Infrastructure & Automation Engineer  
 Almaty, Kazakhstan · [LinkedIn](https://www.linkedin.com/in/evgeny-ivanov-infra/) · [GitHub](https://github.com/johnivanov092-glitch)
 
 > Open to remote international roles in infrastructure, platform engineering, automation, and AI infrastructure.

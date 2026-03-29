@@ -1,5 +1,5 @@
 """
-smart_memory.py — умная память Elira AI.
+smart_memory.py — умная память Jarvis.
 
 Возможности:
   • SQLite хранилище (не JSON)
