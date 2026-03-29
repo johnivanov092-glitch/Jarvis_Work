@@ -7,7 +7,7 @@
 - `GET /api/settings`
 
 ## Как применить
-Распаковать архив поверх `D:\AIWork\jarvis_work`.
+Распаковать архив поверх `D:\AIWork\Elira_AI`.
 
 ## Как проверить
 1. Перезапустить backend

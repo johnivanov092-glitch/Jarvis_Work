@@ -1,4 +1,4 @@
-# Jarvis Work
+# Elira AI Workspace
 
 Это стартовая миграция со Streamlit на FastAPI + React + Tauri.
 

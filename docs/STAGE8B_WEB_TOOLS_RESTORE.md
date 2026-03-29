@@ -1,6 +1,6 @@
 # Stage 8B — Web Tools Restore
 
-Что восстановлено в jarvis_work:
+Что восстановлено в Elira_AI:
 - backend/app/services/web_service.py
 - tools:
   - search_web
