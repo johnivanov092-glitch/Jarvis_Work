@@ -19,15 +19,6 @@ import "../styles/markdown.css";
 const LIBRARY_KEY = "elira_library_files_v7";
 const CHAT_CONTEXT_KEY = "elira_chat_context_map_v7";
 
-// Миграция старых localStorage ключей
-["jarvis_library_files_v7", "jarvis_chat_context_map_v7", "jarvis_theme"].forEach(oldKey => {
-  const val = localStorage.getItem(oldKey);
-  if (val !== null) {
-    const newKey = oldKey.replace("jarvis_", "elira_");
-    if (!localStorage.getItem(newKey)) localStorage.setItem(newKey, val);
-    localStorage.removeItem(oldKey);
-  }
-});
 const MAX_HISTORY_PAIRS = 10;
 
 const PROFILE_DESCRIPTIONS = {

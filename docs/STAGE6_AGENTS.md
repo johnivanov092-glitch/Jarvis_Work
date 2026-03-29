@@ -16,9 +16,9 @@
 - meta блок
 
 Как проверить:
-1. Распаковать архив поверх `D:\AIWork\jarvis_work`
+1. Распаковать архив поверх `D:\AIWork\Elira_AI`
 2. Перезапустить backend
 3. Если нужно, перезапустить frontend
 4. Выполнить:
-   `powershell -ExecutionPolicy Bypass -File D:\AIWork\jarvis_work\scripts\test_stage6_agents.ps1`
+   `powershell -ExecutionPolicy Bypass -File D:\AIWork\Elira_AI\scripts\test_stage6_agents.ps1`
 5. Открыть вкладку Agents в UI

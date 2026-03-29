@@ -14,7 +14,7 @@
 ## Как запустить
 1. Backend должен уже работать на `http://127.0.0.1:8000`
 2. Запустить:
-   `D:\AIWork\jarvis_work\scripts\run_frontend.bat`
+   `D:\AIWork\Elira_AI\scripts\run_frontend.bat`
 3. Открыть:
    `http://127.0.0.1:5173`
 

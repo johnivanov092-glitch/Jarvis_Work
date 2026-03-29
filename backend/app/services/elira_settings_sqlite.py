@@ -3,10 +3,6 @@ import json
 from pathlib import Path
 
 DB_PATH = Path("data/elira_state.db")
-_OLD_DB = Path("data/jarvis_state.db")
-if _OLD_DB.exists() and not DB_PATH.exists():
-    _OLD_DB.rename(DB_PATH)
-
 # Дефолтная оркестрация — какая модель на какой тип задачи
 DEFAULT_ROUTE_MAP = {
     "code":     ["qwen2.5-coder:7b", "qwen3:8b", "gemma3:4b"],

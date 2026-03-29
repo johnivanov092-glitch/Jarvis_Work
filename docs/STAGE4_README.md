@@ -15,12 +15,12 @@
 - удаление файла
 
 ## Как проверить backend
-`powershell -ExecutionPolicy Bypass -File D:\AIWork\jarvis_work\scripts\test_stage4.ps1`
+`powershell -ExecutionPolicy Bypass -File D:\AIWork\Elira_AI\scripts\test_stage4.ps1`
 
 ## Как проверить frontend
 1. Backend запущен
 2. Frontend запущен
 3. Перейти в Settings и нажать Сохранить
 4. Перейти в Library
-5. Положить файлы в `D:\AIWork\jarvis_work\data\uploads`
+5. Положить файлы в `D:\AIWork\Elira_AI\data\uploads`
 6. Нажать «Обновить»

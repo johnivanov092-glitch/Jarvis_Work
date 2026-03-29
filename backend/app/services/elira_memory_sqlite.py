@@ -2,11 +2,7 @@ import sqlite3
 from pathlib import Path
 
 DB_PATH = Path("data/elira_state.db")
-_OLD_DB = Path("data/jarvis_state.db")
 DB_PATH.parent.mkdir(parents=True, exist_ok=True)
-if _OLD_DB.exists() and not DB_PATH.exists():
-    _OLD_DB.rename(DB_PATH)
-
 
 def _connect():
     conn = sqlite3.connect(DB_PATH)

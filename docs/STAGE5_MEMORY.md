@@ -19,8 +19,8 @@
 а backend автоматически подмешивает найденную память в запрос к модели.
 
 ## Как проверить
-1. Распаковать архив поверх `D:\AIWork\jarvis_work`
+1. Распаковать архив поверх `D:\AIWork\Elira_AI`
 2. Перезапустить backend
 3. При необходимости перезапустить frontend
 4. Выполнить:
-   `powershell -ExecutionPolicy Bypass -File D:\AIWork\jarvis_work\scripts\test_stage5_memory.ps1`
+   `powershell -ExecutionPolicy Bypass -File D:\AIWork\Elira_AI\scripts\test_stage5_memory.ps1`
