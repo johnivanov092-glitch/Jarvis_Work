@@ -35,6 +35,9 @@ from app.api.routes.image_routes import router as image_router
 from app.api.routes.git_routes import router as git_router
 from app.api.routes.web_search_routes import router as web_search_router
 from app.api.routes.dashboard_routes import router as dashboard_router
+from app.api.routes.autopipeline_routes import router as autopipeline_router
+from app.api.routes.task_planner_routes import router as task_planner_router
+from app.api.routes.telegram_routes import router as telegram_router
 
 app = FastAPI(title="Elira AI API")
 
@@ -90,6 +93,9 @@ app.include_router(image_router)
 app.include_router(git_router)
 app.include_router(web_search_router)
 app.include_router(dashboard_router)
+app.include_router(autopipeline_router)
+app.include_router(task_planner_router)
+app.include_router(telegram_router)
 
 @app.get("/health")
 def health():

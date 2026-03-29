@@ -169,6 +169,18 @@ export default function JarvisChatShell() {
   const [mobileSidebar, setMobileSidebar] = useState(false);
   const [pluginList, setPluginList] = useState([]);
   const [dashData, setDashData] = useState(null);
+  const [pipelinesList, setPipelinesList] = useState([]);
+  const [pipeForm, setPipeForm] = useState({name:"",task_type:"prompt",interval_minutes:60,task_data:{prompt:""}});
+  const [tasksList, setTasksList] = useState([]);
+  const [taskFilter, setTaskFilter] = useState("active");
+  const [taskForm, setTaskForm] = useState({title:"",description:"",category:"general",priority:"medium",due_date:""});
+  const [taskStats, setTaskStats] = useState(null);
+  const [editingTask, setEditingTask] = useState(null);
+  const [tgConfig, setTgConfig] = useState(null);
+  const [tgUsers, setTgUsers] = useState([]);
+  const [tgLog, setTgLog] = useState([]);
+  const [tgTokenInput, setTgTokenInput] = useState("");
+  const [tgTab, setTgTab] = useState("setup");
   const [multiAgent, setMultiAgent] = useState(false);
   const [lastInput, setLastInput] = useState("");
   const [lastModel, setLastModel] = useState("");
@@ -288,6 +300,38 @@ export default function JarvisChatShell() {
       setModelOpts(ml);
       return ml;
     } catch { return []; }
+  }
+
+  async function loadPipelines() {
+    try { const r = await fetch("/api/pipelines/list"); const d = await r.json(); setPipelinesList(d.pipelines || []); } catch {}
+  }
+
+  async function loadTelegram() {
+    try {
+      const [rc, ru, rl] = await Promise.all([
+        fetch("/api/telegram/config"), fetch("/api/telegram/users"), fetch("/api/telegram/log?limit=30"),
+      ]);
+      const [dc, du, dl] = await Promise.all([rc.json(), ru.json(), rl.json()]);
+      setTgConfig(dc); setTgUsers(du.users || []); setTgLog(dl.log || []);
+    } catch {}
+  }
+
+  async function loadTasks(filter) {
+    const f = filter || taskFilter;
+    try {
+      let items = [];
+      if (f === "active") {
+        const [r1, r2] = await Promise.all([fetch("/api/tasks/list?status=todo"), fetch("/api/tasks/list?status=in_progress")]);
+        const [d1, d2] = await Promise.all([r1.json(), r2.json()]);
+        items = [...(d1.tasks || []), ...(d2.tasks || [])];
+      } else if (f === "all") {
+        const r = await fetch("/api/tasks/list"); const d = await r.json(); items = d.tasks || [];
+      } else {
+        const r = await fetch(`/api/tasks/list?status=${f}`); const d = await r.json(); items = d.tasks || [];
+      }
+      setTasksList(items);
+      const sr = await fetch("/api/tasks/stats"); setTaskStats(await sr.json());
+    } catch {}
   }
 
   async function loadDashboard() {
@@ -555,8 +599,8 @@ export default function JarvisChatShell() {
       <aside className={`jarvis-sidebar ${mobileSidebar?"mobile-open":""}`}>
         <button className="sidebar-newchat-btn" onClick={() => newChat(false)}>+ Новый чат</button>
         <div className="sidebar-nav">
-          {[["chats","☰ Чаты"],["project","📂 Проекты"],["library","📚 Файлы"],["memory","★ Память"],["dashboard","📊 Dashboard"],["settings","⚙ Настройки"]].map(([k,l]) => (
-            <button key={k} className={`sidebar-nav-item ${sideTab === k ? "active" : ""}`} onClick={() => { setSideTab(k); setMobileSidebar(false); if(k==="settings"){setSettingsModel(model);setSettingsProfile(profile);setSettingsContext(ollamaContext);setSettingsSaved(false);refreshModels();loadPluginList();}if(k==="dashboard"){loadDashboard();} }}>{l}</button>
+          {[["chats","☰ Чаты"],["project","📂 Проекты"],["library","📚 Файлы"],["memory","★ Память"],["tasks","📅 Задачи"],["dashboard","📊 Dashboard"],["pipelines","🔄 Pipelines"],["telegram","✈️ Telegram"],["settings","⚙ Настройки"]].map(([k,l]) => (
+            <button key={k} className={`sidebar-nav-item ${sideTab === k ? "active" : ""}`} onClick={() => { setSideTab(k); setMobileSidebar(false); if(k==="settings"){setSettingsModel(model);setSettingsProfile(profile);setSettingsContext(ollamaContext);setSettingsSaved(false);refreshModels();loadPluginList();}if(k==="dashboard"){loadDashboard();}if(k==="pipelines"){loadPipelines();}if(k==="tasks"){loadTasks();}if(k==="telegram"){loadTelegram();} }}>{l}</button>
           ))}
         </div>
         <div className="sidebar-nav-item search-shell">
@@ -595,7 +639,7 @@ export default function JarvisChatShell() {
 
         <div className="chat-page">
           <div className="chat-header-row">
-            <div className="chat-page-title">{sideTab==="chats"&&"Чат"}{sideTab==="memory"&&"Память"}{sideTab==="settings"&&"Настройки"}{sideTab==="library"&&"Библиотека"}{sideTab==="project"&&"Проект"}{sideTab==="dashboard"&&"Dashboard"}</div>
+            <div className="chat-page-title">{sideTab==="chats"&&"Чат"}{sideTab==="memory"&&"Память"}{sideTab==="settings"&&"Настройки"}{sideTab==="library"&&"Библиотека"}{sideTab==="project"&&"Проект"}{sideTab==="dashboard"&&"Dashboard"}{sideTab==="pipelines"&&"Pipelines"}</div>
             {sideTab === "chats" && chatId && (
               <div className="chat-header-actions icon-actions" style={{display:"flex"}}>
                 <div className="export-dropdown-wrap" style={{position:"relative"}}>
@@ -617,7 +661,371 @@ export default function JarvisChatShell() {
 
           {renaming && sideTab==="chats" && <div className="rename-bar"><input value={renameVal} onChange={e=>setRenameVal(e.target.value)} className="rename-input wide" placeholder="Название"/><button className="mini-btn" onClick={renameActive}>OK</button></div>}
 
-          {sideTab === "dashboard" ? (
+          {sideTab === "tasks" ? (
+            <div className="settings-main-card" style={{overflow:"auto"}}>
+              <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:12}}>
+                <div style={{fontSize:15,fontWeight:700,color:"var(--text)"}}>📅 Задачи</div>
+                <button className="soft-btn" style={{fontSize:10,padding:"3px 10px",border:"1px solid var(--border)"}} onClick={loadTasks}>↻</button>
+              </div>
+
+              {/* Статистика */}
+              {taskStats && (
+                <div style={{display:"flex",gap:8,marginBottom:12,flexWrap:"wrap"}}>
+                  {[
+                    {l:"Всего",v:taskStats.total,c:"var(--text)"},
+                    {l:"Todo",v:taskStats.by_status?.todo||0,c:"#5b9bd5"},
+                    {l:"В работе",v:taskStats.by_status?.in_progress||0,c:"#f5a623"},
+                    {l:"Готово",v:taskStats.by_status?.done||0,c:"#4caf50"},
+                    {l:"Просрочено",v:taskStats.overdue||0,c:"#f44336"},
+                  ].map(s=>(
+                    <div key={s.l} style={{padding:"6px 10px",borderRadius:8,border:"1px solid var(--border)",background:"var(--bg-surface)",textAlign:"center",minWidth:50}}>
+                      <div style={{fontSize:16,fontWeight:700,color:s.c}}>{s.v}</div>
+                      <div style={{fontSize:9,color:"var(--text-muted)"}}>{s.l}</div>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {/* Фильтр */}
+              <div style={{display:"flex",gap:4,marginBottom:12}}>
+                {[["active","Активные"],["todo","Todo"],["in_progress","В работе"],["done","Готовые"],["all","Все"]].map(([k,l])=>(
+                  <button key={k} className="soft-btn" style={{fontSize:10,padding:"3px 10px",background:taskFilter===k?"var(--accent)":"transparent",color:taskFilter===k?"#fff":"var(--text)",border:"1px solid var(--border)",borderRadius:6}} onClick={()=>{setTaskFilter(k);loadTasks(k);}}>{l}</button>
+                ))}
+              </div>
+
+              {/* Форма создания / редактирования */}
+              <div style={{padding:12,borderRadius:10,border:"1px solid var(--border)",background:"var(--bg-surface)",marginBottom:14}}>
+                <div style={{fontSize:12,fontWeight:600,color:"var(--text)",marginBottom:8}}>{editingTask ? "✏️ Редактирование" : "＋ Новая задача"}</div>
+                <input placeholder="Название задачи" value={taskForm.title} onChange={e=>setTaskForm({...taskForm,title:e.target.value})} className="rename-input" style={{width:"100%",fontSize:11,padding:"5px 8px",marginBottom:6}}/>
+                <textarea placeholder="Описание (необязательно)" value={taskForm.description} onChange={e=>setTaskForm({...taskForm,description:e.target.value})} className="rename-input" style={{width:"100%",fontSize:11,padding:"5px 8px",marginBottom:6,minHeight:40,resize:"vertical",fontFamily:"inherit"}} rows={2}/>
+                <div style={{display:"flex",gap:6,flexWrap:"wrap",marginBottom:6}}>
+                  <select value={taskForm.priority} onChange={e=>setTaskForm({...taskForm,priority:e.target.value})} className="topbar-select dark-select" style={{fontSize:11}}>
+                    <option value="low">🟢 Низкий</option>
+                    <option value="medium">🟡 Средний</option>
+                    <option value="high">🟠 Высокий</option>
+                    <option value="urgent">🔴 Срочный</option>
+                  </select>
+                  <select value={taskForm.category} onChange={e=>setTaskForm({...taskForm,category:e.target.value})} className="topbar-select dark-select" style={{fontSize:11}}>
+                    <option value="general">📋 Общее</option>
+                    <option value="work">💼 Работа</option>
+                    <option value="personal">👤 Личное</option>
+                    <option value="study">📚 Учёба</option>
+                    <option value="project">🛠 Проект</option>
+                    <option value="idea">💡 Идея</option>
+                  </select>
+                  <input type="date" value={taskForm.due_date||""} onChange={e=>setTaskForm({...taskForm,due_date:e.target.value})} className="rename-input" style={{fontSize:11,padding:"4px 8px"}}/>
+                </div>
+                <div style={{display:"flex",gap:6}}>
+                  <button className="soft-btn" style={{fontSize:11,padding:"4px 14px",background:"var(--accent)",color:"#fff",border:"none",borderRadius:6}} onClick={async()=>{
+                    if(!taskForm.title) return;
+                    try {
+                      if(editingTask) {
+                        await fetch(`/api/tasks/update/${editingTask}`,{method:"PUT",headers:{"Content-Type":"application/json"},body:JSON.stringify(taskForm)});
+                        setEditingTask(null);
+                      } else {
+                        await fetch("/api/tasks/create",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(taskForm)});
+                      }
+                      setTaskForm({title:"",description:"",category:"general",priority:"medium",due_date:""});
+                      loadTasks();
+                    } catch{}
+                  }}>{editingTask ? "Сохранить" : "Создать"}</button>
+                  {editingTask && <button className="soft-btn" style={{fontSize:11,padding:"4px 10px",border:"1px solid var(--border)",borderRadius:6}} onClick={()=>{setEditingTask(null);setTaskForm({title:"",description:"",category:"general",priority:"medium",due_date:""});}}>Отмена</button>}
+                </div>
+              </div>
+
+              {/* Список задач */}
+              {tasksList.length===0 && <div style={{fontSize:11,color:"var(--text-muted)",padding:"12px 0",textAlign:"center"}}>Нет задач</div>}
+              {tasksList.map(t=>{
+                const prioColor = {urgent:"#f44336",high:"#ff9800",medium:"#f5a623",low:"#4caf50"}[t.priority]||"var(--text-muted)";
+                const prioIcon = {urgent:"🔴",high:"🟠",medium:"🟡",low:"🟢"}[t.priority]||"⚪";
+                const catIcon = {general:"📋",work:"💼",personal:"👤",study:"📚",project:"🛠",idea:"💡"}[t.category]||"📋";
+                const isOverdue = t.due_date && t.status!=="done" && t.status!=="cancelled" && new Date(t.due_date) < new Date();
+                return (
+                  <div key={t.id} style={{padding:"10px 12px",borderRadius:10,border:`1px solid ${isOverdue?"#f44336":"var(--border)"}`,background:"var(--bg-surface)",marginBottom:6,opacity:t.status==="done"||t.status==="cancelled"?0.6:1}}>
+                    <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:4}}>
+                      <div style={{display:"flex",alignItems:"center",gap:6,flex:1,minWidth:0}}>
+                        <span style={{cursor:"pointer",fontSize:16}} title={t.status==="done"?"Вернуть":"Выполнено"} onClick={async()=>{
+                          const newStatus = t.status==="done" ? "todo" : "done";
+                          try{await fetch(`/api/tasks/update/${t.id}`,{method:"PUT",headers:{"Content-Type":"application/json"},body:JSON.stringify({status:newStatus})});loadTasks();}catch{}
+                        }}>{t.status==="done"?"✅":"⬜"}</span>
+                        <div style={{flex:1,minWidth:0}}>
+                          <div style={{fontWeight:600,fontSize:12,color:"var(--text)",textDecoration:t.status==="done"?"line-through":"none",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{t.title}</div>
+                          {t.description && <div style={{fontSize:10,color:"var(--text-muted)",marginTop:2,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{t.description}</div>}
+                        </div>
+                      </div>
+                      <div style={{display:"flex",gap:3,flexShrink:0}}>
+                        {t.status!=="done" && t.status!=="cancelled" && (
+                          <button className="soft-btn" style={{fontSize:9,padding:"2px 6px"}} title="В работу" onClick={async()=>{
+                            const newS = t.status==="in_progress"?"todo":"in_progress";
+                            try{await fetch(`/api/tasks/update/${t.id}`,{method:"PUT",headers:{"Content-Type":"application/json"},body:JSON.stringify({status:newS})});loadTasks();}catch{}
+                          }}>{t.status==="in_progress"?"⏸":"▶"}</button>
+                        )}
+                        <button className="soft-btn" style={{fontSize:9,padding:"2px 6px"}} title="Редактировать" onClick={()=>{setEditingTask(t.id);setTaskForm({title:t.title,description:t.description||"",category:t.category||"general",priority:t.priority||"medium",due_date:t.due_date||""});}}>✏️</button>
+                        <button className="soft-btn" style={{fontSize:9,padding:"2px 6px",color:"#f44336"}} title="Удалить" onClick={async()=>{if(!confirm("Удалить задачу?"))return;try{await fetch(`/api/tasks/delete/${t.id}`,{method:"DELETE"});loadTasks();}catch{}}}>✕</button>
+                      </div>
+                    </div>
+                    <div style={{display:"flex",gap:8,alignItems:"center",fontSize:10,color:"var(--text-muted)",marginTop:2}}>
+                      <span>{prioIcon} {t.priority}</span>
+                      <span>{catIcon} {t.category}</span>
+                      {t.due_date && <span style={{color:isOverdue?"#f44336":"var(--text-muted)"}}>📅 {new Date(t.due_date).toLocaleDateString("ru-RU")}{isOverdue?" ⚠️ просрочено":""}</span>}
+                      {t.status==="in_progress" && <span style={{color:"#f5a623"}}>⏳ в работе</span>}
+                      {t.status==="done" && t.completed_at && <span style={{color:"#4caf50"}}>✅ {new Date(t.completed_at).toLocaleDateString("ru-RU")}</span>}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          ) : sideTab === "telegram" ? (
+            <div className="settings-main-card" style={{overflow:"auto"}}>
+              <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:12}}>
+                <div style={{fontSize:15,fontWeight:700,color:"var(--text)"}}>✈️ Telegram Bot</div>
+                <button className="soft-btn" style={{fontSize:10,padding:"3px 10px",border:"1px solid var(--border)"}} onClick={loadTelegram}>↻</button>
+              </div>
+
+              {/* Внутренние табы */}
+              <div style={{display:"flex",gap:4,marginBottom:14}}>
+                {[["setup","⚙ Настройка"],["users","👥 Пользователи"],["log","📜 Лог"],["guide","📖 Инструкция"]].map(([k,l])=>(
+                  <button key={k} className="soft-btn" style={{fontSize:10,padding:"3px 10px",background:tgTab===k?"var(--accent)":"transparent",color:tgTab===k?"#fff":"var(--text)",border:"1px solid var(--border)",borderRadius:6}} onClick={()=>setTgTab(k)}>{l}</button>
+                ))}
+              </div>
+
+              {tgTab === "guide" && (
+                <div style={{fontSize:11,color:"var(--text)",lineHeight:1.7}}>
+                  <div style={{fontSize:13,fontWeight:700,marginBottom:8,color:"var(--accent)"}}>📖 Как подключить Telegram-бота</div>
+
+                  <div style={{padding:12,borderRadius:10,border:"1px solid var(--border)",background:"var(--bg-surface)",marginBottom:10}}>
+                    <div style={{fontWeight:700,marginBottom:6}}>Шаг 1: Создай бота</div>
+                    <div>1. Открой Telegram и найди <b>@BotFather</b></div>
+                    <div>2. Отправь команду <code style={{background:"var(--bg-code)",padding:"1px 5px",borderRadius:4}}>/newbot</code></div>
+                    <div>3. Введи имя бота (например: <i>Elira AI</i>)</div>
+                    <div>4. Введи username бота (например: <i>elira_ai_bot</i>)</div>
+                    <div>5. BotFather даст тебе <b>токен</b> — строка вида:</div>
+                    <div style={{background:"var(--bg-code)",padding:"6px 10px",borderRadius:6,fontFamily:"monospace",fontSize:10,margin:"6px 0",wordBreak:"break-all"}}>7123456789:AAHfGx0X...</div>
+                  </div>
+
+                  <div style={{padding:12,borderRadius:10,border:"1px solid var(--border)",background:"var(--bg-surface)",marginBottom:10}}>
+                    <div style={{fontWeight:700,marginBottom:6}}>Шаг 2: Вставь токен</div>
+                    <div>1. Перейди на вкладку <b>⚙ Настройка</b> выше</div>
+                    <div>2. Вставь токен в поле «Bot Token»</div>
+                    <div>3. Нажми <b>💾 Сохранить токен</b></div>
+                    <div>4. Нажми <b>🔍 Тест</b> — должно показать имя бота</div>
+                  </div>
+
+                  <div style={{padding:12,borderRadius:10,border:"1px solid var(--border)",background:"var(--bg-surface)",marginBottom:10}}>
+                    <div style={{fontWeight:700,marginBottom:6}}>Шаг 3: Запусти бота</div>
+                    <div>1. Нажми <b>▶ Запустить бота</b></div>
+                    <div>2. Открой своего бота в Telegram</div>
+                    <div>3. Нажми <b>/start</b> — бот ответит приветствием</div>
+                    <div>4. Пиши любые сообщения — Elira будет отвечать!</div>
+                  </div>
+
+                  <div style={{padding:12,borderRadius:10,border:"1px solid var(--border)",background:"var(--bg-surface)",marginBottom:10}}>
+                    <div style={{fontWeight:700,marginBottom:6}}>Команды бота</div>
+                    <div><code>/start</code> — Приветствие</div>
+                    <div><code>/help</code> — Справка</div>
+                    <div><code>/status</code> — Текущие настройки</div>
+                    <div><code>/web on|off</code> — Включить/выключить веб-поиск</div>
+                    <div><code>/memory on|off</code> — Включить/выключить память</div>
+                  </div>
+
+                  <div style={{padding:12,borderRadius:10,border:"1px solid var(--border)",background:"var(--bg-surface)",marginBottom:10}}>
+                    <div style={{fontWeight:700,marginBottom:6}}>Дополнительно</div>
+                    <div>• <b>Доступ:</b> по умолчанию «все» — любой пользователь может писать боту. Переключи на «только разрешённые» во вкладке Пользователи.</div>
+                    <div>• <b>Модель:</b> бот использует ту же модель что и в чате Elira. Можно изменить в настройках.</div>
+                    <div>• <b>Память и веб-поиск:</b> можно включить для более умных ответов.</div>
+                    <div>• <b>Бот работает пока запущен backend</b> (Elira). При перезапуске нужно снова нажать «Запустить».</div>
+                  </div>
+
+                  <div style={{padding:10,borderRadius:10,background:"rgba(99,102,241,0.1)",border:"1px solid var(--accent)",fontSize:10}}>
+                    💡 <b>Совет от @BotFather:</b> после создания бота отправь <code>/setdescription</code> и <code>/setuserpic</code> чтобы задать описание и аватарку.
+                  </div>
+                </div>
+              )}
+
+              {tgTab === "setup" && (
+                <div>
+                  {/* Статус */}
+                  <div style={{padding:10,borderRadius:10,border:"1px solid var(--border)",background:"var(--bg-surface)",marginBottom:12,display:"flex",alignItems:"center",justifyContent:"space-between"}}>
+                    <div>
+                      <span style={{fontSize:12,fontWeight:600}}>Статус: </span>
+                      <span style={{fontSize:12,color:tgConfig?.running?"#4caf50":"var(--text-muted)",fontWeight:600}}>{tgConfig?.running?"● Работает":"○ Остановлен"}</span>
+                    </div>
+                    <div style={{display:"flex",gap:4}}>
+                      {!tgConfig?.running ? (
+                        <button className="soft-btn" style={{fontSize:10,padding:"4px 12px",background:"#4caf50",color:"#fff",border:"none",borderRadius:6}} onClick={async()=>{try{const r=await fetch("/api/telegram/start",{method:"POST"});const d=await r.json();if(d.ok){loadTelegram();}else{alert(d.error||"Ошибка запуска");}}catch{}}}>▶ Запустить</button>
+                      ) : (
+                        <button className="soft-btn" style={{fontSize:10,padding:"4px 12px",background:"#f44336",color:"#fff",border:"none",borderRadius:6}} onClick={async()=>{try{await fetch("/api/telegram/stop",{method:"POST"});loadTelegram();}catch{}}}>⏹ Остановить</button>
+                      )}
+                      <button className="soft-btn" style={{fontSize:10,padding:"4px 10px",border:"1px solid var(--border)"}} onClick={async()=>{try{const r=await fetch("/api/telegram/test");const d=await r.json();if(d.ok){alert(`✅ Бот: @${d.bot_username} (${d.bot_name})`)}else{alert(`❌ ${d.error}`)}}catch{alert("Ошибка соединения")}}}>🔍 Тест</button>
+                    </div>
+                  </div>
+
+                  {/* Токен */}
+                  <div style={{padding:12,borderRadius:10,border:"1px solid var(--border)",background:"var(--bg-surface)",marginBottom:12}}>
+                    <div style={{fontSize:12,fontWeight:600,marginBottom:6}}>🔑 Bot Token</div>
+                    {tgConfig?.has_token && <div style={{fontSize:10,color:"var(--text-muted)",marginBottom:4}}>Текущий: {tgConfig.bot_token}</div>}
+                    <div style={{display:"flex",gap:6}}>
+                      <input type="password" placeholder="Вставь токен от @BotFather" value={tgTokenInput} onChange={e=>setTgTokenInput(e.target.value)} className="rename-input" style={{flex:1,fontSize:11,padding:"5px 8px"}}/>
+                      <button className="soft-btn" style={{fontSize:10,padding:"4px 12px",background:"var(--accent)",color:"#fff",border:"none",borderRadius:6}} onClick={async()=>{if(!tgTokenInput.trim())return;try{await fetch("/api/telegram/config",{method:"PUT",headers:{"Content-Type":"application/json"},body:JSON.stringify({bot_token:tgTokenInput.trim()})});setTgTokenInput("");loadTelegram();}catch{}}}>💾 Сохранить</button>
+                    </div>
+                  </div>
+
+                  {/* Настройки бота */}
+                  <div style={{padding:12,borderRadius:10,border:"1px solid var(--border)",background:"var(--bg-surface)",marginBottom:12}}>
+                    <div style={{fontSize:12,fontWeight:600,marginBottom:8}}>⚙ Параметры</div>
+                    <div style={{display:"flex",gap:8,flexWrap:"wrap",marginBottom:8}}>
+                      <div>
+                        <div style={{fontSize:10,color:"var(--text-muted)",marginBottom:2}}>Модель</div>
+                        <input placeholder="auto (текущая)" value={tgConfig?.model||""} onChange={e=>{setTgConfig({...tgConfig,model:e.target.value})}} className="rename-input" style={{fontSize:11,padding:"4px 8px",width:140}}/>
+                      </div>
+                      <div>
+                        <div style={{fontSize:10,color:"var(--text-muted)",marginBottom:2}}>Профиль</div>
+                        <select value={tgConfig?.profile||"Универсальный"} onChange={e=>{setTgConfig({...tgConfig,profile:e.target.value})}} className="topbar-select dark-select" style={{fontSize:11}}>
+                          <option>Универсальный</option>
+                          <option>Исследователь</option>
+                          <option>Программист</option>
+                          <option>Аналитик</option>
+                          <option>Сократ</option>
+                        </select>
+                      </div>
+                    </div>
+                    <div style={{display:"flex",gap:12,marginBottom:8}}>
+                      <label style={{fontSize:11,display:"flex",alignItems:"center",gap:4,cursor:"pointer"}}>
+                        <input type="checkbox" checked={tgConfig?.use_memory||false} onChange={e=>{setTgConfig({...tgConfig,use_memory:e.target.checked})}}/>
+                        💾 Память
+                      </label>
+                      <label style={{fontSize:11,display:"flex",alignItems:"center",gap:4,cursor:"pointer"}}>
+                        <input type="checkbox" checked={tgConfig?.use_web_search||false} onChange={e=>{setTgConfig({...tgConfig,use_web_search:e.target.checked})}}/>
+                        🌐 Веб-поиск
+                      </label>
+                    </div>
+                    <div style={{marginBottom:8}}>
+                      <div style={{fontSize:10,color:"var(--text-muted)",marginBottom:2}}>Приветствие (/start)</div>
+                      <textarea value={tgConfig?.welcome_message||""} onChange={e=>{setTgConfig({...tgConfig,welcome_message:e.target.value})}} className="rename-input" style={{width:"100%",fontSize:11,padding:"5px 8px",minHeight:50,resize:"vertical",fontFamily:"inherit"}} rows={2}/>
+                    </div>
+                    <button className="soft-btn" style={{fontSize:11,padding:"4px 14px",background:"var(--accent)",color:"#fff",border:"none",borderRadius:6}} onClick={async()=>{
+                      try{
+                        const upd = {};
+                        if(tgConfig?.model !== undefined) upd.model = tgConfig.model;
+                        if(tgConfig?.profile) upd.profile = tgConfig.profile;
+                        if(tgConfig?.use_memory !== undefined) upd.use_memory = tgConfig.use_memory;
+                        if(tgConfig?.use_web_search !== undefined) upd.use_web_search = tgConfig.use_web_search;
+                        if(tgConfig?.welcome_message) upd.welcome_message = tgConfig.welcome_message;
+                        await fetch("/api/telegram/config",{method:"PUT",headers:{"Content-Type":"application/json"},body:JSON.stringify(upd)});
+                        loadTelegram();
+                      }catch{}
+                    }}>💾 Сохранить настройки</button>
+                  </div>
+                </div>
+              )}
+
+              {tgTab === "users" && (
+                <div>
+                  <div style={{fontSize:11,color:"var(--text-muted)",marginBottom:8}}>Пользователи, написавшие боту. Можно ограничить доступ.</div>
+                  <div style={{marginBottom:10}}>
+                    <label style={{fontSize:11,display:"flex",alignItems:"center",gap:4,cursor:"pointer"}}>
+                      <input type="checkbox" checked={tgConfig?.allowed_users==="all"} onChange={async e=>{
+                        const val = e.target.checked ? "all" : "whitelist";
+                        try{await fetch("/api/telegram/config",{method:"PUT",headers:{"Content-Type":"application/json"},body:JSON.stringify({allowed_users:val})});loadTelegram();}catch{}
+                      }}/>
+                      Разрешить всем (иначе — только отмеченным)
+                    </label>
+                  </div>
+                  {tgUsers.length===0 && <div style={{fontSize:11,color:"var(--text-muted)",padding:"12px 0",textAlign:"center"}}>Пока нет пользователей</div>}
+                  {tgUsers.map(u=>(
+                    <div key={u.chat_id} style={{padding:"8px 12px",borderRadius:10,border:"1px solid var(--border)",background:"var(--bg-surface)",marginBottom:4,display:"flex",alignItems:"center",justifyContent:"space-between"}}>
+                      <div>
+                        <span style={{fontWeight:600,fontSize:12}}>{u.first_name||""} {u.last_name||""}</span>
+                        {u.username && <span style={{fontSize:10,color:"var(--text-muted)",marginLeft:6}}>@{u.username}</span>}
+                        <span style={{fontSize:9,color:"var(--text-muted)",marginLeft:6}}>ID: {u.chat_id}</span>
+                      </div>
+                      <div style={{display:"flex",alignItems:"center",gap:6}}>
+                        <span style={{fontSize:10,color:u.allowed?"#4caf50":"#f44336"}}>{u.allowed?"✅ Разрешён":"⛔ Заблокирован"}</span>
+                        <button className="soft-btn" style={{fontSize:9,padding:"2px 8px"}} onClick={async()=>{try{await fetch("/api/telegram/users/toggle",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({chat_id:u.chat_id,allowed:!u.allowed})});loadTelegram();}catch{}}}>{u.allowed?"🔒":"🔓"}</button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {tgTab === "log" && (
+                <div>
+                  <div style={{fontSize:11,color:"var(--text-muted)",marginBottom:8}}>Последние сообщения через бота</div>
+                  {tgLog.length===0 && <div style={{fontSize:11,color:"var(--text-muted)",padding:"12px 0",textAlign:"center"}}>Пока нет сообщений</div>}
+                  <div style={{maxHeight:400,overflow:"auto"}}>
+                    {tgLog.map((l,i)=>(
+                      <div key={i} style={{padding:"6px 10px",borderRadius:8,marginBottom:3,background:l.direction==="in"?"rgba(99,102,241,0.08)":"rgba(76,175,80,0.08)",borderLeft:`3px solid ${l.direction==="in"?"var(--accent)":"#4caf50"}`}}>
+                        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:2}}>
+                          <span style={{fontSize:9,fontWeight:600,color:l.direction==="in"?"var(--accent)":"#4caf50"}}>{l.direction==="in"?"→ Входящее":"← Ответ"}{l.direction==="cmd"?" (команда)":""}</span>
+                          <span style={{fontSize:9,color:"var(--text-muted)"}}>{l.created_at?new Date(l.created_at).toLocaleString("ru-RU"):""}</span>
+                        </div>
+                        <div style={{fontSize:11,color:"var(--text)",wordBreak:"break-word",maxHeight:60,overflow:"hidden"}}>{l.text}</div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          ) : sideTab === "pipelines" ? (
+            <div className="settings-main-card" style={{overflow:"auto"}}>
+              <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:12}}>
+                <div style={{fontSize:15,fontWeight:700,color:"var(--text)"}}>🔄 Autopipelines</div>
+                <button className="soft-btn" style={{fontSize:10,padding:"3px 10px",border:"1px solid var(--border)"}} onClick={loadPipelines}>↻ Обновить</button>
+              </div>
+              <div className="settings-desc" style={{marginBottom:12}}>Автоматические задачи по расписанию</div>
+
+              {/* Форма создания */}
+              <div style={{padding:12,borderRadius:10,border:"1px solid var(--border)",background:"var(--bg-surface)",marginBottom:14}}>
+                <div style={{fontSize:12,fontWeight:600,color:"var(--text)",marginBottom:8}}>+ Новый pipeline</div>
+                <div style={{display:"flex",gap:6,flexWrap:"wrap",marginBottom:6}}>
+                  <input placeholder="Название" value={pipeForm.name} onChange={e=>setPipeForm({...pipeForm,name:e.target.value})} className="rename-input" style={{flex:1,minWidth:120,fontSize:11,padding:"4px 8px"}}/>
+                  <select value={pipeForm.task_type} onChange={e=>setPipeForm({...pipeForm,task_type:e.target.value})} className="topbar-select dark-select" style={{fontSize:11}}>
+                    <option value="prompt">💬 Промпт</option>
+                    <option value="web_search">🔍 Веб-поиск</option>
+                    <option value="plugin">🔌 Плагин</option>
+                    <option value="http">🌐 HTTP</option>
+                  </select>
+                  <select value={pipeForm.interval_minutes} onChange={e=>setPipeForm({...pipeForm,interval_minutes:+e.target.value})} className="topbar-select dark-select" style={{fontSize:11}}>
+                    <option value={5}>5 мин</option>
+                    <option value={15}>15 мин</option>
+                    <option value={30}>30 мин</option>
+                    <option value={60}>1 час</option>
+                    <option value={180}>3 часа</option>
+                    <option value={360}>6 часов</option>
+                    <option value={720}>12 часов</option>
+                    <option value={1440}>24 часа</option>
+                  </select>
+                </div>
+                <input placeholder={pipeForm.task_type==="prompt"?"Промпт для LLM":pipeForm.task_type==="web_search"?"Поисковый запрос":pipeForm.task_type==="plugin"?"Имя плагина":"URL"} value={pipeForm.task_data.prompt||pipeForm.task_data.query||pipeForm.task_data.plugin_name||pipeForm.task_data.url||""} onChange={e=>{const key={prompt:"prompt",web_search:"query",plugin:"plugin_name",http:"url"}[pipeForm.task_type]||"prompt";setPipeForm({...pipeForm,task_data:{[key]:e.target.value}})}} className="rename-input" style={{width:"100%",fontSize:11,padding:"4px 8px",marginBottom:6}}/>
+                <button className="soft-btn" style={{fontSize:11,padding:"4px 14px",background:"var(--accent)",color:"#fff",border:"none",borderRadius:6}} onClick={async()=>{if(!pipeForm.name)return;try{await fetch("/api/pipelines/create",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(pipeForm)});setPipeForm({name:"",task_type:"prompt",interval_minutes:60,task_data:{prompt:""}});loadPipelines()}catch{}}}>Создать</button>
+              </div>
+
+              {/* Список */}
+              {pipelinesList.length===0 && <div style={{fontSize:11,color:"var(--text-muted)",padding:"12px 0",textAlign:"center"}}>Нет pipelines</div>}
+              {pipelinesList.map(p=>(
+                <div key={p.id} style={{padding:"10px 12px",borderRadius:10,border:"1px solid var(--border)",background:"var(--bg-surface)",marginBottom:6}}>
+                  <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:4}}>
+                    <div>
+                      <span style={{fontWeight:600,fontSize:12,color:"var(--text)"}}>{p.name}</span>
+                      <span style={{fontSize:10,color:"var(--text-muted)",marginLeft:8}}>{p.task_type} • каждые {p.interval_minutes} мин</span>
+                      <span style={{fontSize:9,color:p.enabled?"#4caf50":"#f44336",marginLeft:6}}>{p.enabled?"● вкл":"○ выкл"}</span>
+                    </div>
+                    <div style={{display:"flex",gap:4}}>
+                      <button className="soft-btn" style={{fontSize:9,padding:"2px 8px"}} onClick={async()=>{try{await fetch(`/api/pipelines/run/${p.id}`,{method:"POST"});loadPipelines()}catch{}}}>▶ Run</button>
+                      <button className="soft-btn" style={{fontSize:9,padding:"2px 8px"}} onClick={async()=>{try{await fetch(`/api/pipelines/update/${p.id}`,{method:"PUT",headers:{"Content-Type":"application/json"},body:JSON.stringify({enabled:!p.enabled})});loadPipelines()}catch{}}}>{p.enabled?"⏸":"▶"}</button>
+                      <button className="soft-btn" style={{fontSize:9,padding:"2px 8px",color:"#f44336"}} onClick={async()=>{if(!confirm("Удалить?"))return;try{await fetch(`/api/pipelines/delete/${p.id}`,{method:"DELETE"});loadPipelines()}catch{}}}>✕</button>
+                    </div>
+                  </div>
+                  <div style={{fontSize:10,color:"var(--text-muted)"}}>
+                    {p.run_count>0 && <span>Запусков: {p.run_count} • </span>}
+                    {p.last_run && <span>Посл.: {new Date(p.last_run).toLocaleString("ru-RU")} • </span>}
+                    {p.next_run && <span>След.: {new Date(p.next_run).toLocaleString("ru-RU")}</span>}
+                  </div>
+                  {p.last_error && <div style={{fontSize:10,color:"#f44336",marginTop:2}}>Ошибка: {p.last_error}</div>}
+                </div>
+              ))}
+            </div>
+          ) : sideTab === "dashboard" ? (
             <div className="settings-main-card" style={{overflow:"auto"}}>
               <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:16}}>
                 <div style={{fontSize:15,fontWeight:700,color:"var(--text)"}}>📊 Dashboard</div>
