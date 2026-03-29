@@ -4,6 +4,9 @@ This folder now keeps only the current working documentation at the top level.
 
 ## Current docs
 
+- `ACTUAL_WORK.md`
+  Live work log: what was repaired, what was upgraded, what was verified, and what is queued next.
+
 - `ROADMAP_STABILIZATION_2026-03-29.md`
   Current stabilization roadmap: what is done, what is left, logging follow-up, and next priorities.
 
@@ -15,8 +18,12 @@ This folder now keeps only the current working documentation at the top level.
 - `docs/ROADMAP_STABILIZATION_2026-03-29.md`
   Current project status, completed work, remaining work, logging follow-up, and next priorities.
 
+- `docs/ACTUAL_WORK.md`
+  Actual execution log for concrete repair steps: started, completed, verified, and queued follow-up.
+
 If you need to know how to install or run the project, use the root README.
-If you need to know what is done and what still needs to be finished, use the roadmap in `docs/`.
+If you need to know what was actually repaired and verified, use `docs/ACTUAL_WORK.md`.
+If you need the broader status and next priorities, use the roadmap in `docs/`.
 
 ## Archive
 

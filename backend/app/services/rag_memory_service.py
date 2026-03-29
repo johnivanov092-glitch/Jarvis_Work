@@ -14,13 +14,13 @@ import json
 import logging
 import math
 import sqlite3
-from pathlib import Path
 from typing import Any
+
+from app.core.data_files import sqlite_data_file
 
 logger = logging.getLogger(__name__)
 
-DB_PATH = Path("data/rag_memory.db")
-DB_PATH.parent.mkdir(parents=True, exist_ok=True)
+DB_PATH = sqlite_data_file("rag_memory.db", key_tables=("rag_items",))
 
 EMBED_MODEL = "nomic-embed-text"  # Маленькая модель для embeddings
 EMBED_DIM = 768  # Размерность nomic-embed-text

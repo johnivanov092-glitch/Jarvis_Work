@@ -1,8 +1,8 @@
 import sqlite3
-from pathlib import Path
 
-DB_PATH = Path("data/elira_state.db")
-DB_PATH.parent.mkdir(parents=True, exist_ok=True)
+from app.core.data_files import sqlite_data_file
+
+DB_PATH = sqlite_data_file("elira_state.db", key_tables=("chats", "messages"))
 
 
 def _connect():
@@ -185,5 +185,8 @@ def add_message(chat_id, role, content):
     finally:
         conn.close()
     return dict(row)
+
+
+init_db()
 
 
