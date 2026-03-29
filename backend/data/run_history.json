@@ -1,13 +1,5 @@
 [
   {
-    "run_id": "1c77c27a",
-    "finished_at": "2026-03-20T14:59:29.901716",
-    "ok": true,
-    "route": "research",
-    "model": "deepseek-r1:8b",
-    "answer_len": 935
-  },
-  {
     "run_id": "42e54c9e",
     "finished_at": "2026-03-20T15:04:06.820630",
     "ok": true,
@@ -1598,5 +1590,13 @@
     "route": "chat",
     "model": "gemma3:4b",
     "answer_len": 2425
+  },
+  {
+    "run_id": "3b14f110",
+    "finished_at": "2026-03-29T13:10:02.614400",
+    "ok": true,
+    "route": "chat",
+    "model": "gemma3:4b",
+    "answer_len": 199
   }
 ]
