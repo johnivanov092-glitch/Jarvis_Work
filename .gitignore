@@ -114,3 +114,6 @@ __pycache__/
 !backend/
 !frontend/
 !src-tauri/
+
+# Runtime backend data (local only)
+backend/data/**
