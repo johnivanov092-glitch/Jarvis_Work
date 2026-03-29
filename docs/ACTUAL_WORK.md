@@ -78,6 +78,28 @@ Live repair log for concrete backend/runtime fixes.
   memory routes respond successfully;
   dashboard stats read from the SQL-backed run history service.
 
+### 8. UI visual recovery and Russian localization
+- Status: completed
+- Scope: restored readable interface text, returned action icons to the UI, and replaced unstable emoji-style glyphs with safe SVG icons in the main shell and code workspace.
+- Start: Tauri rendered several interface actions and labels as `?`, while part of the UI still had temporary ASCII placeholders and mixed English labels.
+- Finish:
+  updated [frontend/src/components/EliraChatShell.jsx](/D:/AIWork/Elira_AI/frontend/src/components/EliraChatShell.jsx) and [frontend/src/components/IdeWorkspaceShell.jsx](/D:/AIWork/Elira_AI/frontend/src/components/IdeWorkspaceShell.jsx);
+  restored Russian labels for chat, tasks, Telegram, pipelines, dashboard, export menu, code workspace, library search, and settings;
+  moved visible interface icons to `lucide-react` SVG icons to avoid Tauri font fallback and question-mark rendering.
+- Result:
+  the interface is readable again in the desktop app;
+  critical action buttons display real icons instead of `?`;
+  Russian UI labels are consistent across the main user-facing panels.
+- Marker:
+  current desktop UI baseline is marked as `идеальный визуал` for this stabilization wave.
+
+### 9. UI verification
+- Status: completed
+- Checks:
+  `npm --prefix frontend run build`
+- Result:
+  frontend build passed after the visual recovery patch.
+
 ## Next queued work
 
 ### A. Logging foundation
