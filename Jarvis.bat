@@ -1,9 +1,9 @@
 @echo off
-title Jarvis AI
+title Elira AI (Legacy Launcher)
 color 0A
 echo.
 echo   ╔══════════════════════════════════════╗
-echo   ║         JARVIS AI - Starting         ║
+echo   ║     ELIRA AI - Legacy launcher       ║
 echo   ╚══════════════════════════════════════╝
 echo.
 
@@ -19,18 +19,18 @@ if not exist "backend\.venv\Scripts\python.exe" (
 
 :: Запуск бекенда
 echo [1/2] Starting backend...
-start /min "Jarvis Backend" cmd /c "cd backend && .venv\Scripts\python.exe -m uvicorn app.main:app --host 127.0.0.1 --port 8000 --reload"
+start /min "Elira Backend" cmd /c "cd backend && .venv\Scripts\python.exe -m uvicorn app.main:app --host 127.0.0.1 --port 8000 --reload"
 
 :: Ждём 3 секунды пока бекенд запустится
 timeout /t 3 /nobreak > nul
 
 :: Запуск Tauri (фронтенд + окно)
-echo [2/2] Starting Jarvis window...
+echo [2/2] Starting Elira window...
 start "" cmd /c "npm run tauri dev"
 
 echo.
-echo   Jarvis запущен! Окно откроется через несколько секунд.
-echo   Для остановки закройте окно Jarvis.
+echo   Elira запущена! Окно откроется через несколько секунд.
+echo   Для остановки закройте окно Elira.
 echo.
 timeout /t 5 /nobreak > nul
 exit

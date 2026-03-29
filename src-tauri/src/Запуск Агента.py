@@ -1,2 +1,2 @@
-cd D:\AIWork\jarvis_work
+cd D:\AIWork\Elira_Work
 npm.cmd run tauri dev
