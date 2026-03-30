@@ -44,6 +44,10 @@ REQUIRED_PATHS = {
     "/api/agent-os/workflow-runs/{run_id}",
     "/api/agent-os/workflow-runs/{run_id}/resume",
     "/api/agent-os/workflow-runs/{run_id}/cancel",
+    "/api/agent-os/health",
+    "/api/agent-os/dashboard",
+    "/api/agent-os/limits",
+    "/api/agent-os/limits/{agent_id}",
 }
 
 DEAD_FRONTEND_ENDPOINTS = {
@@ -92,6 +96,20 @@ RUNTIME_STATUS_REQUIRED_KEYS = {
     "web_warnings",
     "warning",
 }
+AGENT_OS_HEALTH_REQUIRED_KEYS = {"ok", "components", "warnings"}
+AGENT_OS_DASHBOARD_REQUIRED_KEYS = {
+    "ok",
+    "window_hours",
+    "total_agent_runs",
+    "blocked_runs",
+    "workflow_runs",
+    "avg_duration_ms",
+    "top_agents",
+    "recent_violations",
+    "limits_summary",
+    "warnings",
+}
+AGENT_OS_LIMITS_REQUIRED_KEYS = {"items", "total"}
 EXPECTED_SEARCH_ENGINES = ("tavily", "duckduckgo", "wikipedia")
 LEGACY_ENGINE_SNIPPETS = {
     '"brave"',
@@ -304,6 +322,55 @@ def validate_web_engines_shape(payload: Any) -> list[str]:
     return failures
 
 
+def validate_agent_os_health_shape(payload: Any) -> list[str]:
+    failures: list[str] = []
+    if not isinstance(payload, dict):
+        return [f"agent_os_health: expected dict, got {type(payload).__name__}"]
+
+    missing = sorted(AGENT_OS_HEALTH_REQUIRED_KEYS - set(payload))
+    if missing:
+        failures.append(f"agent_os_health: missing keys {', '.join(missing)}")
+    if not isinstance(payload.get("ok"), bool):
+        failures.append("agent_os_health: 'ok' must be bool")
+    if not isinstance(payload.get("components"), list):
+        failures.append("agent_os_health: 'components' must be list")
+    if not isinstance(payload.get("warnings"), list):
+        failures.append("agent_os_health: 'warnings' must be list")
+    return failures
+
+
+def validate_agent_os_dashboard_shape(payload: Any) -> list[str]:
+    failures: list[str] = []
+    if not isinstance(payload, dict):
+        return [f"agent_os_dashboard: expected dict, got {type(payload).__name__}"]
+
+    missing = sorted(AGENT_OS_DASHBOARD_REQUIRED_KEYS - set(payload))
+    if missing:
+        failures.append(f"agent_os_dashboard: missing keys {', '.join(missing)}")
+    for key in ("window_hours", "total_agent_runs", "blocked_runs", "workflow_runs", "avg_duration_ms"):
+        if not isinstance(payload.get(key), int):
+            failures.append(f"agent_os_dashboard: '{key}' must be int")
+    for key in ("top_agents", "recent_violations", "limits_summary", "warnings"):
+        if not isinstance(payload.get(key), list):
+            failures.append(f"agent_os_dashboard: '{key}' must be list")
+    return failures
+
+
+def validate_agent_os_limits_shape(payload: Any) -> list[str]:
+    failures: list[str] = []
+    if not isinstance(payload, dict):
+        return [f"agent_os_limits: expected dict, got {type(payload).__name__}"]
+
+    missing = sorted(AGENT_OS_LIMITS_REQUIRED_KEYS - set(payload))
+    if missing:
+        failures.append(f"agent_os_limits: missing keys {', '.join(missing)}")
+    if not isinstance(payload.get("items"), list):
+        failures.append("agent_os_limits: 'items' must be list")
+    if not isinstance(payload.get("total"), int):
+        failures.append("agent_os_limits: 'total' must be int")
+    return failures
+
+
 def collect_failures() -> dict[str, Any]:
     schema = app.openapi()
     paths = set(schema.get("paths", {}))
@@ -314,6 +381,9 @@ def collect_failures() -> dict[str, Any]:
     persona_status = client.get("/api/persona/status").json()
     runtime_status = client.get("/api/runtime/status").json()
     web_engines = client.get("/api/web/engines").json()
+    agent_os_health = client.get("/api/agent-os/health").json()
+    agent_os_dashboard = client.get("/api/agent-os/dashboard").json()
+    agent_os_limits = client.get("/api/agent-os/limits").json()
 
     return {
         "paths_count": len(paths),
@@ -322,6 +392,9 @@ def collect_failures() -> dict[str, Any]:
         "persona_status": persona_status,
         "runtime_status": runtime_status,
         "web_engines": web_engines,
+        "agent_os_health": agent_os_health,
+        "agent_os_dashboard": agent_os_dashboard,
+        "agent_os_limits": agent_os_limits,
         "missing_paths": sorted(REQUIRED_PATHS - paths),
         "raw_fetch_hits": find_raw_relative_fetches(),
         "dead_endpoint_hits": find_dead_endpoint_refs(),
@@ -334,6 +407,9 @@ def collect_failures() -> dict[str, Any]:
         "persona_failures": validate_persona_status_shape(persona_status),
         "runtime_failures": validate_runtime_status_shape(runtime_status),
         "web_engine_failures": validate_web_engines_shape(web_engines),
+        "agent_os_health_failures": validate_agent_os_health_shape(agent_os_health),
+        "agent_os_dashboard_failures": validate_agent_os_dashboard_shape(agent_os_dashboard),
+        "agent_os_limits_failures": validate_agent_os_limits_shape(agent_os_limits),
     }
 
 
@@ -346,6 +422,9 @@ def main() -> int:
     print("Persona status:", json.dumps(results["persona_status"], ensure_ascii=True))
     print("Runtime status:", json.dumps(results["runtime_status"], ensure_ascii=True))
     print("Web engines:", json.dumps(results["web_engines"], ensure_ascii=True))
+    print("Agent OS health:", json.dumps(results["agent_os_health"], ensure_ascii=True))
+    print("Agent OS dashboard:", json.dumps(results["agent_os_dashboard"], ensure_ascii=True))
+    print("Agent OS limits:", json.dumps(results["agent_os_limits"], ensure_ascii=True))
 
     failed = False
     failure_sections = (
@@ -358,6 +437,9 @@ def main() -> int:
         ("Persona status shape issues", results["persona_failures"]),
         ("Runtime status shape issues", results["runtime_failures"]),
         ("Web engine shape issues", results["web_engine_failures"]),
+        ("Agent OS health shape issues", results["agent_os_health_failures"]),
+        ("Agent OS dashboard shape issues", results["agent_os_dashboard_failures"]),
+        ("Agent OS limits shape issues", results["agent_os_limits_failures"]),
     )
 
     for title, items in failure_sections:

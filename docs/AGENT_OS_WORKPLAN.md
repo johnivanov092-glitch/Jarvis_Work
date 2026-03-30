@@ -13,7 +13,7 @@
 | 2 | Tool Registry с JSON Schema | Claude Code | `feat/agent-os-phase2-tools` | **TODO** | Phase 1 |
 | 3 | Event Bus + межагентные сообщения | Codex | `feat/agent-os-phase3-eventbus` | **DONE** | Phase 1 (core), Phase 2 (`tool.executed` — заглушка) |
 | 4 | Workflow Engine | Codex | `feat/agent-os-phase4-workflows` | **DONE** | Phase 1 + 3 (core), Phase 2 (tool adapter only) |
-| 5 | Monitoring + Sandboxing | Свободный | `feat/agent-os-phase5-monitoring` | **TODO** | Phase 3 |
+| 5 | Monitoring + Sandboxing | Codex | `feat/agent-os-phase5-monitoring` | **IN PROGRESS** | Phase 3 + 4 |
 
 ---
 
@@ -186,3 +186,4 @@ subscriptions (
 | 2026-03-30 | Codex | Phase 3 завершена: Event Bus, subscriptions, agent messages, emit в `run_agent`/`run_agent_stream`, тесты и smoke-check зелёные |
 | 2026-03-30 | Codex | Зафиксировано правило самокоординации: два агента синхронизируют статусы и handoff через `AGENT_OS_WORKPLAN.md` и `ACTUAL_WORK.md` без ручной передачи через пользователя |
 | 2026-03-30 | Codex | Взята Phase 4, создана ветка `feat/agent-os-phase4-workflows`, Workflow Engine стартует параллельно незавершённой Phase 2 через локальный tool adapter |
+| 2026-03-30 | Codex | Взята Phase 5, создана ветка `feat/agent-os-phase5-monitoring`, backend checkpoint готов: monitoring DB, soft sandbox hooks, workflow metrics, новые `/api/agent-os/health|dashboard|limits*`, tests + smoke зелёные; следующий шаг — read-only UI секция |

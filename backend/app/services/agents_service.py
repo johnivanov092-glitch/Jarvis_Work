@@ -13,6 +13,12 @@ import re
 import logging
 from typing import Any, Generator
 
+from app.services.agent_monitor import record_agent_run_metric
+from app.services.agent_sandbox import (
+    SandboxPolicyError,
+    preflight_or_raise,
+    resolve_effective_agent_id,
+)
 from app.services.chat_service import run_chat, run_chat_stream
 from app.services.identity_guard import guard_identity_response
 from app.services.planner_v2_service import PlannerV2Service
@@ -122,6 +128,34 @@ def _emit_agent_os_event(*, event_type: str, source_agent_id: str = "", payload:
         )
     except Exception:
         logger.debug("event_bus_emit_failed", exc_info=True)
+
+
+def _record_agent_os_monitoring(
+    *,
+    agent_id: str,
+    run_id: str,
+    route: str,
+    model_name: str,
+    ok: bool,
+    duration_ms: int,
+    streaming: bool,
+    num_ctx: int,
+    selected_tools: list[str] | None,
+) -> None:
+    try:
+        record_agent_run_metric(
+            agent_id=agent_id,
+            run_id=run_id,
+            route=route,
+            model_name=model_name,
+            ok=ok,
+            duration_ms=duration_ms,
+            streaming=streaming,
+            num_ctx=int(num_ctx or 0),
+            tools=list(selected_tools or []),
+        )
+    except Exception:
+        logger.debug("agent_monitor_record_failed", exc_info=True)
 
 
 def _compose_human_style_rules(temporal: dict[str, Any] | None) -> str:
@@ -1773,6 +1807,11 @@ def run_agent(*, model_name, profile_name, user_input, session_id=None, agent_id
         except Exception:
             pass
 
+    _effective_agent_id = resolve_effective_agent_id(
+        agent_id=agent_id,
+        profile_name=profile_name,
+        registry_agent=_registry_agent,
+    )
     history = _trim_history(history or [])
     _skill_flags = {"web_search": use_web_search, "python_exec": use_python_exec, "image_gen": use_image_gen, "file_gen": use_file_gen, "http_api": use_http_api, "sql": use_sql, "screenshot": use_screenshot, "encrypt": use_encrypt, "archiver": use_archiver, "converter": use_converter, "regex": use_regex, "translator": use_translator, "csv_analysis": use_csv, "webhook": use_webhook, "plugins": use_plugins}
     _disabled_skills = {k for k, v in _skill_flags.items() if not v}
@@ -1781,7 +1820,7 @@ def run_agent(*, model_name, profile_name, user_input, session_id=None, agent_id
     raw_user_input = user_input
     planner_input = _strip_frontend_project_context(user_input)
     run = _HISTORY.start_run(raw_user_input)
-    _agent_os_source_id = _resolve_agent_os_source_id(agent_id, _registry_agent)
+    _agent_os_source_id = _effective_agent_id
     _emit_agent_os_event(
         event_type="agent.run.started",
         source_agent_id=_agent_os_source_id,
@@ -1816,6 +1855,15 @@ def run_agent(*, model_name, profile_name, user_input, session_id=None, agent_id
                 _tl(timeline, "memory_save", "Память", "done", "Сохранено: " + str(len(saved)))
         except Exception:
             pass
+
+        preflight_or_raise(
+            agent_id=_effective_agent_id,
+            num_ctx=num_ctx,
+            selected_tools=selected,
+            run_id=run["run_id"],
+            route=route,
+            streaming=False,
+        )
 
         ctx = _collect_context(profile_name=profile_name, user_input=planner_input, tools=selected, tool_results=tool_results, timeline=timeline, use_reflection=use_reflection, temporal=temporal, web_plan=web_plan)
 
@@ -1893,6 +1941,17 @@ def run_agent(*, model_name, profile_name, user_input, session_id=None, agent_id
         }
         _HISTORY.finish_run(run["run_id"], result)
         _duration_ms = int((_time.monotonic() - _agent_start) * 1000)
+        _record_agent_os_monitoring(
+            agent_id=_effective_agent_id,
+            run_id=run["run_id"],
+            route=route,
+            model_name=effective_model,
+            ok=True,
+            duration_ms=_duration_ms,
+            streaming=False,
+            num_ctx=num_ctx,
+            selected_tools=selected,
+        )
 
         # Agent OS: записываем запуск в реестр
         if agent_id or _registry_agent:
@@ -1910,7 +1969,6 @@ def run_agent(*, model_name, profile_name, user_input, session_id=None, agent_id
                 })
             except Exception:
                 pass
-
         _emit_agent_os_event(
             event_type="agent.run.completed",
             source_agent_id=_agent_os_source_id,
@@ -1927,12 +1985,65 @@ def run_agent(*, model_name, profile_name, user_input, session_id=None, agent_id
         )
 
         return result
+    except SandboxPolicyError as exc:
+        err = {
+            "ok": False,
+            "answer": "",
+            "timeline": timeline + [{"step": "sandbox", "title": "Sandbox", "status": "error", "detail": str(exc)}],
+            "tool_results": tool_results,
+            "meta": {
+                "error": str(exc),
+                "run_id": run["run_id"],
+                "sandbox_reason": exc.reason,
+                "sandbox_details": exc.details,
+            },
+        }
+        _HISTORY.finish_run(run["run_id"], err)
+        _duration_ms = int((_time.monotonic() - _agent_start) * 1000)
+        _record_agent_os_monitoring(
+            agent_id=_effective_agent_id,
+            run_id=run["run_id"],
+            route=locals().get("route", ""),
+            model_name=locals().get("effective_model", model_name),
+            ok=False,
+            duration_ms=_duration_ms,
+            streaming=False,
+            num_ctx=num_ctx,
+            selected_tools=locals().get("selected", []),
+        )
+        _emit_agent_os_event(
+            event_type="agent.run.completed",
+            source_agent_id=_agent_os_source_id,
+            payload={
+                "run_id": run["run_id"],
+                "profile_name": profile_name,
+                "route": locals().get("route", ""),
+                "ok": False,
+                "model_used": locals().get("effective_model", model_name),
+                "duration_ms": _duration_ms,
+                "error": str(exc)[:500],
+                "session_id": str(session_id or ""),
+                "streaming": False,
+            },
+        )
+        return err
     except Exception as exc:
         err = {"ok": False, "answer": "", "timeline": timeline + [{"step": "error", "title": "Ошибка", "status": "error", "detail": str(exc)}], "tool_results": tool_results, "meta": {"error": str(exc), "run_id": run["run_id"]}}
         _HISTORY.finish_run(run["run_id"], err)
         _duration_ms = int((_time.monotonic() - _agent_start) * 1000)
 
         # Agent OS: записываем ошибочный запуск
+        _record_agent_os_monitoring(
+            agent_id=_effective_agent_id,
+            run_id=run["run_id"],
+            route=locals().get("route", ""),
+            model_name=locals().get("effective_model", model_name),
+            ok=False,
+            duration_ms=_duration_ms,
+            streaming=False,
+            num_ctx=num_ctx,
+            selected_tools=locals().get("selected", []),
+        )
         if agent_id or _registry_agent:
             try:
                 from app.services.agent_registry import record_agent_run
@@ -1975,6 +2086,7 @@ def run_agent(*, model_name, profile_name, user_input, session_id=None, agent_id
 def run_agent_stream(*, model_name, profile_name, user_input, session_id=None, use_memory=True, use_library=True, use_reflection=False, history=None, num_ctx=8192, use_web_search=True, use_python_exec=True, use_image_gen=True, use_file_gen=True, use_http_api=True, use_sql=True, use_screenshot=True, use_encrypt=True, use_archiver=True, use_converter=True, use_regex=True, use_translator=True, use_csv=True, use_webhook=True, use_plugins=True):
     import time as _time
     _agent_start = _time.monotonic()
+    _effective_agent_id = resolve_effective_agent_id(profile_name=profile_name)
     history = _trim_history(history or [])
     _skill_flags = {"web_search": use_web_search, "python_exec": use_python_exec, "image_gen": use_image_gen, "file_gen": use_file_gen, "http_api": use_http_api, "sql": use_sql, "screenshot": use_screenshot, "encrypt": use_encrypt, "archiver": use_archiver, "converter": use_converter, "regex": use_regex, "translator": use_translator, "csv_analysis": use_csv, "webhook": use_webhook, "plugins": use_plugins}
     _disabled_skills = {k for k, v in _skill_flags.items() if not v}
@@ -1985,7 +2097,7 @@ def run_agent_stream(*, model_name, profile_name, user_input, session_id=None, u
     run = _HISTORY.start_run(raw_user_input)
     _emit_agent_os_event(
         event_type="agent.run.started",
-        source_agent_id="",
+        source_agent_id=_effective_agent_id,
         payload={
             "run_id": run["run_id"],
             "profile_name": profile_name,
@@ -2013,6 +2125,14 @@ def run_agent_stream(*, model_name, profile_name, user_input, session_id=None, u
 
         # ═══ АВТО-ВЫБОР МОДЕЛИ (тихо, без UI) ═══
         effective_model = pick_model_for_route(route, model_name)
+        preflight_or_raise(
+            agent_id=_effective_agent_id,
+            num_ctx=num_ctx,
+            selected_tools=selected,
+            run_id=run["run_id"],
+            route=route,
+            streaming=True,
+        )
         if effective_model != model_name:
             _tl(timeline, "auto_model", "Авто-модель", "ok", f"{model_name} → {effective_model} (route={route})")
 
@@ -2049,9 +2169,20 @@ def run_agent_stream(*, model_name, profile_name, user_input, session_id=None, u
                 )
                 meta["persona"] = persona_meta
                 _HISTORY.finish_run(run["run_id"], {"ok": True, "answer": cached, "meta": meta})
+                _record_agent_os_monitoring(
+                    agent_id=_effective_agent_id,
+                    run_id=run["run_id"],
+                    route=route,
+                    model_name=effective_model,
+                    ok=True,
+                    duration_ms=int((_time.monotonic() - _agent_start) * 1000),
+                    streaming=True,
+                    num_ctx=num_ctx,
+                    selected_tools=selected,
+                )
                 _emit_agent_os_event(
                     event_type="agent.run.completed",
-                    source_agent_id="",
+                    source_agent_id=_effective_agent_id,
                     payload={
                         "run_id": run["run_id"],
                         "profile_name": profile_name,
@@ -2166,9 +2297,20 @@ def run_agent_stream(*, model_name, profile_name, user_input, session_id=None, u
                 "provenance_guard": provenance_guard if provenance_guard.get("changed") else None,
             }
             _HISTORY.finish_run(run["run_id"], {"ok": True, "answer": full_text, "meta": meta})
+            _record_agent_os_monitoring(
+                agent_id=_effective_agent_id,
+                run_id=run["run_id"],
+                route=route,
+                model_name=effective_model,
+                ok=True,
+                duration_ms=int((_time.monotonic() - _agent_start) * 1000),
+                streaming=True,
+                num_ctx=num_ctx,
+                selected_tools=selected,
+            )
             _emit_agent_os_event(
                 event_type="agent.run.completed",
-                source_agent_id="",
+                source_agent_id=_effective_agent_id,
                 payload={
                     "run_id": run["run_id"],
                     "profile_name": profile_name,
@@ -2243,9 +2385,20 @@ def run_agent_stream(*, model_name, profile_name, user_input, session_id=None, u
                 "provenance_guard": provenance_guard if provenance_guard.get("changed") else None,
             }
             _HISTORY.finish_run(run["run_id"], {"ok": True, "answer": full_text, "meta": meta})
+            _record_agent_os_monitoring(
+                agent_id=_effective_agent_id,
+                run_id=run["run_id"],
+                route=route,
+                model_name=effective_model,
+                ok=True,
+                duration_ms=int((_time.monotonic() - _agent_start) * 1000),
+                streaming=True,
+                num_ctx=num_ctx,
+                selected_tools=selected,
+            )
             _emit_agent_os_event(
                 event_type="agent.run.completed",
-                source_agent_id="",
+                source_agent_id=_effective_agent_id,
                 payload={
                     "run_id": run["run_id"],
                     "profile_name": profile_name,
@@ -2260,9 +2413,20 @@ def run_agent_stream(*, model_name, profile_name, user_input, session_id=None, u
             yield {"token": "", "done": True, "full_text": full_text, "meta": meta, "timeline": timeline}
     except Exception as exc:
         _HISTORY.finish_run(run["run_id"], {"ok": False, "error": str(exc)})
+        _record_agent_os_monitoring(
+            agent_id=_effective_agent_id,
+            run_id=run["run_id"],
+            route=locals().get("route", ""),
+            model_name=locals().get("effective_model", model_name),
+            ok=False,
+            duration_ms=int((_time.monotonic() - _agent_start) * 1000),
+            streaming=True,
+            num_ctx=num_ctx,
+            selected_tools=locals().get("selected", []),
+        )
         _emit_agent_os_event(
             event_type="agent.run.completed",
-            source_agent_id="",
+            source_agent_id=_effective_agent_id,
             payload={
                 "run_id": run["run_id"],
                 "profile_name": profile_name,

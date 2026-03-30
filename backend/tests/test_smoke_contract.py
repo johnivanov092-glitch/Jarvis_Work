@@ -24,6 +24,9 @@ class SmokeContractTest(unittest.TestCase):
         self.assertFalse(results["capability_failures"], f"Capability shape issues: {results['capability_failures']}")
         self.assertFalse(results["persona_failures"], f"Persona status issues: {results['persona_failures']}")
         self.assertFalse(results["runtime_failures"], f"Runtime status issues: {results['runtime_failures']}")
+        self.assertFalse(results["agent_os_health_failures"], f"Agent OS health issues: {results['agent_os_health_failures']}")
+        self.assertFalse(results["agent_os_dashboard_failures"], f"Agent OS dashboard issues: {results['agent_os_dashboard_failures']}")
+        self.assertFalse(results["agent_os_limits_failures"], f"Agent OS limits issues: {results['agent_os_limits_failures']}")
 
 
 if __name__ == "__main__":

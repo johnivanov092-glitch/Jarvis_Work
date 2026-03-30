@@ -15,6 +15,8 @@ DB_PATH: Path = sqlite_data_file("event_bus.db")
 SUPPORTED_EVENT_TYPES = (
     "agent.run.started",
     "agent.run.completed",
+    "agent.limit.updated",
+    "sandbox.policy.blocked",
     "tool.executed",
     "workflow.run.started",
     "workflow.run.paused",

@@ -376,3 +376,27 @@ Live repair log for concrete backend/runtime fixes.
   both current multi-agent paths now execute through one workflow-backed layer instead of maintaining separate orchestration logic, which gives the project one shared execution backbone for later phases;
   Autopipelines can now launch workflows directly through `task_type="workflow"` and keep the result inside existing pipeline logging;
   Phase 4 stays compatible with the unfinished Phase 2 by using a local tool adapter around the existing `run_tool()` path instead of modifying `tool_service.py` or `plugin_system.py`.
+
+### 26. Agent OS Phase 5 - Monitoring + Soft Sandboxing
+- Status: in progress
+- Scope: started Phase 5 on branch `feat/agent-os-phase5-monitoring` as the monitoring and soft-sandboxing layer over Phase 3 + Phase 4, with read-only dashboard exposure planned in the existing UI panel.
+- Start:
+  claimed Phase 5 in [AGENT_OS_WORKPLAN.md](/D:/AIWork/Elira_AI/docs/AGENT_OS_WORKPLAN.md) and закрепил фазу за Codex вместо свободного слота;
+  confirmed the execution base is the current Agent OS line rather than `main`, because `main` still does not contain the already completed Phase 3/4 slices;
+  locked the phase assumptions: soft guards only, no OS-level isolation, no live subscription dispatcher, and no dependency on the unfinished Phase 2 registry merge beyond the current `tool_service.py` names.
+- Current implementation track:
+  building [agent_monitor.py](/D:/AIWork/Elira_AI/backend/app/services/agent_monitor.py) as the SQLite-backed metrics/limits layer with default seeded limits for builtin agents and `workflow-engine`;
+  wiring a new sandbox preflight layer for `run_agent()`, `run_agent_stream()`, and workflow tool steps, with audit events and controlled policy-block failures instead of hard crashes;
+  preparing new `/api/agent-os/health`, `/api/agent-os/dashboard`, and `/api/agent-os/limits*` endpoints plus a read-only Agent OS section in the existing dashboard panel.
+- Backend checkpoint:
+  added [backend/app/services/agent_monitor.py](/D:/AIWork/Elira_AI/backend/app/services/agent_monitor.py), [backend/app/services/agent_sandbox.py](/D:/AIWork/Elira_AI/backend/app/services/agent_sandbox.py), [backend/app/schemas/agent_monitor.py](/D:/AIWork/Elira_AI/backend/app/schemas/agent_monitor.py), and [backend/app/api/routes/agent_monitor_routes.py](/D:/AIWork/Elira_AI/backend/app/api/routes/agent_monitor_routes.py) as the new Phase 5 vertical slice with `data/agent_monitor.db`, seeded soft limits, health/dashboard aggregates, and API-only limit updates;
+  integrated preflight sandbox checks and metric recording into [backend/app/services/agents_service.py](/D:/AIWork/Elira_AI/backend/app/services/agents_service.py) for both `run_agent()` and `run_agent_stream()`, including rate-limit / context-limit / allowlist blocks and agent-run metrics for successful and failed runs;
+  extended [backend/app/services/workflow_engine.py](/D:/AIWork/Elira_AI/backend/app/services/workflow_engine.py) with workflow run/step metrics, workflow tool-step sandboxing via synthetic `workflow-engine`, and persisted monitoring for `started`, `resumed`, `paused`, `completed`, `failed`, and `cancelled` workflow states;
+  extended [backend/app/services/event_bus.py](/D:/AIWork/Elira_AI/backend/app/services/event_bus.py), [backend/app/main.py](/D:/AIWork/Elira_AI/backend/app/main.py), [backend/tests/test_agent_os_phase5.py](/D:/AIWork/Elira_AI/backend/tests/test_agent_os_phase5.py), [backend/tests/test_smoke_contract.py](/D:/AIWork/Elira_AI/backend/tests/test_smoke_contract.py), and [scripts/smoke_contract_check.py](/D:/AIWork/Elira_AI/scripts/smoke_contract_check.py) to cover new audit events and Agent OS monitoring endpoints.
+- Verification:
+  `python -m compileall backend/app`;
+  `D:\\AIWork\\Elira_AI\\backend\\.venv\\Scripts\\python.exe -m unittest backend/tests/test_agent_os_phase5.py -v`;
+  `D:\\AIWork\\Elira_AI\\backend\\.venv\\Scripts\\python.exe -m unittest discover -s backend/tests -p "test_*.py"` -> 70 tests OK;
+  `D:\\AIWork\\Elira_AI\\backend\\.venv\\Scripts\\python.exe scripts\\smoke_contract_check.py` -> passed.
+- Next:
+  add the read-only `Agent OS` dashboard section in the frontend and then close Phase 5 as complete.
