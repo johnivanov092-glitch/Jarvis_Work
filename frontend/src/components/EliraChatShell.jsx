@@ -159,6 +159,13 @@ function yesNoText(value) {
   return value ? "Да" : "Нет";
 }
 
+function formatDurationMs(value) {
+  const ms = Number(value || 0);
+  if (!ms) return "0 мс";
+  if (ms >= 1000) return `${(ms / 1000).toFixed(ms >= 10000 ? 0 : 1)} с`;
+  return `${ms} мс`;
+}
+
 function UiIcon({ icon: Icon, size = 14, strokeWidth = 2, style }) {
   return <Icon size={size} strokeWidth={strokeWidth} style={{ display: "block", flexShrink: 0, ...style }} aria-hidden="true" />;
 }
@@ -378,6 +385,125 @@ function RuntimeStatusSection({ status }) {
   );
 }
 
+function AgentOsStatusSection({ health, dashboard, limits }) {
+  const hasHealth = Boolean(health && (Array.isArray(health.components) || Array.isArray(health.warnings)));
+  const hasDashboard = Boolean(dashboard && (dashboard.ok || dashboard.total_agent_runs || dashboard.workflow_runs || dashboard.blocked_runs || (dashboard.top_agents || []).length || (dashboard.limits_summary || []).length));
+  const limitItems = Array.isArray(limits?.items) ? limits.items : Array.isArray(dashboard?.limits_summary) ? dashboard.limits_summary : [];
+  if (!hasHealth && !hasDashboard && !limitItems.length) return null;
+
+  const healthComponents = Array.isArray(health?.components) ? health.components : [];
+  const topAgents = Array.isArray(dashboard?.top_agents) ? dashboard.top_agents : [];
+  const recentViolations = Array.isArray(dashboard?.recent_violations) ? dashboard.recent_violations : [];
+  const warnings = [
+    ...(Array.isArray(health?.warnings) ? health.warnings : []),
+    ...(Array.isArray(dashboard?.warnings) ? dashboard.warnings : []),
+  ].filter(Boolean);
+  const keyLimits = limitItems.filter((item) => [
+    "builtin-universal",
+    "builtin-researcher",
+    "builtin-programmer",
+    "builtin-analyst",
+    "builtin-orchestrator",
+    "workflow-engine",
+  ].includes(item?.agent_id)).slice(0, 6);
+
+  return (
+    <div style={{ marginBottom: 16 }}>
+      <div style={{ fontSize: 12, fontWeight: 600, color: "var(--text)", marginBottom: 8 }}>Agent OS</div>
+      <div style={{ padding: 12, borderRadius: 10, border: `1px solid ${warnings.length ? "rgba(245,166,35,0.35)" : "rgba(16,185,129,0.28)"}`, background: "var(--bg-surface)" }}>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(160px,1fr))", gap: 8, marginBottom: warnings.length || topAgents.length || recentViolations.length || keyLimits.length ? 12 : 0 }}>
+          {[
+            { label: "Health", value: health?.ok ? "OK" : "Check", icon: Bot },
+            { label: "Agent runs / 24ч", value: dashboard?.total_agent_runs ?? 0, icon: BrainCircuit },
+            { label: "Workflow runs / 24ч", value: dashboard?.workflow_runs ?? 0, icon: Workflow },
+            { label: "Blocked / 24ч", value: dashboard?.blocked_runs ?? 0, icon: Square },
+            { label: "Avg duration", value: formatDurationMs(dashboard?.avg_duration_ms ?? 0), icon: BarChart3 },
+          ].map((item) => (
+            <div key={item.label} style={{ padding: 10, borderRadius: 8, border: "1px solid var(--border)", background: "rgba(255,255,255,0.01)" }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 10, color: "var(--text-muted)", marginBottom: 4 }}>
+                <UiIcon icon={item.icon} size={12} />
+                <span>{item.label}</span>
+              </div>
+              <div style={{ fontSize: 12, color: "var(--text)", fontWeight: 600 }}>{item.value}</div>
+            </div>
+          ))}
+        </div>
+
+        {warnings.length ? (
+          <div style={{ display: "grid", gap: 6, marginBottom: 12 }}>
+            {warnings.map((warning, index) => (
+              <div key={`${warning}-${index}`} style={{ padding: "8px 10px", borderRadius: 8, border: "1px solid rgba(245,166,35,0.35)", background: "rgba(245,166,35,0.08)", fontSize: 10, color: "var(--text)" }}>
+                {warning}
+              </div>
+            ))}
+          </div>
+        ) : null}
+
+        {healthComponents.length ? (
+          <div style={{ marginBottom: topAgents.length || recentViolations.length || keyLimits.length ? 12 : 0 }}>
+            <div style={{ fontSize: 11, fontWeight: 600, color: "var(--text)", marginBottom: 6 }}>Components</div>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(180px,1fr))", gap: 8 }}>
+              {healthComponents.map((item) => (
+                <div key={item.component} style={{ padding: 10, borderRadius: 8, border: `1px solid ${item.ok ? "rgba(16,185,129,0.26)" : "rgba(245,166,35,0.30)"}`, background: "rgba(255,255,255,0.01)" }}>
+                  <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, marginBottom: 4 }}>
+                    <div style={{ fontSize: 11, color: "var(--text)", fontWeight: 600 }}>{humanizeValue(item.component)}</div>
+                    <div style={{ fontSize: 10, color: item.ok ? "#10b981" : "#f5a623" }}>{item.ok ? "OK" : "Warn"}</div>
+                  </div>
+                  <div style={{ fontSize: 10, color: "var(--text-muted)", wordBreak: "break-word" }}>{item.detail || "—"}</div>
+                </div>
+              ))}
+            </div>
+          </div>
+        ) : null}
+
+        {topAgents.length ? (
+          <div style={{ marginBottom: recentViolations.length || keyLimits.length ? 12 : 0 }}>
+            <div style={{ fontSize: 11, fontWeight: 600, color: "var(--text)", marginBottom: 6 }}>Top agents</div>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(180px,1fr))", gap: 8 }}>
+              {topAgents.map((item) => (
+                <div key={item.agent_id} style={{ padding: 10, borderRadius: 8, border: "1px solid var(--border)", background: "rgba(255,255,255,0.01)" }}>
+                  <div style={{ fontSize: 11, color: "var(--text)", fontWeight: 600 }}>{item.agent_id}</div>
+                  <div style={{ fontSize: 10, color: "var(--text-muted)", marginTop: 4 }}>Запусков: {item.run_count}</div>
+                </div>
+              ))}
+            </div>
+          </div>
+        ) : null}
+
+        {recentViolations.length ? (
+          <div style={{ marginBottom: keyLimits.length ? 12 : 0 }}>
+            <div style={{ fontSize: 11, fontWeight: 600, color: "var(--text)", marginBottom: 6 }}>Recent violations</div>
+            <div style={{ display: "grid", gap: 6 }}>
+              {recentViolations.slice(0, 5).map((item, index) => (
+                <div key={`${item.id || item.created_at || index}`} style={{ padding: "8px 10px", borderRadius: 8, border: "1px solid rgba(244,67,54,0.28)", background: "rgba(244,67,54,0.08)" }}>
+                  <div style={{ fontSize: 11, color: "var(--text)", fontWeight: 600 }}>{item.agent_id || "unknown-agent"}</div>
+                  <div style={{ fontSize: 10, color: "var(--text-muted)", marginTop: 2 }}>{item.details?.reason || item.details?.error || "policy_blocked"}</div>
+                </div>
+              ))}
+            </div>
+          </div>
+        ) : null}
+
+        {keyLimits.length ? (
+          <div>
+            <div style={{ fontSize: 11, fontWeight: 600, color: "var(--text)", marginBottom: 6 }}>Key limits</div>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(210px,1fr))", gap: 8 }}>
+              {keyLimits.map((item) => (
+                <div key={item.agent_id} style={{ padding: 10, borderRadius: 8, border: "1px solid var(--border)", background: "rgba(255,255,255,0.01)" }}>
+                  <div style={{ fontSize: 11, color: "var(--text)", fontWeight: 600, marginBottom: 4 }}>{item.agent_id}</div>
+                  <div style={{ fontSize: 10, color: "var(--text-muted)" }}>Runs/hour: {item.max_runs_per_hour}</div>
+                  <div style={{ fontSize: 10, color: "var(--text-muted)", marginTop: 2 }}>Max exec: {item.max_execution_seconds}s</div>
+                  <div style={{ fontSize: 10, color: "var(--text-muted)", marginTop: 2 }}>Context: {item.max_context_tokens}</div>
+                </div>
+              ))}
+            </div>
+          </div>
+        ) : null}
+      </div>
+    </div>
+  );
+}
+
 async function fileToLibraryRecord(file) {
   let preview = "";
   const name = file.name || "";
@@ -458,6 +584,9 @@ export default function EliraChatShell() {
   const [projectBrainStatus, setProjectBrainStatus] = useState(null);
   const [personaStatus, setPersonaStatus] = useState(null);
   const [runtimeStatus, setRuntimeStatus] = useState(null);
+  const [agentOsHealth, setAgentOsHealth] = useState(null);
+  const [agentOsDashboard, setAgentOsDashboard] = useState(null);
+  const [agentOsLimits, setAgentOsLimits] = useState(null);
   const [personaBusy, setPersonaBusy] = useState(false);
   const [dashboardError, setDashboardError] = useState("");
   const [pipelinesList, setPipelinesList] = useState([]);
@@ -687,6 +816,9 @@ export default function EliraChatShell() {
       setProjectBrainStatus(data.projectBrainStatus || null);
       setPersonaStatus(data.personaStatus || null);
       setRuntimeStatus(data.runtimeStatus || null);
+      setAgentOsHealth(data.agentOsHealth || null);
+      setAgentOsDashboard(data.agentOsDashboard || null);
+      setAgentOsLimits(data.agentOsLimits || null);
       const message = Array.isArray(data.errors) ? data.errors.filter(Boolean).join(" | ") : "";
       setDashboardError(message);
       setError(message ? `Dashboard: ${message}` : "");
@@ -696,6 +828,9 @@ export default function EliraChatShell() {
       setProjectBrainStatus(null);
       setPersonaStatus(null);
       setRuntimeStatus(null);
+      setAgentOsHealth(null);
+      setAgentOsDashboard(null);
+      setAgentOsLimits(null);
       setDashboardError(message);
       setError(`Dashboard: ${message}`);
     }
@@ -1695,6 +1830,7 @@ export default function EliraChatShell() {
               <RuntimeStatusSection status={runtimeStatus} />
               <CapabilityStatusSection status={projectBrainStatus} />
               <PersonaStatusSection status={personaStatus} busy={personaBusy} onRollback={handlePersonaRollback} />
+              <AgentOsStatusSection health={agentOsHealth} dashboard={agentOsDashboard} limits={agentOsLimits} />
               {!dashData && !dashboardError ? <div style={{color:"var(--text-muted)",fontSize:12}}>Загрузка...</div> : !dashData ? null : (
                 <>
                   {/* Карточки статистики */}

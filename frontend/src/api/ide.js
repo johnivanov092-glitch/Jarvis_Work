@@ -307,6 +307,36 @@ export async function getRuntimeStatus() {
   });
 }
 
+export async function getAgentOsHealth() {
+  return safeRequest("/api/agent-os/health", {}, {
+    ok: false,
+    components: [],
+    warnings: [],
+  });
+}
+
+export async function getAgentOsDashboard(windowHours = 24) {
+  return safeRequest(withParams("/api/agent-os/dashboard", { window_hours: windowHours }), {}, {
+    ok: false,
+    window_hours: windowHours,
+    total_agent_runs: 0,
+    blocked_runs: 0,
+    workflow_runs: 0,
+    avg_duration_ms: 0,
+    top_agents: [],
+    recent_violations: [],
+    limits_summary: [],
+    warnings: [],
+  });
+}
+
+export async function listAgentOsLimits() {
+  return safeRequest("/api/agent-os/limits", {}, {
+    items: [],
+    total: 0,
+  });
+}
+
 export async function getPersonaVersion(version) {
   return safeRequest(withParams("/api/persona/version", { version }), {}, { ok: false, item: null });
 }
@@ -321,11 +351,14 @@ export async function rollbackPersona(version) {
 }
 
 export async function getDashboardOverview() {
-  const [statsResult, projectBrainStatusResult, personaStatusResult, runtimeStatusResult] = await Promise.allSettled([
+  const [statsResult, projectBrainStatusResult, personaStatusResult, runtimeStatusResult, agentOsHealthResult, agentOsDashboardResult, agentOsLimitsResult] = await Promise.allSettled([
     request("/api/dashboard/stats"),
     getProjectBrainStatus(),
     getPersonaStatus(),
     getRuntimeStatus(),
+    getAgentOsHealth(),
+    getAgentOsDashboard(),
+    listAgentOsLimits(),
   ]);
 
   const errors = [];
@@ -333,6 +366,9 @@ export async function getDashboardOverview() {
   const projectBrainStatus = projectBrainStatusResult.status === "fulfilled" ? projectBrainStatusResult.value : null;
   const personaStatus = personaStatusResult.status === "fulfilled" ? personaStatusResult.value : null;
   const runtimeStatus = runtimeStatusResult.status === "fulfilled" ? runtimeStatusResult.value : null;
+  const agentOsHealth = agentOsHealthResult.status === "fulfilled" ? agentOsHealthResult.value : null;
+  const agentOsDashboard = agentOsDashboardResult.status === "fulfilled" ? agentOsDashboardResult.value : null;
+  const agentOsLimits = agentOsLimitsResult.status === "fulfilled" ? agentOsLimitsResult.value : null;
 
   if (statsResult.status === "rejected") {
     errors.push(`dashboard stats: ${formatRequestError(statsResult.reason)}`);
@@ -346,11 +382,20 @@ export async function getDashboardOverview() {
   if (runtimeStatusResult.status === "rejected") {
     errors.push(`runtime status: ${formatRequestError(runtimeStatusResult.reason)}`);
   }
-  if (!stats && !projectBrainStatus && !personaStatus && !runtimeStatus && errors.length) {
+  if (agentOsHealthResult.status === "rejected") {
+    errors.push(`agent os health: ${formatRequestError(agentOsHealthResult.reason)}`);
+  }
+  if (agentOsDashboardResult.status === "rejected") {
+    errors.push(`agent os dashboard: ${formatRequestError(agentOsDashboardResult.reason)}`);
+  }
+  if (agentOsLimitsResult.status === "rejected") {
+    errors.push(`agent os limits: ${formatRequestError(agentOsLimitsResult.reason)}`);
+  }
+  if (!stats && !projectBrainStatus && !personaStatus && !runtimeStatus && !agentOsHealth && !agentOsDashboard && !agentOsLimits && errors.length) {
     throw new Error(errors.join(" | "));
   }
 
-  return { stats, projectBrainStatus, personaStatus, runtimeStatus, errors };
+  return { stats, projectBrainStatus, personaStatus, runtimeStatus, agentOsHealth, agentOsDashboard, agentOsLimits, errors };
 }
 
 export async function listPatchHistory({ path = "", limit = 20 } = {}) {
@@ -639,6 +684,9 @@ export const api = {
   getProjectBrainStatus,
   getPersonaStatus,
   getRuntimeStatus,
+  getAgentOsHealth,
+  getAgentOsDashboard,
+  listAgentOsLimits,
   getPersonaVersion,
   listPersonaCandidates,
   rollbackPersona,

@@ -378,8 +378,8 @@ Live repair log for concrete backend/runtime fixes.
   Phase 4 stays compatible with the unfinished Phase 2 by using a local tool adapter around the existing `run_tool()` path instead of modifying `tool_service.py` or `plugin_system.py`.
 
 ### 26. Agent OS Phase 5 - Monitoring + Soft Sandboxing
-- Status: in progress
-- Scope: started Phase 5 on branch `feat/agent-os-phase5-monitoring` as the monitoring and soft-sandboxing layer over Phase 3 + Phase 4, with read-only dashboard exposure planned in the existing UI panel.
+- Status: completed
+- Scope: completed Phase 5 on branch `feat/agent-os-phase5-monitoring` as the monitoring and soft-sandboxing layer over Phase 3 + Phase 4, including the read-only `Agent OS` dashboard block in the existing UI panel.
 - Start:
   claimed Phase 5 in [AGENT_OS_WORKPLAN.md](/D:/AIWork/Elira_AI/docs/AGENT_OS_WORKPLAN.md) and закрепил фазу за Codex вместо свободного слота;
   confirmed the execution base is the current Agent OS line rather than `main`, because `main` still does not contain the already completed Phase 3/4 slices;
@@ -398,5 +398,12 @@ Live repair log for concrete backend/runtime fixes.
   `D:\\AIWork\\Elira_AI\\backend\\.venv\\Scripts\\python.exe -m unittest backend/tests/test_agent_os_phase5.py -v`;
   `D:\\AIWork\\Elira_AI\\backend\\.venv\\Scripts\\python.exe -m unittest discover -s backend/tests -p "test_*.py"` -> 70 tests OK;
   `D:\\AIWork\\Elira_AI\\backend\\.venv\\Scripts\\python.exe scripts\\smoke_contract_check.py` -> passed.
-- Next:
-  add the read-only `Agent OS` dashboard section in the frontend and then close Phase 5 as complete.
+- Frontend completion:
+  expanded [frontend/src/api/ide.js](/D:/AIWork/Elira_AI/frontend/src/api/ide.js) so the dashboard overview also loads `agent-os` health, dashboard, and limits payloads alongside the existing runtime/persona/project data;
+  finished the read-only `Agent OS` section in [frontend/src/components/EliraChatShell.jsx](/D:/AIWork/Elira_AI/frontend/src/components/EliraChatShell.jsx), wiring health, blocked runs, workflow runs, top agents, warnings, and key soft limits into the existing dashboard panel without adding edit controls;
+  kept the Phase 5 UI intentionally observational only: limits remain API-managed, while the dashboard now surfaces the current health and policy state for operators.
+- Final verification:
+  `npm --prefix frontend run build` -> passed.
+- Result:
+  Agent OS now has a complete Phase 5 layer: backend monitoring/soft-sandboxing, audit events, policy-limit endpoints, workflow-aware metrics, and a read-only dashboard view for runtime operators;
+  ordinary chat and multi-agent flows stay compatible under the seeded soft defaults, while policy blocks and limit updates are visible both in API responses and in the dashboard summary.
