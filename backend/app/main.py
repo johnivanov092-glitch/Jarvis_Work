@@ -41,6 +41,8 @@ from app.api.routes.autopipeline_routes import router as autopipeline_router
 from app.api.routes.task_planner_routes import router as task_planner_router
 from app.api.routes.telegram_routes import router as telegram_router
 from app.api.routes.agent_registry_routes import router as agent_registry_router
+from app.api.routes.event_bus_routes import router as event_bus_router
+from app.api.routes.workflow_routes import router as workflow_router
 from app.services.runtime_service import init_runtime_state
 
 app = FastAPI(title="Elira AI API")
@@ -103,12 +105,16 @@ app.include_router(autopipeline_router)
 app.include_router(task_planner_router)
 app.include_router(telegram_router)
 app.include_router(agent_registry_router)
+app.include_router(event_bus_router)
+app.include_router(workflow_router)
 
 init_runtime_state()
 
 # Seed встроенных агентов в Agent Registry при старте
 from app.services.agent_registry import seed_builtin_agents
+from app.services.workflow_engine import seed_builtin_workflows
 seed_builtin_agents()
+seed_builtin_workflows()
 
 @app.get("/health")
 def health():

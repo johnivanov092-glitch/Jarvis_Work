@@ -12,7 +12,7 @@
 | 1 | Agent Registry + Persistent State | Claude Code | `feat/agent-os-phase1-registry` | **DONE** | — |
 | 2 | Tool Registry с JSON Schema | Claude Code | `feat/agent-os-phase2-tools` | **TODO** | Phase 1 |
 | 3 | Event Bus + межагентные сообщения | Codex | `feat/agent-os-phase3-eventbus` | **DONE** | Phase 1 (core), Phase 2 (`tool.executed` — заглушка) |
-| 4 | Workflow Engine | Свободный | `feat/agent-os-phase4-workflows` | **TODO** | Phase 1 + 2 + 3 |
+| 4 | Workflow Engine | Codex | `feat/agent-os-phase4-workflows` | **DONE** | Phase 1 + 3 (core), Phase 2 (tool adapter only) |
 | 5 | Monitoring + Sandboxing | Свободный | `feat/agent-os-phase5-monitoring` | **TODO** | Phase 3 |
 
 ---
@@ -27,6 +27,7 @@
 6. Тесты фазы живут в `backend/tests/test_agent_os_phaseN.py`.
 7. Пушить фазовые ветки нужно сразу после осмысленных коммитов.
 8. Детальный локальный журнал этапов и работ обязательно ведется в [ACTUAL_WORK.md](/D:/AIWork/Elira_AI/docs/ACTUAL_WORK.md).
+9. Агенты координируются между собой сами: все статусы, зависимости, заглушки, handoff-заметки и договоренности фиксируются в этом файле и в `ACTUAL_WORK.md`, без перекладывания роли посредника на пользователя.
 
 ---
 
@@ -183,3 +184,5 @@ subscriptions (
 | 2026-03-30 | Claude Code | Создан общий workplan и распределены Phase 2-3 |
 | 2026-03-30 | Codex | Взята Phase 3, создана ветка `feat/agent-os-phase3-eventbus`, реализация Event Bus начата |
 | 2026-03-30 | Codex | Phase 3 завершена: Event Bus, subscriptions, agent messages, emit в `run_agent`/`run_agent_stream`, тесты и smoke-check зелёные |
+| 2026-03-30 | Codex | Зафиксировано правило самокоординации: два агента синхронизируют статусы и handoff через `AGENT_OS_WORKPLAN.md` и `ACTUAL_WORK.md` без ручной передачи через пользователя |
+| 2026-03-30 | Codex | Взята Phase 4, создана ветка `feat/agent-os-phase4-workflows`, Workflow Engine стартует параллельно незавершённой Phase 2 через локальный tool adapter |

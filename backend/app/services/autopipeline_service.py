@@ -8,6 +8,7 @@ autopipeline_service.py — Autopipelines (cron-задачи) Elira AI.
   - prompt: отправить промпт в LLM и сохранить результат
   - web_search: выполнить веб-поиск по запросу
   - plugin: запустить плагин
+  - workflow: запустить workflow Engine
   - http: вызвать URL (webhook/API)
 """
 from __future__ import annotations
@@ -231,6 +232,26 @@ def _execute_task(task_type: str, task_data: dict) -> dict:
                 return {"ok": False, "error": "Нет имени плагина"}
             from app.services.plugin_system import run_plugin
             return run_plugin(name, task_data.get("args", {}))
+
+        elif task_type == "workflow":
+            workflow_id = str(task_data.get("workflow_id", "")).strip()
+            if not workflow_id:
+                return {"ok": False, "error": "Нет workflow_id"}
+            from app.services.workflow_engine import start_workflow_run
+
+            run = start_workflow_run(
+                workflow_id=workflow_id,
+                workflow_input=task_data.get("input", {}) if isinstance(task_data.get("input", {}), dict) else {},
+                context=task_data.get("context", {}) if isinstance(task_data.get("context", {}), dict) else {},
+                trigger_source="autopipeline",
+            )
+            return {
+                "ok": run.get("status") == "completed",
+                "run_id": run.get("run_id", ""),
+                "workflow_id": workflow_id,
+                "status": run.get("status", ""),
+                "error": run.get("error", {}).get("message", "") if isinstance(run.get("error"), dict) else "",
+            }
 
         elif task_type == "http":
             import requests

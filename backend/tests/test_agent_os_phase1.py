@@ -1,172 +1,191 @@
-"""Тесты Agent OS Phase 1 — Agent Registry."""
+from __future__ import annotations
+
 import sys
+import unittest
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-import pytest
-from app.services import agent_registry as reg
+ROOT = Path(__file__).resolve().parents[2]
+BACKEND_ROOT = ROOT / "backend"
 
+if str(BACKEND_ROOT) not in sys.path:
+    sys.path.insert(0, str(BACKEND_ROOT))
 
-@pytest.fixture(autouse=True)
-def _clean_test_agents():
-    """Удаляем тестовых агентов после каждого теста."""
-    yield
-    for prefix in ("test-", "custom-"):
-        for a in reg.list_agents(enabled_only=False):
-            if a["id"].startswith(prefix):
-                with reg._conn() as con:
-                    con.execute("DELETE FROM agent_runs WHERE agent_id = ?", (a["id"],))
-                    con.execute("DELETE FROM agent_state WHERE agent_id = ?", (a["id"],))
-                    con.execute("DELETE FROM agents WHERE id = ?", (a["id"],))
+from app.services import agent_registry as reg  # noqa: E402
 
 
-class TestAgentCRUD:
-    def test_register_and_get(self):
-        result = reg.register_agent({
-            "id": "test-alpha",
-            "name": "Alpha Agent",
-            "name_ru": "Агент Альфа",
-            "role": "researcher",
-            "system_prompt": "You are Alpha.",
-            "tags": ["test", "research"],
-        })
-        assert result["id"] == "test-alpha"
-        assert result["name"] == "Alpha Agent"
-        assert result["role"] == "researcher"
+class AgentRegistryTestCase(unittest.TestCase):
+    def tearDown(self) -> None:
+        for prefix in ("test-", "custom-"):
+            for agent in reg.list_agents(enabled_only=False):
+                if agent["id"].startswith(prefix):
+                    with reg._conn() as con:
+                        con.execute("DELETE FROM agent_runs WHERE agent_id = ?", (agent["id"],))
+                        con.execute("DELETE FROM agent_state WHERE agent_id = ?", (agent["id"],))
+                        con.execute("DELETE FROM agents WHERE id = ?", (agent["id"],))
+        super().tearDown()
+
+
+class TestAgentCRUD(AgentRegistryTestCase):
+    def test_register_and_get(self) -> None:
+        result = reg.register_agent(
+            {
+                "id": "test-alpha",
+                "name": "Alpha Agent",
+                "name_ru": "Агент Альфа",
+                "role": "researcher",
+                "system_prompt": "You are Alpha.",
+                "tags": ["test", "research"],
+            }
+        )
+        self.assertEqual(result["id"], "test-alpha")
+        self.assertEqual(result["name"], "Alpha Agent")
+        self.assertEqual(result["role"], "researcher")
 
         fetched = reg.get_agent("test-alpha")
+        self.assertIsNotNone(fetched)
         assert fetched is not None
-        assert fetched["name_ru"] == "Агент Альфа"
-        assert "test" in fetched["tags"]
+        self.assertEqual(fetched["name_ru"], "Агент Альфа")
+        self.assertIn("test", fetched["tags"])
 
-    def test_list_agents(self):
+    def test_list_agents(self) -> None:
         reg.register_agent({"id": "test-one", "name": "One", "role": "general"})
         reg.register_agent({"id": "test-two", "name": "Two", "role": "researcher"})
 
         all_agents = reg.list_agents()
-        ids = [a["id"] for a in all_agents]
-        assert "test-one" in ids
-        assert "test-two" in ids
+        ids = [agent["id"] for agent in all_agents]
+        self.assertIn("test-one", ids)
+        self.assertIn("test-two", ids)
 
         researchers = reg.list_agents(role="researcher")
-        assert all(a["role"] == "researcher" for a in researchers)
+        self.assertTrue(all(agent["role"] == "researcher" for agent in researchers))
 
-    def test_update_agent(self):
+    def test_update_agent(self) -> None:
         reg.register_agent({"id": "test-upd", "name": "Before"})
         updated = reg.update_agent("test-upd", {"name": "After", "role": "analyst"})
-        assert updated["name"] == "After"
-        assert updated["role"] == "analyst"
+        self.assertEqual(updated["name"], "After")
+        self.assertEqual(updated["role"], "analyst")
 
-    def test_delete_agent_soft(self):
+    def test_delete_agent_soft(self) -> None:
         reg.register_agent({"id": "test-del", "name": "ToDelete"})
         reg.delete_agent("test-del")
 
         agent = reg.get_agent("test-del")
+        self.assertIsNotNone(agent)
         assert agent is not None
-        assert agent["enabled"] is False
+        self.assertFalse(agent["enabled"])
 
         enabled = reg.list_agents(enabled_only=True)
-        assert "test-del" not in [a["id"] for a in enabled]
+        self.assertNotIn("test-del", [item["id"] for item in enabled])
 
-    def test_upsert_on_register(self):
+    def test_upsert_on_register(self) -> None:
         reg.register_agent({"id": "test-ups", "name": "V1"})
         reg.register_agent({"id": "test-ups", "name": "V2"})
         agent = reg.get_agent("test-ups")
-        assert agent["name"] == "V2"
+        assert agent is not None
+        self.assertEqual(agent["name"], "V2")
 
-    def test_get_nonexistent(self):
-        assert reg.get_agent("no-such-agent") is None
+    def test_get_nonexistent(self) -> None:
+        self.assertIsNone(reg.get_agent("no-such-agent"))
 
 
-class TestAgentState:
-    def test_state_empty_by_default(self):
+class TestAgentState(AgentRegistryTestCase):
+    def test_state_empty_by_default(self) -> None:
         reg.register_agent({"id": "test-state", "name": "Stateful"})
         state = reg.get_agent_state("test-state")
-        assert state["state"] == {}
+        self.assertEqual(state["state"], {})
 
-    def test_set_and_get_state(self):
+    def test_set_and_get_state(self) -> None:
         reg.register_agent({"id": "test-state2", "name": "Stateful2"})
         reg.set_agent_state("test-state2", {"memory": ["fact1"], "counter": 42})
 
         state = reg.get_agent_state("test-state2")
-        assert state["state"]["counter"] == 42
-        assert state["state"]["memory"] == ["fact1"]
-        assert state["last_active_at"] is not None
+        self.assertEqual(state["state"]["counter"], 42)
+        self.assertEqual(state["state"]["memory"], ["fact1"])
+        self.assertIsNotNone(state["last_active_at"])
 
-    def test_state_overwrite(self):
+    def test_state_overwrite(self) -> None:
         reg.register_agent({"id": "test-state3", "name": "Stateful3"})
         reg.set_agent_state("test-state3", {"v": 1})
         reg.set_agent_state("test-state3", {"v": 2})
         state = reg.get_agent_state("test-state3")
-        assert state["state"]["v"] == 2
+        self.assertEqual(state["state"]["v"], 2)
 
 
-class TestAgentRuns:
-    def test_record_and_list_runs(self):
+class TestAgentRuns(AgentRegistryTestCase):
+    def test_record_and_list_runs(self) -> None:
         reg.register_agent({"id": "test-runner", "name": "Runner"})
-        reg.record_agent_run({
-            "agent_id": "test-runner",
-            "run_id": "run-001",
-            "input_summary": "Что такое Python?",
-            "output_summary": "Python — язык программирования.",
-            "ok": True,
-            "route": "chat",
-            "model_used": "gemma3:4b",
-            "duration_ms": 1500,
-        })
-        reg.record_agent_run({
-            "agent_id": "test-runner",
-            "run_id": "run-002",
-            "input_summary": "Ошибка",
-            "ok": False,
-            "route": "code",
-            "duration_ms": 300,
-        })
+        reg.record_agent_run(
+            {
+                "agent_id": "test-runner",
+                "run_id": "run-001",
+                "input_summary": "Что такое Python?",
+                "output_summary": "Python — язык программирования.",
+                "ok": True,
+                "route": "chat",
+                "model_used": "gemma3:4b",
+                "duration_ms": 1500,
+            }
+        )
+        reg.record_agent_run(
+            {
+                "agent_id": "test-runner",
+                "run_id": "run-002",
+                "input_summary": "Ошибка",
+                "ok": False,
+                "route": "code",
+                "duration_ms": 300,
+            }
+        )
 
         runs, total = reg.get_agent_runs("test-runner")
-        assert total == 2
-        assert runs[0]["run_id"] == "run-002"  # newest first
-        assert runs[1]["ok"] is True
+        self.assertEqual(total, 2)
+        self.assertEqual(runs[0]["run_id"], "run-002")
+        self.assertTrue(runs[1]["ok"])
 
 
-class TestSeedBuiltinAgents:
-    def test_seed_creates_agents(self):
-        # Сбрасываем флаг и вызываем seed
+class TestSeedBuiltinAgents(AgentRegistryTestCase):
+    def test_seed_creates_agents(self) -> None:
         reg._BUILTIN_AGENTS_SEEDED = False
         count = reg.seed_builtin_agents()
         agents = reg.list_agents()
-        ids = [a["id"] for a in agents]
-        builtin_ids = [i for i in ids if i.startswith("builtin-")]
-        # Если AGENT_PROFILES непустой — должны быть builtin, иначе count >= 0
-        from app.core.config import AGENT_PROFILES
-        if AGENT_PROFILES:
-            assert len(builtin_ids) >= 1 or count >= 0
-        else:
-            assert count == 0
+        ids = [agent["id"] for agent in agents]
+        builtin_ids = [agent_id for agent_id in ids if agent_id.startswith("builtin-")]
 
-    def test_seed_idempotent(self):
+        from app.core.config import AGENT_PROFILES
+
+        if AGENT_PROFILES:
+            self.assertTrue(len(builtin_ids) >= 1 or count >= 0)
+        else:
+            self.assertEqual(count, 0)
+
+    def test_seed_idempotent(self) -> None:
         reg._BUILTIN_AGENTS_SEEDED = False
         reg.seed_builtin_agents()
-        # Повторный вызов не должен создавать дубликаты
         reg._BUILTIN_AGENTS_SEEDED = False
-        count2 = reg.seed_builtin_agents()
-        assert count2 == 0  # уже существуют
+        count = reg.seed_builtin_agents()
+        self.assertEqual(count, 0)
 
 
-class TestResolveAgent:
-    def test_resolve_by_id(self):
+class TestResolveAgent(AgentRegistryTestCase):
+    def test_resolve_by_id(self) -> None:
         reg.register_agent({"id": "test-res", "name": "Resolvable", "role": "analyst"})
         agent = reg.resolve_agent(agent_id="test-res")
+        self.assertIsNotNone(agent)
         assert agent is not None
-        assert agent["id"] == "test-res"
+        self.assertEqual(agent["id"], "test-res")
 
-    def test_resolve_by_role(self):
+    def test_resolve_by_role(self) -> None:
         reg.register_agent({"id": "test-role-a", "name": "RoleAgent", "role": "orchestrator"})
         agent = reg.resolve_agent(role="orchestrator")
+        self.assertIsNotNone(agent)
         assert agent is not None
-        assert agent["role"] == "orchestrator"
+        self.assertEqual(agent["role"], "orchestrator")
 
-    def test_resolve_none(self):
-        assert reg.resolve_agent() is None
-        assert reg.resolve_agent(agent_id="nonexistent") is None
+    def test_resolve_none(self) -> None:
+        self.assertIsNone(reg.resolve_agent())
+        self.assertIsNone(reg.resolve_agent(agent_id="nonexistent"))
+
+
+if __name__ == "__main__":
+    unittest.main()

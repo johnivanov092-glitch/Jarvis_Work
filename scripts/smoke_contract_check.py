@@ -33,6 +33,17 @@ REQUIRED_PATHS = {
     "/api/project-brain/status",
     "/api/persona/status",
     "/api/runtime/status",
+    "/api/agent-os/events",
+    "/api/agent-os/messages",
+    "/api/agent-os/agents/{agent_id}/messages",
+    "/api/agent-os/messages/{message_id}/read",
+    "/api/agent-os/subscriptions",
+    "/api/agent-os/workflows",
+    "/api/agent-os/workflows/{workflow_id}",
+    "/api/agent-os/workflow-runs",
+    "/api/agent-os/workflow-runs/{run_id}",
+    "/api/agent-os/workflow-runs/{run_id}/resume",
+    "/api/agent-os/workflow-runs/{run_id}/cancel",
 }
 
 DEAD_FRONTEND_ENDPOINTS = {

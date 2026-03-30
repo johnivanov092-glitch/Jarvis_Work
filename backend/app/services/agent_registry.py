@@ -346,6 +346,43 @@ def seed_builtin_agents() -> int:
         })
         created += 1
 
+    extra_builtins = [
+        {
+            "id": "builtin-orchestrator",
+            "name": "Orchestrator",
+            "name_ru": "Оркестратор",
+            "description": "Plans and synthesizes multi-step workflows.",
+            "description_ru": "Планирует и собирает итог многошаговых workflow.",
+            "role": "orchestrator",
+            "system_prompt": (
+                "Ты Оркестратор. Разбивай сложные задачи на шаги, собирай итоговые выводы, "
+                "держи структуру ответа и помогай агентам работать согласованно."
+            ),
+            "tags": ["workflow", "planning", "coordination"],
+            "config": {"icon": "◎"},
+        },
+        {
+            "id": "builtin-reviewer",
+            "name": "Reviewer",
+            "name_ru": "Ревьюер",
+            "description": "Critiques intermediate and final results.",
+            "description_ru": "Проверяет промежуточные и финальные результаты.",
+            "role": "reviewer",
+            "system_prompt": (
+                "Ты Ревьюер. Проверяй ответы на логические пробелы, слабые места, риски и "
+                "недостающие улучшения. Пиши конкретно и полезно."
+            ),
+            "tags": ["review", "quality", "critique"],
+            "config": {"icon": "◌"},
+        },
+    ]
+
+    for agent_def in extra_builtins:
+        if get_agent(agent_def["id"]):
+            continue
+        register_agent(agent_def)
+        created += 1
+
     _BUILTIN_AGENTS_SEEDED = True
     return created
 

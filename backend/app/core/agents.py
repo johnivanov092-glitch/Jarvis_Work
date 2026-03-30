@@ -2858,3 +2858,26 @@ Reflection:
         "persona": persona_meta,
     }
 
+
+# Phase 4 override: legacy multi-agent path now delegates to Workflow Engine.
+def run_multi_agent(
+    task: str,
+    model_name: str,
+    memory_profile: str,
+    num_ctx: int = 4096,
+    progress_callback=None,
+    project_context: str = "",
+    file_context: str = "",
+) -> Dict[str, Any]:
+    from app.services.workflow_engine import run_legacy_multi_agent_workflow
+
+    return run_legacy_multi_agent_workflow(
+        task=task,
+        model_name=model_name,
+        memory_profile=memory_profile,
+        num_ctx=num_ctx,
+        progress_callback=progress_callback,
+        project_context=project_context,
+        file_context=file_context,
+    )
+

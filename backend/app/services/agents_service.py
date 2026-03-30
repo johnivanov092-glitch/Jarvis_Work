@@ -107,6 +107,23 @@ def _apply_provenance_guard(user_input: str, answer_text: str, timeline: list[di
     return guard
 
 
+def _resolve_agent_os_source_id(agent_id: str | None, registry_agent: dict[str, Any] | None) -> str:
+    return str(agent_id or (registry_agent or {}).get("id") or "")
+
+
+def _emit_agent_os_event(*, event_type: str, source_agent_id: str = "", payload: dict[str, Any] | None = None) -> None:
+    try:
+        from app.services.event_bus import emit_event
+
+        emit_event(
+            event_type=event_type,
+            source_agent_id=source_agent_id,
+            payload=payload or {},
+        )
+    except Exception:
+        logger.debug("event_bus_emit_failed", exc_info=True)
+
+
 def _compose_human_style_rules(temporal: dict[str, Any] | None) -> str:
     temporal = temporal or {}
     mode = temporal.get("mode", "none")
@@ -1764,6 +1781,18 @@ def run_agent(*, model_name, profile_name, user_input, session_id=None, agent_id
     raw_user_input = user_input
     planner_input = _strip_frontend_project_context(user_input)
     run = _HISTORY.start_run(raw_user_input)
+    _agent_os_source_id = _resolve_agent_os_source_id(agent_id, _registry_agent)
+    _emit_agent_os_event(
+        event_type="agent.run.started",
+        source_agent_id=_agent_os_source_id,
+        payload={
+            "run_id": run["run_id"],
+            "profile_name": profile_name,
+            "requested_model": model_name,
+            "session_id": str(session_id or ""),
+            "streaming": False,
+        },
+    )
     try:
         plan = planner.plan(planner_input)
         _HISTORY.add_event(run["run_id"], "planner", plan)
@@ -1863,6 +1892,7 @@ def run_agent(*, model_name, profile_name, user_input, session_id=None, agent_id
             },
         }
         _HISTORY.finish_run(run["run_id"], result)
+        _duration_ms = int((_time.monotonic() - _agent_start) * 1000)
 
         # Agent OS: записываем запуск в реестр
         if agent_id or _registry_agent:
@@ -1876,15 +1906,31 @@ def run_agent(*, model_name, profile_name, user_input, session_id=None, agent_id
                     "ok": True,
                     "route": route,
                     "model_used": effective_model,
-                    "duration_ms": int((_time.monotonic() - _agent_start) * 1000),
+                    "duration_ms": _duration_ms,
                 })
             except Exception:
                 pass
+
+        _emit_agent_os_event(
+            event_type="agent.run.completed",
+            source_agent_id=_agent_os_source_id,
+            payload={
+                "run_id": run["run_id"],
+                "profile_name": profile_name,
+                "route": route,
+                "ok": True,
+                "model_used": effective_model,
+                "duration_ms": _duration_ms,
+                "session_id": str(session_id or ""),
+                "streaming": False,
+            },
+        )
 
         return result
     except Exception as exc:
         err = {"ok": False, "answer": "", "timeline": timeline + [{"step": "error", "title": "Ошибка", "status": "error", "detail": str(exc)}], "tool_results": tool_results, "meta": {"error": str(exc), "run_id": run["run_id"]}}
         _HISTORY.finish_run(run["run_id"], err)
+        _duration_ms = int((_time.monotonic() - _agent_start) * 1000)
 
         # Agent OS: записываем ошибочный запуск
         if agent_id or _registry_agent:
@@ -1898,10 +1944,26 @@ def run_agent(*, model_name, profile_name, user_input, session_id=None, agent_id
                     "ok": False,
                     "route": "",
                     "model_used": model_name,
-                    "duration_ms": int((_time.monotonic() - _agent_start) * 1000),
+                    "duration_ms": _duration_ms,
                 })
             except Exception:
                 pass
+
+        _emit_agent_os_event(
+            event_type="agent.run.completed",
+            source_agent_id=_agent_os_source_id,
+            payload={
+                "run_id": run["run_id"],
+                "profile_name": profile_name,
+                "route": locals().get("route", ""),
+                "ok": False,
+                "model_used": locals().get("effective_model", model_name),
+                "duration_ms": _duration_ms,
+                "error": str(exc)[:500],
+                "session_id": str(session_id or ""),
+                "streaming": False,
+            },
+        )
 
         return err
 
@@ -1911,6 +1973,8 @@ def run_agent(*, model_name, profile_name, user_input, session_id=None, agent_id
 # ═══════════════════════════════════════════════════════════════
 
 def run_agent_stream(*, model_name, profile_name, user_input, session_id=None, use_memory=True, use_library=True, use_reflection=False, history=None, num_ctx=8192, use_web_search=True, use_python_exec=True, use_image_gen=True, use_file_gen=True, use_http_api=True, use_sql=True, use_screenshot=True, use_encrypt=True, use_archiver=True, use_converter=True, use_regex=True, use_translator=True, use_csv=True, use_webhook=True, use_plugins=True):
+    import time as _time
+    _agent_start = _time.monotonic()
     history = _trim_history(history or [])
     _skill_flags = {"web_search": use_web_search, "python_exec": use_python_exec, "image_gen": use_image_gen, "file_gen": use_file_gen, "http_api": use_http_api, "sql": use_sql, "screenshot": use_screenshot, "encrypt": use_encrypt, "archiver": use_archiver, "converter": use_converter, "regex": use_regex, "translator": use_translator, "csv_analysis": use_csv, "webhook": use_webhook, "plugins": use_plugins}
     _disabled_skills = {k for k, v in _skill_flags.items() if not v}
@@ -1919,6 +1983,17 @@ def run_agent_stream(*, model_name, profile_name, user_input, session_id=None, u
     raw_user_input = user_input
     planner_input = _strip_frontend_project_context(user_input)
     run = _HISTORY.start_run(raw_user_input)
+    _emit_agent_os_event(
+        event_type="agent.run.started",
+        source_agent_id="",
+        payload={
+            "run_id": run["run_id"],
+            "profile_name": profile_name,
+            "requested_model": model_name,
+            "session_id": str(session_id or ""),
+            "streaming": True,
+        },
+    )
     try:
         yield {"token": "", "done": False, "phase": "planning", "message": "Думаю..."}
 
@@ -1974,6 +2049,20 @@ def run_agent_stream(*, model_name, profile_name, user_input, session_id=None, u
                 )
                 meta["persona"] = persona_meta
                 _HISTORY.finish_run(run["run_id"], {"ok": True, "answer": cached, "meta": meta})
+                _emit_agent_os_event(
+                    event_type="agent.run.completed",
+                    source_agent_id="",
+                    payload={
+                        "run_id": run["run_id"],
+                        "profile_name": profile_name,
+                        "route": route,
+                        "ok": True,
+                        "model_used": effective_model,
+                        "duration_ms": int((_time.monotonic() - _agent_start) * 1000),
+                        "session_id": str(session_id or ""),
+                        "streaming": True,
+                    },
+                )
                 # Стримим кэшированный ответ по токенам (выглядит естественно)
                 words = cached.split(" ")
                 for i, word in enumerate(words):
@@ -2077,6 +2166,20 @@ def run_agent_stream(*, model_name, profile_name, user_input, session_id=None, u
                 "provenance_guard": provenance_guard if provenance_guard.get("changed") else None,
             }
             _HISTORY.finish_run(run["run_id"], {"ok": True, "answer": full_text, "meta": meta})
+            _emit_agent_os_event(
+                event_type="agent.run.completed",
+                source_agent_id="",
+                payload={
+                    "run_id": run["run_id"],
+                    "profile_name": profile_name,
+                    "route": route,
+                    "ok": True,
+                    "model_used": effective_model,
+                    "duration_ms": int((_time.monotonic() - _agent_start) * 1000),
+                    "session_id": str(session_id or ""),
+                    "streaming": True,
+                },
+            )
             yield {"token": "", "done": True, "full_text": full_text, "meta": meta, "timeline": timeline}
         else:
             # Тяжёлый путь — reflection и/или генерация файлов
@@ -2140,7 +2243,36 @@ def run_agent_stream(*, model_name, profile_name, user_input, session_id=None, u
                 "provenance_guard": provenance_guard if provenance_guard.get("changed") else None,
             }
             _HISTORY.finish_run(run["run_id"], {"ok": True, "answer": full_text, "meta": meta})
+            _emit_agent_os_event(
+                event_type="agent.run.completed",
+                source_agent_id="",
+                payload={
+                    "run_id": run["run_id"],
+                    "profile_name": profile_name,
+                    "route": route,
+                    "ok": True,
+                    "model_used": effective_model,
+                    "duration_ms": int((_time.monotonic() - _agent_start) * 1000),
+                    "session_id": str(session_id or ""),
+                    "streaming": True,
+                },
+            )
             yield {"token": "", "done": True, "full_text": full_text, "meta": meta, "timeline": timeline}
     except Exception as exc:
         _HISTORY.finish_run(run["run_id"], {"ok": False, "error": str(exc)})
+        _emit_agent_os_event(
+            event_type="agent.run.completed",
+            source_agent_id="",
+            payload={
+                "run_id": run["run_id"],
+                "profile_name": profile_name,
+                "route": locals().get("route", ""),
+                "ok": False,
+                "model_used": locals().get("effective_model", model_name),
+                "duration_ms": int((_time.monotonic() - _agent_start) * 1000),
+                "error": str(exc)[:500],
+                "session_id": str(session_id or ""),
+                "streaming": True,
+            },
+        )
         yield {"token": "", "done": True, "error": str(exc), "full_text": ""}
