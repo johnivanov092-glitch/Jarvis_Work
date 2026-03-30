@@ -306,3 +306,26 @@ Live repair log for concrete backend/runtime fixes.
   `1-3` current-world subtopics now run in one pass, while `4+` subtopics automatically use two web passes without asking the user to split the prompt manually;
   the runtime now exposes which subqueries went into `pass_1` and `pass_2`, whether overflow policy was applied, and which subtopics remained weak or uncovered;
   live verification of a `4`-subtopic prompt confirmed `2` passes with separate coverage for local incidents, finance, fuel price, and flight-status queries in one combined backend run.
+
+### 23. Agent OS Phase 1 — Agent Registry with persistent state
+- Status: completed
+- Scope: built the foundation layer of the Agent OS — a persistent agent registry with identity, state, and run history tracking.
+- Start: agents were stateless single-shot functions with hardcoded roles (Researcher, Programmer, Analyst), no persistent identity, no state between calls, and no inter-agent discoverability.
+- Finish:
+  added [backend/app/schemas/agent_registry.py](/D:/AIWork/Elira_AI/backend/app/schemas/agent_registry.py) with Pydantic models for agent definitions, state, run records, and API responses;
+  added [backend/app/services/agent_registry.py](/D:/AIWork/Elira_AI/backend/app/services/agent_registry.py) with SQLite-backed CRUD (`data/agent_registry.db`), persistent agent state (JSON blob per agent), run history with duration/model/route tracking, builtin agent seeding from `AGENT_PROFILES`, and `resolve_agent()` for integration;
+  added [backend/app/api/routes/agent_registry_routes.py](/D:/AIWork/Elira_AI/backend/app/api/routes/agent_registry_routes.py) with REST endpoints under `/api/agent-os/agents/*` (register, list, get, update, delete, state CRUD, run history);
+  integrated optional `agent_id` parameter into `run_agent()` in [backend/app/services/agents_service.py](/D:/AIWork/Elira_AI/backend/app/services/agents_service.py) — when provided, loads agent definition from registry, applies its system prompt and model preference, and records the run result (success or failure) with duration;
+  registered the new router and builtin agent seeding in [backend/app/main.py](/D:/AIWork/Elira_AI/backend/app/main.py);
+  added [backend/tests/test_agent_os_phase1.py](/D:/AIWork/Elira_AI/backend/tests/test_agent_os_phase1.py) with 15 tests covering CRUD, state persistence, run history, seed idempotency, and agent resolution — all passing.
+- Result:
+  agents now have persistent identity, discoverable via API, with state that survives between calls;
+  every agent run can be tracked with input/output summary, route, model, and duration;
+  builtin agents (Universal, Researcher, Programmer, Analyst, Socrat) are auto-seeded on startup;
+  existing chat flow is fully backward-compatible — `agent_id` is optional;
+  branch `feat/agent-os-phase1-registry` pushed to origin.
+- Next phases planned:
+  Phase 2 — Tool Registry with JSON Schema (replace hardcoded tool dispatch);
+  Phase 3 — Event Bus + inter-agent messaging;
+  Phase 4 — Workflow Engine (DAG-based multi-step orchestration);
+  Phase 5 — Monitoring + Sandboxing.
