@@ -277,3 +277,18 @@ def screenshot_url(url: str, width: int = 1280, height: int = 800, full_page: bo
     except Exception as e:
         return {"ok": False, "error": str(e)}
 
+
+# 5. Task Planner Integration
+# -----------------------------------------------------------------------------
+
+def add_task(title: str, description: str = "", priority: str = "medium", due_date: str = None) -> dict:
+    from app.services.task_planner_service import create_task
+    return create_task(title, description, priority=priority, due_date=due_date)
+
+def get_tasks(status: str = "todo") -> dict:
+    from app.services.task_planner_service import list_tasks
+    return list_tasks(status=status)
+
+def set_task_status(task_id: str, status: str) -> dict:
+    from app.services.task_planner_service import update_task
+    return update_task(task_id, status=status)

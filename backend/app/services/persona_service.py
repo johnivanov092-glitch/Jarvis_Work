@@ -244,30 +244,30 @@ def build_persona_prompt(profile_name: str, model_name: str = "", task_context: 
     tool_style = "\n".join(f"- {item}" for item in payload.get("tool_style", []))
     disallowed = "\n".join(f"- {item}" for item in payload.get("disallowed_drift", []))
     runtime = [
-        "Факты, RAG и память расширяют знания, но не меняют личность Elira.",
-        "Профили — это режимы поведения одной Elira, а не отдельные персонажи.",
-        "Особенности модели могут менять форму ответа, но не должны ломать голос Elira.",
-        "Ты всегда представляешься как Elira.",
-        "В обычном чате не называй себя именем модели и не описывай себя как LLM или языковую модель.",
-        "Если пользователь спрашивает, кто ты или как тебя зовут, отвечай только как Elira.",
+        "Р¤Р°РєС‚С‹, RAG Рё РїР°РјСЏС‚СЊ СЂР°СЃС€РёСЂСЏСЋС‚ Р·РЅР°РЅРёСЏ, РЅРѕ РЅРµ РјРµРЅСЏСЋС‚ Р»РёС‡РЅРѕСЃС‚СЊ Elira.",
+        "РџСЂРѕС„РёР»Рё вЂ” СЌС‚Рѕ СЂРµР¶РёРјС‹ РїРѕРІРµРґРµРЅРёСЏ РѕРґРЅРѕР№ Elira, Р° РЅРµ РѕС‚РґРµР»СЊРЅС‹Рµ РїРµСЂСЃРѕРЅР°Р¶Рё.",
+        "РћСЃРѕР±РµРЅРЅРѕСЃС‚Рё РјРѕРґРµР»Рё РјРѕРіСѓС‚ РјРµРЅСЏС‚СЊ С„РѕСЂРјСѓ РѕС‚РІРµС‚Р°, РЅРѕ РЅРµ РґРѕР»Р¶РЅС‹ Р»РѕРјР°С‚СЊ РіРѕР»РѕСЃ Elira.",
+        "РўС‹ РІСЃРµРіРґР° РїСЂРµРґСЃС‚Р°РІР»СЏРµС€СЊСЃСЏ РєР°Рє Elira.",
+        "Р’ РѕР±С‹С‡РЅРѕРј С‡Р°С‚Рµ РЅРµ РЅР°Р·С‹РІР°Р№ СЃРµР±СЏ РёРјРµРЅРµРј РјРѕРґРµР»Рё Рё РЅРµ РѕРїРёСЃС‹РІР°Р№ СЃРµР±СЏ РєР°Рє LLM РёР»Рё СЏР·С‹РєРѕРІСѓСЋ РјРѕРґРµР»СЊ.",
+        "Р•СЃР»Рё РїРѕР»СЊР·РѕРІР°С‚РµР»СЊ СЃРїСЂР°С€РёРІР°РµС‚, РєС‚Рѕ С‚С‹ РёР»Рё РєР°Рє С‚РµР±СЏ Р·РѕРІСѓС‚, РѕС‚РІРµС‡Р°Р№ С‚РѕР»СЊРєРѕ РєР°Рє Elira.",
     ]
     if task_context.strip():
         runtime.append(task_context.strip())
 
     return "\n\n".join(
         [
-            f"Ты — Elira. Активная версия личности: v{snapshot.get('version', 1)}.",
-            f"Идентичность: {payload.get('identity', {}).get('continuity', '')}",
-            f"Миссия: {payload.get('identity', {}).get('mission', '')}",
-            f"Голос:\n{voice}",
-            f"Ценности:\n{values}",
-            f"Правила поведения:\n{rules}",
-            f"Предпочтения ответа:\n{preferences}",
-            f"Стиль работы с инструментами:\n{tool_style}",
-            f"Границы:\n{boundaries}",
-            f"Недопустимый дрейф:\n{disallowed}",
-            f"Режим профиля ({profile_key}): {overlay}",
-            "Калибровка модели:\n"
+            f"РўС‹ вЂ” Elira. РђРєС‚РёРІРЅР°СЏ РІРµСЂСЃРёСЏ Р»РёС‡РЅРѕСЃС‚Рё: v{snapshot.get('version', 1)}.",
+            f"РРґРµРЅС‚РёС‡РЅРѕСЃС‚СЊ: {payload.get('identity', {}).get('continuity', '')}",
+            f"РњРёСЃСЃРёСЏ: {payload.get('identity', {}).get('mission', '')}",
+            f"Р“РѕР»РѕСЃ:\n{voice}",
+            f"Р¦РµРЅРЅРѕСЃС‚Рё:\n{values}",
+            f"РџСЂР°РІРёР»Р° РїРѕРІРµРґРµРЅРёСЏ:\n{rules}",
+            f"РџСЂРµРґРїРѕС‡С‚РµРЅРёСЏ РѕС‚РІРµС‚Р°:\n{preferences}",
+            f"РЎС‚РёР»СЊ СЂР°Р±РѕС‚С‹ СЃ РёРЅСЃС‚СЂСѓРјРµРЅС‚Р°РјРё:\n{tool_style}",
+            f"Р“СЂР°РЅРёС†С‹:\n{boundaries}",
+            f"РќРµРґРѕРїСѓСЃС‚РёРјС‹Р№ РґСЂРµР№С„:\n{disallowed}",
+            f"Р РµР¶РёРј РїСЂРѕС„РёР»СЏ ({profile_key}): {overlay}",
+            "РљР°Р»РёР±СЂРѕРІРєР° РјРѕРґРµР»Рё:\n"
             f"- verbosity: {calibration_payload.get('verbosity', 'balanced')}\n"
             f"- formatting: {calibration_payload.get('formatting', 'structured')}\n"
             f"- list_bias: {calibration_payload.get('list_bias', 'moderate')}",
@@ -306,19 +306,19 @@ def _extract_signals(profile_name: str, user_input: str, answer_text: str) -> di
     persona: list[dict[str, Any]] = []
     calibration: list[dict[str, Any]] = []
 
-    if any(token in combined for token in ("помогу", "давай", "следующий шаг", "шаги")):
-        persona.append({"trait_key": "supportive_guidance", "layer": "behavior_rules", "confidence": 0.82, "summary": "Поддержка и понятные следующие шаги."})
-    if any(token in combined for token in ("структур", "1.", "2.", "итог", "вывод")):
-        persona.append({"trait_key": "structured_clarity", "layer": "preferences", "confidence": 0.79, "summary": "Структурированный и ясный ответ."})
-    if any(token in combined for token in ("не уверен", "не знаю", "недостаточно данных", "скажу прямо")):
-        persona.append({"trait_key": "transparent_honesty", "layer": "values", "confidence": 0.88, "summary": "Честно обозначает неопределённость."})
+    if any(token in combined for token in ("РїРѕРјРѕРіСѓ", "РґР°РІР°Р№", "СЃР»РµРґСѓСЋС‰РёР№ С€Р°Рі", "С€Р°РіРё")):
+        persona.append({"trait_key": "supportive_guidance", "layer": "behavior_rules", "confidence": 0.82, "summary": "РџРѕРґРґРµСЂР¶РєР° Рё РїРѕРЅСЏС‚РЅС‹Рµ СЃР»РµРґСѓСЋС‰РёРµ С€Р°РіРё."})
+    if any(token in combined for token in ("СЃС‚СЂСѓРєС‚СѓСЂ", "1.", "2.", "РёС‚РѕРі", "РІС‹РІРѕРґ")):
+        persona.append({"trait_key": "structured_clarity", "layer": "preferences", "confidence": 0.79, "summary": "РЎС‚СЂСѓРєС‚СѓСЂРёСЂРѕРІР°РЅРЅС‹Р№ Рё СЏСЃРЅС‹Р№ РѕС‚РІРµС‚."})
+    if any(token in combined for token in ("РЅРµ СѓРІРµСЂРµРЅ", "РЅРµ Р·РЅР°СЋ", "РЅРµРґРѕСЃС‚Р°С‚РѕС‡РЅРѕ РґР°РЅРЅС‹С…", "СЃРєР°Р¶Сѓ РїСЂСЏРјРѕ")):
+        persona.append({"trait_key": "transparent_honesty", "layer": "values", "confidence": 0.88, "summary": "Р§РµСЃС‚РЅРѕ РѕР±РѕР·РЅР°С‡Р°РµС‚ РЅРµРѕРїСЂРµРґРµР»С‘РЅРЅРѕСЃС‚СЊ."})
 
-    if profile_name == "Программист" and any(token in combined for token in ("```", "патч", "рефактор", "код")):
-        persona.append({"trait_key": "code_first_precision", "layer": "preferences", "confidence": 0.74, "summary": "Ставит код и надёжность выше общих рассуждений."})
-    if profile_name == "Аналитик" and any(token in combined for token in ("риск", "сравн", "альтернатив", "декомпози")):
-        persona.append({"trait_key": "risk_visible_reasoning", "layer": "behavior_rules", "confidence": 0.74, "summary": "Показывает риски и варианты явно."})
-    if profile_name == "Сократ" and answer_text.count("?") >= 2:
-        persona.append({"trait_key": "guided_questions", "layer": "behavior_rules", "confidence": 0.73, "summary": "Ведёт через вопросы и уточнение мысли."})
+    if profile_name == "РџСЂРѕРіСЂР°РјРјРёСЃС‚" and any(token in combined for token in ("```", "РїР°С‚С‡", "СЂРµС„Р°РєС‚РѕСЂ", "РєРѕРґ")):
+        persona.append({"trait_key": "code_first_precision", "layer": "preferences", "confidence": 0.74, "summary": "РЎС‚Р°РІРёС‚ РєРѕРґ Рё РЅР°РґС‘Р¶РЅРѕСЃС‚СЊ РІС‹С€Рµ РѕР±С‰РёС… СЂР°СЃСЃСѓР¶РґРµРЅРёР№."})
+    if profile_name == "РђРЅР°Р»РёС‚РёРє" and any(token in combined for token in ("СЂРёСЃРє", "СЃСЂР°РІРЅ", "Р°Р»СЊС‚РµСЂРЅР°С‚РёРІ", "РґРµРєРѕРјРїРѕР·Рё")):
+        persona.append({"trait_key": "risk_visible_reasoning", "layer": "behavior_rules", "confidence": 0.74, "summary": "РџРѕРєР°Р·С‹РІР°РµС‚ СЂРёСЃРєРё Рё РІР°СЂРёР°РЅС‚С‹ СЏРІРЅРѕ."})
+    if profile_name == "РЎРѕРєСЂР°С‚" and answer_text.count("?") >= 2:
+        persona.append({"trait_key": "guided_questions", "layer": "behavior_rules", "confidence": 0.73, "summary": "Р’РµРґС‘С‚ С‡РµСЂРµР· РІРѕРїСЂРѕСЃС‹ Рё СѓС‚РѕС‡РЅРµРЅРёРµ РјС‹СЃР»Рё."})
 
     answer_len = len(answer_text or "")
     bullet_count = answer_text.count("\n- ") + answer_text.count("\n1.")

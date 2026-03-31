@@ -1,15 +1,15 @@
 """
-autopipeline_service.py — Autopipelines (cron-задачи) Elira AI.
+autopipeline_service.py вЂ” Autopipelines (cron-Р·Р°РґР°С‡Рё) Elira AI.
 
-Лёгкий планировщик на threading.Timer — без внешних зависимостей.
-Задачи хранятся в SQLite, выполняются в фоне.
+Р›С‘РіРєРёР№ РїР»Р°РЅРёСЂРѕРІС‰РёРє РЅР° threading.Timer вЂ” Р±РµР· РІРЅРµС€РЅРёС… Р·Р°РІРёСЃРёРјРѕСЃС‚РµР№.
+Р—Р°РґР°С‡Рё С…СЂР°РЅСЏС‚СЃСЏ РІ SQLite, РІС‹РїРѕР»РЅСЏСЋС‚СЃСЏ РІ С„РѕРЅРµ.
 
-Типы задач:
-  - prompt: отправить промпт в LLM и сохранить результат
-  - web_search: выполнить веб-поиск по запросу
-  - plugin: запустить плагин
-  - workflow: запустить workflow Engine
-  - http: вызвать URL (webhook/API)
+РўРёРїС‹ Р·Р°РґР°С‡:
+  - prompt: РѕС‚РїСЂР°РІРёС‚СЊ РїСЂРѕРјРїС‚ РІ LLM Рё СЃРѕС…СЂР°РЅРёС‚СЊ СЂРµР·СѓР»СЊС‚Р°С‚
+  - web_search: РІС‹РїРѕР»РЅРёС‚СЊ РІРµР±-РїРѕРёСЃРє РїРѕ Р·Р°РїСЂРѕСЃСѓ
+  - plugin: Р·Р°РїСѓСЃС‚РёС‚СЊ РїР»Р°РіРёРЅ
+  - workflow: Р·Р°РїСѓСЃС‚РёС‚СЊ workflow Engine
+  - http: РІС‹Р·РІР°С‚СЊ URL (webhook/API)
 """
 from __future__ import annotations
 
@@ -30,12 +30,12 @@ DB_PATH.parent.mkdir(parents=True, exist_ok=True)
 
 _scheduler_thread: threading.Timer | None = None
 _running = False
-_TICK_INTERVAL = 30  # проверка каждые 30 сек
+_TICK_INTERVAL = 30  # РїСЂРѕРІРµСЂРєР° РєР°Р¶РґС‹Рµ 30 СЃРµРє
 
 
-# ═══════════════════════════════════════════════════════════════
+# в•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђ
 # DATABASE
-# ═══════════════════════════════════════════════════════════════
+# в•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђ
 
 def _connect():
     conn = sqlite3.connect(str(DB_PATH))
@@ -79,9 +79,9 @@ def _init_db():
 _init_db()
 
 
-# ═══════════════════════════════════════════════════════════════
+# в•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђ
 # CRUD
-# ═══════════════════════════════════════════════════════════════
+# в•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђ
 
 def create_pipeline(
     name: str,
@@ -90,7 +90,7 @@ def create_pipeline(
     interval_minutes: int = 60,
     enabled: bool = True,
 ) -> dict:
-    """Создаёт новый pipeline."""
+    """РЎРѕР·РґР°С‘С‚ РЅРѕРІС‹Р№ pipeline."""
     pid = str(uuid.uuid4())[:8]
     now = datetime.utcnow().isoformat()
     next_run = (datetime.utcnow() + timedelta(minutes=interval_minutes)).isoformat()
@@ -107,7 +107,7 @@ def create_pipeline(
 
 
 def list_pipelines() -> dict:
-    """Список всех pipelines."""
+    """РЎРїРёСЃРѕРє РІСЃРµС… pipelines."""
     conn = _connect()
     try:
         rows = conn.execute("SELECT * FROM pipelines ORDER BY created_at DESC").fetchall()
@@ -126,12 +126,12 @@ def list_pipelines() -> dict:
 
 
 def get_pipeline(pid: str) -> dict:
-    """Получить pipeline по id."""
+    """РџРѕР»СѓС‡РёС‚СЊ pipeline РїРѕ id."""
     conn = _connect()
     try:
         row = conn.execute("SELECT * FROM pipelines WHERE id = ?", (pid,)).fetchone()
         if not row:
-            return {"ok": False, "error": "Pipeline не найден"}
+            return {"ok": False, "error": "Pipeline РЅРµ РЅР°Р№РґРµРЅ"}
         d = dict(row)
         try:
             d["task_data"] = json.loads(d.get("task_data") or "{}")
@@ -144,7 +144,7 @@ def get_pipeline(pid: str) -> dict:
 
 
 def update_pipeline(pid: str, **kwargs) -> dict:
-    """Обновляет поля pipeline."""
+    """РћР±РЅРѕРІР»СЏРµС‚ РїРѕР»СЏ pipeline."""
     allowed = {"name", "task_type", "task_data", "interval_minutes", "enabled"}
     updates = []
     values = []
@@ -159,7 +159,7 @@ def update_pipeline(pid: str, **kwargs) -> dict:
         values.append(v)
 
     if not updates:
-        return {"ok": False, "error": "Нечего обновлять"}
+        return {"ok": False, "error": "РќРµС‡РµРіРѕ РѕР±РЅРѕРІР»СЏС‚СЊ"}
 
     conn = _connect()
     try:
@@ -172,7 +172,7 @@ def update_pipeline(pid: str, **kwargs) -> dict:
 
 
 def delete_pipeline(pid: str) -> dict:
-    """Удаляет pipeline и его логи."""
+    """РЈРґР°Р»СЏРµС‚ pipeline Рё РµРіРѕ Р»РѕРіРё."""
     conn = _connect()
     try:
         conn.execute("DELETE FROM pipelines WHERE id = ?", (pid,))
@@ -184,7 +184,7 @@ def delete_pipeline(pid: str) -> dict:
 
 
 def get_pipeline_logs(pid: str, limit: int = 20) -> dict:
-    """История выполнения pipeline."""
+    """РСЃС‚РѕСЂРёСЏ РІС‹РїРѕР»РЅРµРЅРёСЏ pipeline."""
     conn = _connect()
     try:
         rows = conn.execute(
@@ -196,22 +196,22 @@ def get_pipeline_logs(pid: str, limit: int = 20) -> dict:
         conn.close()
 
 
-# ═══════════════════════════════════════════════════════════════
-# ВЫПОЛНЕНИЕ ЗАДАЧ
-# ═══════════════════════════════════════════════════════════════
+# в•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђ
+# Р’Р«РџРћР›РќР•РќРР• Р—РђР”РђР§
+# в•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђ
 
 def _execute_task(task_type: str, task_data: dict) -> dict:
-    """Выполняет задачу по типу."""
+    """Р’С‹РїРѕР»РЅСЏРµС‚ Р·Р°РґР°С‡Сѓ РїРѕ С‚РёРїСѓ."""
     try:
         if task_type == "prompt":
             prompt = task_data.get("prompt", "")
             model = task_data.get("model", "")
             if not prompt:
-                return {"ok": False, "error": "Нет промпта"}
+                return {"ok": False, "error": "РќРµС‚ РїСЂРѕРјРїС‚Р°"}
             from app.services.agents_service import run_agent
             result = run_agent(
                 model_name=model or "gemma3:4b",
-                profile_name=task_data.get("profile", "Универсальный"),
+                profile_name=task_data.get("profile", "РЈРЅРёРІРµСЂСЃР°Р»СЊРЅС‹Р№"),
                 user_input=prompt,
                 use_memory=False,
                 use_web_search=task_data.get("web_search", False),
@@ -222,21 +222,21 @@ def _execute_task(task_type: str, task_data: dict) -> dict:
         elif task_type == "web_search":
             query = task_data.get("query", "")
             if not query:
-                return {"ok": False, "error": "Нет запроса"}
+                return {"ok": False, "error": "РќРµС‚ Р·Р°РїСЂРѕСЃР°"}
             from app.services.web_multisearch_service import multi_search
             return multi_search(query, max_results=task_data.get("max_results", 5))
 
         elif task_type == "plugin":
             name = task_data.get("plugin_name", "")
             if not name:
-                return {"ok": False, "error": "Нет имени плагина"}
+                return {"ok": False, "error": "РќРµС‚ РёРјРµРЅРё РїР»Р°РіРёРЅР°"}
             from app.services.plugin_system import run_plugin
             return run_plugin(name, task_data.get("args", {}))
 
         elif task_type == "workflow":
             workflow_id = str(task_data.get("workflow_id", "")).strip()
             if not workflow_id:
-                return {"ok": False, "error": "Нет workflow_id"}
+                return {"ok": False, "error": "РќРµС‚ workflow_id"}
             from app.services.workflow_engine import start_workflow_run
 
             run = start_workflow_run(
@@ -258,19 +258,19 @@ def _execute_task(task_type: str, task_data: dict) -> dict:
             url = task_data.get("url", "")
             method = task_data.get("method", "GET").upper()
             if not url:
-                return {"ok": False, "error": "Нет URL"}
+                return {"ok": False, "error": "РќРµС‚ URL"}
             resp = requests.request(method, url, timeout=30, json=task_data.get("body"))
             return {"ok": True, "status": resp.status_code, "body": resp.text[:2000]}
 
         else:
-            return {"ok": False, "error": f"Неизвестный тип: {task_type}"}
+            return {"ok": False, "error": f"РќРµРёР·РІРµСЃС‚РЅС‹Р№ С‚РёРї: {task_type}"}
 
     except Exception as e:
         return {"ok": False, "error": str(e)}
 
 
 def run_pipeline_now(pid: str) -> dict:
-    """Запускает pipeline вручную прямо сейчас."""
+    """Р—Р°РїСѓСЃРєР°РµС‚ pipeline РІСЂСѓС‡РЅСѓСЋ РїСЂСЏРјРѕ СЃРµР№С‡Р°СЃ."""
     p = get_pipeline(pid)
     if not p.get("ok"):
         return p
@@ -279,7 +279,7 @@ def run_pipeline_now(pid: str) -> dict:
     result = _execute_task(p["task_type"], p.get("task_data", {}))
     finished = datetime.utcnow().isoformat()
 
-    # Сохраняем лог
+    # РЎРѕС…СЂР°РЅСЏРµРј Р»РѕРі
     conn = _connect()
     try:
         conn.execute(
@@ -287,7 +287,7 @@ def run_pipeline_now(pid: str) -> dict:
             (pid, started, finished, int(result.get("ok", False)),
              json.dumps(result, ensure_ascii=False)[:5000], result.get("error", "")),
         )
-        # Обновляем pipeline
+        # РћР±РЅРѕРІР»СЏРµРј pipeline
         next_run = (datetime.utcnow() + timedelta(minutes=p.get("interval_minutes", 60))).isoformat()
         conn.execute(
             "UPDATE pipelines SET last_run = ?, next_run = ?, run_count = run_count + 1, last_result = ?, last_error = ? WHERE id = ?",
@@ -300,12 +300,12 @@ def run_pipeline_now(pid: str) -> dict:
     return {"ok": True, "pipeline_id": pid, "result": result}
 
 
-# ═══════════════════════════════════════════════════════════════
-# ПЛАНИРОВЩИК (фоновый тик)
-# ═══════════════════════════════════════════════════════════════
+# в•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђ
+# РџР›РђРќРР РћР’Р©РРљ (С„РѕРЅРѕРІС‹Р№ С‚РёРє)
+# в•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђ
 
 def _tick():
-    """Проверяет и запускает просроченные pipelines."""
+    """РџСЂРѕРІРµСЂСЏРµС‚ Рё Р·Р°РїСѓСЃРєР°РµС‚ РїСЂРѕСЃСЂРѕС‡РµРЅРЅС‹Рµ pipelines."""
     global _scheduler_thread
     if not _running:
         return
@@ -326,14 +326,14 @@ def _tick():
         except Exception as e:
             logger.error(f"Autopipeline {row['id']} error: {e}")
 
-    # Перепланируем следующий тик
+    # РџРµСЂРµРїР»Р°РЅРёСЂСѓРµРј СЃР»РµРґСѓСЋС‰РёР№ С‚РёРє
     _scheduler_thread = threading.Timer(_TICK_INTERVAL, _tick)
     _scheduler_thread.daemon = True
     _scheduler_thread.start()
 
 
 def start_scheduler():
-    """Запускает фоновый планировщик."""
+    """Р—Р°РїСѓСЃРєР°РµС‚ С„РѕРЅРѕРІС‹Р№ РїР»Р°РЅРёСЂРѕРІС‰РёРє."""
     global _running, _scheduler_thread
     if _running:
         return {"ok": True, "status": "already_running"}
@@ -346,7 +346,7 @@ def start_scheduler():
 
 
 def stop_scheduler():
-    """Останавливает планировщик."""
+    """РћСЃС‚Р°РЅР°РІР»РёРІР°РµС‚ РїР»Р°РЅРёСЂРѕРІС‰РёРє."""
     global _running, _scheduler_thread
     _running = False
     if _scheduler_thread:
@@ -357,9 +357,9 @@ def stop_scheduler():
 
 
 def scheduler_status() -> dict:
-    """Статус планировщика."""
+    """РЎС‚Р°С‚СѓСЃ РїР»Р°РЅРёСЂРѕРІС‰РёРєР°."""
     return {"ok": True, "running": _running, "tick_interval": _TICK_INTERVAL}
 
 
-# Автозапуск при импорте
+# РђРІС‚РѕР·Р°РїСѓСЃРє РїСЂРё РёРјРїРѕСЂС‚Рµ
 start_scheduler()

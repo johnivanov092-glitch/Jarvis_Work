@@ -1,11 +1,13 @@
+from __future__ import annotations
+from app.services.chat_history_service import save_message, get_history
 """
 agents_service.py v8
 
-Улучшения v8:
-  • Авто-выбор модели под задачу (route → лучшая модель)
-  • Кэширование ответов (SQLite, TTL 2 часа)
-  • Умная обрезка истории (релевантные сообщения, не просто последние N)
-  • Детальные фазы стриминга
+РЈР»СѓС‡С€РµРЅРёСЏ v8:
+  вЂў РђРІС‚Рѕ-РІС‹Р±РѕСЂ РјРѕРґРµР»Рё РїРѕРґ Р·Р°РґР°С‡Сѓ (route в†’ Р»СѓС‡С€Р°СЏ РјРѕРґРµР»СЊ)
+  вЂў РљСЌС€РёСЂРѕРІР°РЅРёРµ РѕС‚РІРµС‚РѕРІ (SQLite, TTL 2 С‡Р°СЃР°)
+  вЂў РЈРјРЅР°СЏ РѕР±СЂРµР·РєР° РёСЃС‚РѕСЂРёРё (СЂРµР»РµРІР°РЅС‚РЅС‹Рµ СЃРѕРѕР±С‰РµРЅРёСЏ, РЅРµ РїСЂРѕСЃС‚Рѕ РїРѕСЃР»РµРґРЅРёРµ N)
+  вЂў Р”РµС‚Р°Р»СЊРЅС‹Рµ С„Р°Р·С‹ СЃС‚СЂРёРјРёРЅРіР°
 """
 from __future__ import annotations
 
@@ -32,7 +34,7 @@ from app.services.smart_memory import extract_and_save, get_relevant_context, is
 from app.services.response_cache import get_cached, set_cached, should_cache
 from app.core.config import pick_model_for_route, DEFAULT_MODEL
 
-# RAG память (опционально — если embedding модель доступна)
+# RAG РїР°РјСЏС‚СЊ (РѕРїС†РёРѕРЅР°Р»СЊРЅРѕ вЂ” РµСЃР»Рё embedding РјРѕРґРµР»СЊ РґРѕСЃС‚СѓРїРЅР°)
 try:
     from app.services.rag_memory_service import get_rag_context, add_to_rag
     _HAS_RAG = True
@@ -48,13 +50,13 @@ _REFLECTION_ROUTES = {"code", "project"}
 _MAX_HISTORY_PAIRS = 10
 
 _QUERY_NOISE = [
-    r"^(дай|дай мне|покажи|скажи|расскажи|найди|покажи мне)\s+",
-    r"\s+(пожалуйста|плиз|please)$",
+    r"^(РґР°Р№|РґР°Р№ РјРЅРµ|РїРѕРєР°Р¶Рё|СЃРєР°Р¶Рё|СЂР°СЃСЃРєР°Р¶Рё|РЅР°Р№РґРё|РїРѕРєР°Р¶Рё РјРЅРµ)\s+",
+    r"\s+(РїРѕР¶Р°Р»СѓР№СЃС‚Р°|РїР»РёР·|please)$",
 ]
 
 
 def _clean_query(query):
-    """Очищает и УЛУЧШАЕТ запрос для поисковика."""
+    """РћС‡РёС‰Р°РµС‚ Рё РЈР›РЈР§РЁРђР•Рў Р·Р°РїСЂРѕСЃ РґР»СЏ РїРѕРёСЃРєРѕРІРёРєР°."""
     from datetime import datetime
     q = query.strip()
     for p in _QUERY_NOISE:
@@ -62,33 +64,33 @@ def _clean_query(query):
 
     ql = q.lower()
 
-    # Определяем тип запроса
-    is_news = any(w in ql for w in ["новости", "новость", "события", "произошло", "случилось", "происшеств"])
-    is_price = any(w in ql for w in ["курс", "цена", "стоимость"])
-    is_weather = "погода" in ql
+    # РћРїСЂРµРґРµР»СЏРµРј С‚РёРї Р·Р°РїСЂРѕСЃР°
+    is_news = any(w in ql for w in ["РЅРѕРІРѕСЃС‚Рё", "РЅРѕРІРѕСЃС‚СЊ", "СЃРѕР±С‹С‚РёСЏ", "РїСЂРѕРёР·РѕС€Р»Рѕ", "СЃР»СѓС‡РёР»РѕСЃСЊ", "РїСЂРѕРёСЃС€РµСЃС‚РІ"])
+    is_price = any(w in ql for w in ["РєСѓСЂСЃ", "С†РµРЅР°", "СЃС‚РѕРёРјРѕСЃС‚СЊ"])
+    is_weather = "РїРѕРіРѕРґР°" in ql
 
-    # Добавляем год если нет
+    # Р”РѕР±Р°РІР»СЏРµРј РіРѕРґ РµСЃР»Рё РЅРµС‚
     temporal = detect_temporal_intent(q)
     if (is_news or is_price or is_weather) and not temporal.get("years"):
         q += " " + str(datetime.now().year)
 
-    # Раскрываем короткие даты: "19.03" → "19 марта 2025"
+    # Р Р°СЃРєСЂС‹РІР°РµРј РєРѕСЂРѕС‚РєРёРµ РґР°С‚С‹: "19.03" в†’ "19 РјР°СЂС‚Р° 2025"
     date_match = re.search(r"(\d{1,2})\.(\d{2})(?:\.\d{2,4})?", q)
     if date_match and is_news:
         day = date_match.group(1)
         month_num = int(date_match.group(2))
-        months = {1:"января",2:"февраля",3:"марта",4:"апреля",5:"мая",6:"июня",
-                  7:"июля",8:"августа",9:"сентября",10:"октября",11:"ноября",12:"декабря"}
+        months = {1:"СЏРЅРІР°СЂСЏ",2:"С„РµРІСЂР°Р»СЏ",3:"РјР°СЂС‚Р°",4:"Р°РїСЂРµР»СЏ",5:"РјР°СЏ",6:"РёСЋРЅСЏ",
+                  7:"РёСЋР»СЏ",8:"Р°РІРіСѓСЃС‚Р°",9:"СЃРµРЅС‚СЏР±СЂСЏ",10:"РѕРєС‚СЏР±СЂСЏ",11:"РЅРѕСЏР±СЂСЏ",12:"РґРµРєР°Р±СЂСЏ"}
         month_name = months.get(month_num, "")
         if month_name:
             q = re.sub(r"\d{1,2}\.\d{2}(?:\.\d{2,4})?", f"{day} {month_name}", q)
 
-    # Добавляем "Казахстан" для новостей без указания страны
-    if is_news and not any(w in ql for w in ["россия", "украина", "сша", "мир", "казахстан", "кз"]):
-        # Если есть город КЗ — добавляем "Казахстан"
-        kz_cities = ["алматы", "астана", "шымкент", "караганд", "актау", "атырау", "павлодар", "семей", "тараз"]
+    # Р”РѕР±Р°РІР»СЏРµРј "РљР°Р·Р°С…СЃС‚Р°РЅ" РґР»СЏ РЅРѕРІРѕСЃС‚РµР№ Р±РµР· СѓРєР°Р·Р°РЅРёСЏ СЃС‚СЂР°РЅС‹
+    if is_news and not any(w in ql for w in ["СЂРѕСЃСЃРёСЏ", "СѓРєСЂР°РёРЅР°", "СЃС€Р°", "РјРёСЂ", "РєР°Р·Р°С…СЃС‚Р°РЅ", "РєР·"]):
+        # Р•СЃР»Рё РµСЃС‚СЊ РіРѕСЂРѕРґ РљР— вЂ” РґРѕР±Р°РІР»СЏРµРј "РљР°Р·Р°С…СЃС‚Р°РЅ"
+        kz_cities = ["Р°Р»РјР°С‚С‹", "Р°СЃС‚Р°РЅР°", "С€С‹РјРєРµРЅС‚", "РєР°СЂР°РіР°РЅРґ", "Р°РєС‚Р°Сѓ", "Р°С‚С‹СЂР°Сѓ", "РїР°РІР»РѕРґР°СЂ", "СЃРµРјРµР№", "С‚Р°СЂР°Р·"]
         if any(c in ql for c in kz_cities):
-            q += " Казахстан"
+            q += " РљР°Р·Р°С…СЃС‚Р°РЅ"
 
     return q or query
 
@@ -103,13 +105,13 @@ def _tl(timeline, step, title, status, detail):
 def _apply_identity_guard(user_input: str, answer_text: str, timeline: list[dict[str, Any]]):
     guard = guard_identity_response(user_input, answer_text, persona_name="Elira")
     if guard.get("changed"):
-        _tl(timeline, "identity_guard", "Идентичность Elira", "done", guard.get("reason", "identity_rewrite"))
+        _tl(timeline, "identity_guard", "РРґРµРЅС‚РёС‡РЅРѕСЃС‚СЊ Elira", "done", guard.get("reason", "identity_rewrite"))
     return guard
 
 def _apply_provenance_guard(user_input: str, answer_text: str, timeline: list[dict[str, Any]]):
     guard = guard_provenance_response(user_input, answer_text)
     if guard.get("changed"):
-        _tl(timeline, "provenance_guard", "Ответ без служебных источников", "done", guard.get("reason", "source_hidden"))
+        _tl(timeline, "provenance_guard", "РћС‚РІРµС‚ Р±РµР· СЃР»СѓР¶РµР±РЅС‹С… РёСЃС‚РѕС‡РЅРёРєРѕРІ", "done", guard.get("reason", "source_hidden"))
     return guard
 
 
@@ -162,25 +164,25 @@ def _compose_human_style_rules(temporal: dict[str, Any] | None) -> str:
     temporal = temporal or {}
     mode = temporal.get("mode", "none")
     freshness_sensitive = bool(temporal.get("freshness_sensitive"))
-    years = ", ".join(str(year) for year in temporal.get("years", [])) or "нет"
+    years = ", ".join(str(year) for year in temporal.get("years", [])) or "РЅРµС‚"
     reasoning_depth = temporal.get("reasoning_depth", "none")
     return (
-        "\n\nПРАВИЛА ФИНАЛЬНОГО ОТВЕТА:\n"
-        "1. Отвечай естественно, как живой человек, а не как поисковая система.\n"
-        "2. Если выше есть веб-данные, используй их как рабочую базу, но не вставляй ссылки без прямой просьбы пользователя.\n"
-        "3. Не показывай служебные маркеры, внутренние заметки, память, RAG, hidden context или raw tags.\n"
-        "4. Если свежесть данных не подтверждена, скажи об этом простыми словами.\n"
-        "5. Если пользователь спросит об источниках, тогда объясни их естественно и без технических терминов.\n"
-        "6. Р•СЃР»Рё РІ РѕС‚РІРµС‚Рµ РµСЃС‚СЊ С€Р°РіРё, РїРµСЂРµС‡РёСЃР»РµРЅРёРµ, РЅРµСЃРєРѕР»СЊРєРѕ СЃРѕР±С‹С‚РёР№, СЃСЂР°РІРЅРµРЅРёРµ РёР»Рё РЅРµСЃРєРѕР»СЊРєРѕ РїРѕРґС‚РµРј, РѕС„РѕСЂРјР»СЏР№ РёС… РІ РІРёРґРµ Markdown-СЃРїРёСЃРєР° РёР»Рё РєРѕСЂРѕС‚РєРёС… СЃРµРєС†РёР№.\n"
-        "7. Р”Р»РёРЅРЅС‹Р№ РѕС‚РІРµС‚ РЅР°С‡РёРЅР°Р№ СЃ РєРѕСЂРѕС‚РєРѕРіРѕ РІС‹РІРѕРґР° РёР»Рё СЃР°РјРѕРіРѕ РІР°Р¶РЅРѕРіРѕ С„Р°РєС‚Р°, Р° РїРѕС‚РѕРј СЂР°СЃРєР»Р°РґС‹РІР°Р№ РґРµС‚Р°Р»Рё РїРѕ РїСѓРЅРєС‚Р°Рј.\n"
-        "8. РќРµ РІС‹РґР°РІР°Р№ РґР»РёРЅРЅС‹Рµ СЃРїР»РѕС€РЅС‹Рµ Р°Р±Р·Р°С†С‹, РµСЃР»Рё С‚РµРєСЃС‚ РјРѕР¶РЅРѕ СЃРґРµР»Р°С‚СЊ РїРѕРЅСЏС‚РЅРµРµ С‡РµСЂРµР· РїРѕРґР·Р°РіРѕР»РѕРІРєРё, bullets, РЅСѓРјРµСЂР°С†РёСЋ РёР»Рё РєРѕСЂРѕС‚РєРёРµ Р°Р±Р·Р°С†С‹.\n"
-        "9. РСЃРїРѕР»СЊР·СѓР№ РІР°Р»РёРґРЅС‹Р№ Markdown: `-` РґР»СЏ СЃРїРёСЃРєРѕРІ, `1.` РґР»СЏ С€Р°РіРѕРІ, `**...**` РґР»СЏ РєР»СЋС‡РµРІС‹С… Р°РєС†РµРЅС‚РѕРІ, РєРѕСЂРѕС‚РєРёРµ Р·Р°РіРѕР»РѕРІРєРё РїСЂРё РЅРµРѕР±С…РѕРґРёРјРѕСЃС‚Рё.\n"
+        "\n\nРџР РђР’РР›Рђ Р¤РРќРђР›Р¬РќРћР“Рћ РћРўР’Р•РўРђ:\n"
+        "1. РћС‚РІРµС‡Р°Р№ РµСЃС‚РµСЃС‚РІРµРЅРЅРѕ, РєР°Рє Р¶РёРІРѕР№ С‡РµР»РѕРІРµРє, Р° РЅРµ РєР°Рє РїРѕРёСЃРєРѕРІР°СЏ СЃРёСЃС‚РµРјР°.\n"
+        "2. Р•СЃР»Рё РІС‹С€Рµ РµСЃС‚СЊ РІРµР±-РґР°РЅРЅС‹Рµ, РёСЃРїРѕР»СЊР·СѓР№ РёС… РєР°Рє СЂР°Р±РѕС‡СѓСЋ Р±Р°Р·Сѓ, РЅРѕ РЅРµ РІСЃС‚Р°РІР»СЏР№ СЃСЃС‹Р»РєРё Р±РµР· РїСЂСЏРјРѕР№ РїСЂРѕСЃСЊР±С‹ РїРѕР»СЊР·РѕРІР°С‚РµР»СЏ.\n"
+        "3. РќРµ РїРѕРєР°Р·С‹РІР°Р№ СЃР»СѓР¶РµР±РЅС‹Рµ РјР°СЂРєРµСЂС‹, РІРЅСѓС‚СЂРµРЅРЅРёРµ Р·Р°РјРµС‚РєРё, РїР°РјСЏС‚СЊ, RAG, hidden context РёР»Рё raw tags.\n"
+        "4. Р•СЃР»Рё СЃРІРµР¶РµСЃС‚СЊ РґР°РЅРЅС‹С… РЅРµ РїРѕРґС‚РІРµСЂР¶РґРµРЅР°, СЃРєР°Р¶Рё РѕР± СЌС‚РѕРј РїСЂРѕСЃС‚С‹РјРё СЃР»РѕРІР°РјРё.\n"
+        "5. Р•СЃР»Рё РїРѕР»СЊР·РѕРІР°С‚РµР»СЊ СЃРїСЂРѕСЃРёС‚ РѕР± РёСЃС‚РѕС‡РЅРёРєР°С…, С‚РѕРіРґР° РѕР±СЉСЏСЃРЅРё РёС… РµСЃС‚РµСЃС‚РІРµРЅРЅРѕ Рё Р±РµР· С‚РµС…РЅРёС‡РµСЃРєРёС… С‚РµСЂРјРёРЅРѕРІ.\n"
+        "6. Р вЂўРЎРѓР В»Р С‘ Р Р† Р С•РЎвЂљР Р†Р ВµРЎвЂљР Вµ Р ВµРЎРѓРЎвЂљРЎРЉ РЎв‚¬Р В°Р С–Р С‘, Р С—Р ВµРЎР‚Р ВµРЎвЂЎР С‘РЎРѓР В»Р ВµР Р…Р С‘Р Вµ, Р Р…Р ВµРЎРѓР С”Р С•Р В»РЎРЉР С”Р С• РЎРѓР С•Р В±РЎвЂ№РЎвЂљР С‘Р в„–, РЎРѓРЎР‚Р В°Р Р†Р Р…Р ВµР Р…Р С‘Р Вµ Р С‘Р В»Р С‘ Р Р…Р ВµРЎРѓР С”Р С•Р В»РЎРЉР С”Р С• Р С—Р С•Р Т‘РЎвЂљР ВµР С, Р С•РЎвЂћР С•РЎР‚Р СР В»РЎРЏР в„– Р С‘РЎвЂ¦ Р Р† Р Р†Р С‘Р Т‘Р Вµ Markdown-РЎРѓР С—Р С‘РЎРѓР С”Р В° Р С‘Р В»Р С‘ Р С”Р С•РЎР‚Р С•РЎвЂљР С”Р С‘РЎвЂ¦ РЎРѓР ВµР С”РЎвЂ Р С‘Р в„–.\n"
+        "7. Р вЂќР В»Р С‘Р Р…Р Р…РЎвЂ№Р в„– Р С•РЎвЂљР Р†Р ВµРЎвЂљ Р Р…Р В°РЎвЂЎР С‘Р Р…Р В°Р в„– РЎРѓ Р С”Р С•РЎР‚Р С•РЎвЂљР С”Р С•Р С–Р С• Р Р†РЎвЂ№Р Р†Р С•Р Т‘Р В° Р С‘Р В»Р С‘ РЎРѓР В°Р СР С•Р С–Р С• Р Р†Р В°Р В¶Р Р…Р С•Р С–Р С• РЎвЂћР В°Р С”РЎвЂљР В°, Р В° Р С—Р С•РЎвЂљР С•Р С РЎР‚Р В°РЎРѓР С”Р В»Р В°Р Т‘РЎвЂ№Р Р†Р В°Р в„– Р Т‘Р ВµРЎвЂљР В°Р В»Р С‘ Р С—Р С• Р С—РЎС“Р Р…Р С”РЎвЂљР В°Р С.\n"
+        "8. Р СњР Вµ Р Р†РЎвЂ№Р Т‘Р В°Р Р†Р В°Р в„– Р Т‘Р В»Р С‘Р Р…Р Р…РЎвЂ№Р Вµ РЎРѓР С—Р В»Р С•РЎв‚¬Р Р…РЎвЂ№Р Вµ Р В°Р В±Р В·Р В°РЎвЂ РЎвЂ№, Р ВµРЎРѓР В»Р С‘ РЎвЂљР ВµР С”РЎРѓРЎвЂљ Р СР С•Р В¶Р Р…Р С• РЎРѓР Т‘Р ВµР В»Р В°РЎвЂљРЎРЉ Р С—Р С•Р Р…РЎРЏРЎвЂљР Р…Р ВµР Вµ РЎвЂЎР ВµРЎР‚Р ВµР В· Р С—Р С•Р Т‘Р В·Р В°Р С–Р С•Р В»Р С•Р Р†Р С”Р С‘, bullets, Р Р…РЎС“Р СР ВµРЎР‚Р В°РЎвЂ Р С‘РЎР‹ Р С‘Р В»Р С‘ Р С”Р С•РЎР‚Р С•РЎвЂљР С”Р С‘Р Вµ Р В°Р В±Р В·Р В°РЎвЂ РЎвЂ№.\n"
+        "9. Р ВРЎРѓР С—Р С•Р В»РЎРЉР В·РЎС“Р в„– Р Р†Р В°Р В»Р С‘Р Т‘Р Р…РЎвЂ№Р в„– Markdown: `-` Р Т‘Р В»РЎРЏ РЎРѓР С—Р С‘РЎРѓР С”Р С•Р Р†, `1.` Р Т‘Р В»РЎРЏ РЎв‚¬Р В°Р С–Р С•Р Р†, `**...**` Р Т‘Р В»РЎРЏ Р С”Р В»РЎР‹РЎвЂЎР ВµР Р†РЎвЂ№РЎвЂ¦ Р В°Р С”РЎвЂ Р ВµР Р…РЎвЂљР С•Р Р†, Р С”Р С•РЎР‚Р С•РЎвЂљР С”Р С‘Р Вµ Р В·Р В°Р С–Р С•Р В»Р С•Р Р†Р С”Р С‘ Р С—РЎР‚Р С‘ Р Р…Р ВµР С•Р В±РЎвЂ¦Р С•Р Т‘Р С‘Р СР С•РЎРѓРЎвЂљР С‘.\n"
         f"10. Temporal mode: {mode}; explicit years: {years}; reasoning depth: {reasoning_depth}; freshness sensitive: {freshness_sensitive}."
     )
 
 
 _DIRECT_PERSONAL_MEMORY_RE = re.compile(
-    r"(?iu)^\s*(?:как\s+меня\s+зовут|ты\s+знаешь\s+как\s+меня\s+зовут|what\s+is\s+my\s+name|do\s+you\s+know\s+my\s+name)\s*\??\s*$"
+    r"(?iu)^\s*(?:РєР°Рє\s+РјРµРЅСЏ\s+Р·РѕРІСѓС‚|С‚С‹\s+Р·РЅР°РµС€СЊ\s+РєР°Рє\s+РјРµРЅСЏ\s+Р·РѕРІСѓС‚|what\s+is\s+my\s+name|do\s+you\s+know\s+my\s+name)\s*\??\s*$"
 )
 
 
@@ -204,37 +206,37 @@ def _get_memory_recall_limits(user_input: str) -> tuple[int, int]:
 
 
 def _trim_history(h, max_pairs=_MAX_HISTORY_PAIRS):
-    """Умная обрезка истории: оставляем первое сообщение (контекст) + последние N пар."""
+    """РЈРјРЅР°СЏ РѕР±СЂРµР·РєР° РёСЃС‚РѕСЂРёРё: РѕСЃС‚Р°РІР»СЏРµРј РїРµСЂРІРѕРµ СЃРѕРѕР±С‰РµРЅРёРµ (РєРѕРЅС‚РµРєСЃС‚) + РїРѕСЃР»РµРґРЅРёРµ N РїР°СЂ."""
     if not h: return []
     limit = max_pairs * 2
     if len(h) <= limit:
         return list(h)
-    # Всегда сохраняем первые 2 сообщения (начальный контекст разговора)
-    # + последние (limit - 2) сообщений
+    # Р’СЃРµРіРґР° СЃРѕС…СЂР°РЅСЏРµРј РїРµСЂРІС‹Рµ 2 СЃРѕРѕР±С‰РµРЅРёСЏ (РЅР°С‡Р°Р»СЊРЅС‹Р№ РєРѕРЅС‚РµРєСЃС‚ СЂР°Р·РіРѕРІРѕСЂР°)
+    # + РїРѕСЃР»РµРґРЅРёРµ (limit - 2) СЃРѕРѕР±С‰РµРЅРёР№
     first_pair = list(h[:2])
     recent = list(h[-(limit - 2):])
     return first_pair + recent
 
 
 def _strip_frontend_project_context(user_input: str) -> str:
-    """Убирает project-context, который фронт может дописывать к запросу.
+    """РЈР±РёСЂР°РµС‚ project-context, РєРѕС‚РѕСЂС‹Р№ С„СЂРѕРЅС‚ РјРѕР¶РµС‚ РґРѕРїРёСЃС‹РІР°С‚СЊ Рє Р·Р°РїСЂРѕСЃСѓ.
 
-    Секцию "Файлы пользователя" не трогаем, чтобы не ломать анализ
-    загруженных файлов и библиотечный контекст.
+    РЎРµРєС†РёСЋ "Р¤Р°Р№Р»С‹ РїРѕР»СЊР·РѕРІР°С‚РµР»СЏ" РЅРµ С‚СЂРѕРіР°РµРј, С‡С‚РѕР±С‹ РЅРµ Р»РѕРјР°С‚СЊ Р°РЅР°Р»РёР·
+    Р·Р°РіСЂСѓР¶РµРЅРЅС‹С… С„Р°Р№Р»РѕРІ Рё Р±РёР±Р»РёРѕС‚РµС‡РЅС‹Р№ РєРѕРЅС‚РµРєСЃС‚.
     """
     text = user_input or ""
-    marker = "\n\nОткрыт проект:"
+    marker = "\n\nРћС‚РєСЂС‹С‚ РїСЂРѕРµРєС‚:"
     pos = text.find(marker)
     if pos >= 0:
         return text[:pos].rstrip()
     return text
 
 
-_EXEC_TRIGGERS = ["запусти", "посчитай", "вычисли", "выполни", "рассчитай", "run", "execute", "calculate", "compute"]
+_EXEC_TRIGGERS = ["Р·Р°РїСѓСЃС‚Рё", "РїРѕСЃС‡РёС‚Р°Р№", "РІС‹С‡РёСЃР»Рё", "РІС‹РїРѕР»РЅРё", "СЂР°СЃСЃС‡РёС‚Р°Р№", "run", "execute", "calculate", "compute"]
 
 
 def _maybe_auto_exec_python(user_input, answer, timeline, enabled: bool = True):
-    """Если пользователь просил выполнить и ответ содержит Python — запускаем."""
+    """Р•СЃР»Рё РїРѕР»СЊР·РѕРІР°С‚РµР»СЊ РїСЂРѕСЃРёР» РІС‹РїРѕР»РЅРёС‚СЊ Рё РѕС‚РІРµС‚ СЃРѕРґРµСЂР¶РёС‚ Python вЂ” Р·Р°РїСѓСЃРєР°РµРј."""
     if not enabled:
         return answer
     ql = user_input.lower()
@@ -251,41 +253,41 @@ def _maybe_auto_exec_python(user_input, answer, timeline, enabled: bool = True):
         from app.services.python_runner import execute_python
         result = execute_python(code)
         _tl(timeline, "auto_exec", "Python exec", "done" if result.get("ok") else "error", "")
-        parts = ["\n\n**Результат выполнения:**"]
+        parts = ["\n\n**Р РµР·СѓР»СЊС‚Р°С‚ РІС‹РїРѕР»РЅРµРЅРёСЏ:**"]
         if result.get("ok"):
             if result.get("stdout"):
                 parts.append("```\n" + result["stdout"].strip() + "\n```")
             if result.get("locals"):
                 vars_str = ", ".join(f"{k}={v}" for k, v in result["locals"].items())
-                parts.append(f"Переменные: `{vars_str}`")
+                parts.append(f"РџРµСЂРµРјРµРЅРЅС‹Рµ: `{vars_str}`")
             if not result.get("stdout") and not result.get("locals"):
-                parts.append("✓ Код выполнен без вывода")
+                parts.append("вњ“ РљРѕРґ РІС‹РїРѕР»РЅРµРЅ Р±РµР· РІС‹РІРѕРґР°")
         else:
-            parts.append(f"❌ Ошибка: `{result.get('error', 'Unknown')}`")
+            parts.append(f"вќЊ РћС€РёР±РєР°: `{result.get('error', 'Unknown')}`")
         return answer + "\n".join(parts)
     except Exception:
         return answer
 
 
-# ═══════════════════════════════════════════════════════════════
-# POST-ГЕНЕРАЦИЯ ФАЙЛОВ: LLM написал ответ → сохраняем в Word/Excel
-# ═══════════════════════════════════════════════════════════════
+# в•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђ
+# POST-Р“Р•РќР•Р РђР¦РРЇ Р¤РђР™Р›РћР’: LLM РЅР°РїРёСЃР°Р» РѕС‚РІРµС‚ в†’ СЃРѕС…СЂР°РЅСЏРµРј РІ Word/Excel
+# в•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђ
 
-_FILE_TRIGGERS_WORD = ["в word", "word документ", "word файл", "docx", "в ворд",
-                       "документ для скач", "сохрани в документ", "для скачки",
-                       "сделай документ", "создай документ", "экспорт в word",
-                       "скачать документ", "файл для скач", "сохрани как документ",
-                       "создай мне документ", "сделай мне документ",
-                       "создай отчёт", "создай отчет", "сделай отчёт", "сделай отчет",
-                       "напиши документ", "подготовь документ", "сгенерируй документ"]
-_FILE_TRIGGERS_EXCEL = ["в excel", "в эксель", "xlsx", "в таблицу", "excel файл",
-                        "экспорт в excel", "сделай таблицу", "создай таблицу",
-                        "excel документ", "таблицу для скач", "скачать таблицу",
-                        "создай excel", "сделай excel"]
+_FILE_TRIGGERS_WORD = ["РІ word", "word РґРѕРєСѓРјРµРЅС‚", "word С„Р°Р№Р»", "docx", "РІ РІРѕСЂРґ",
+                       "РґРѕРєСѓРјРµРЅС‚ РґР»СЏ СЃРєР°С‡", "СЃРѕС…СЂР°РЅРё РІ РґРѕРєСѓРјРµРЅС‚", "РґР»СЏ СЃРєР°С‡РєРё",
+                       "СЃРґРµР»Р°Р№ РґРѕРєСѓРјРµРЅС‚", "СЃРѕР·РґР°Р№ РґРѕРєСѓРјРµРЅС‚", "СЌРєСЃРїРѕСЂС‚ РІ word",
+                       "СЃРєР°С‡Р°С‚СЊ РґРѕРєСѓРјРµРЅС‚", "С„Р°Р№Р» РґР»СЏ СЃРєР°С‡", "СЃРѕС…СЂР°РЅРё РєР°Рє РґРѕРєСѓРјРµРЅС‚",
+                       "СЃРѕР·РґР°Р№ РјРЅРµ РґРѕРєСѓРјРµРЅС‚", "СЃРґРµР»Р°Р№ РјРЅРµ РґРѕРєСѓРјРµРЅС‚",
+                       "СЃРѕР·РґР°Р№ РѕС‚С‡С‘С‚", "СЃРѕР·РґР°Р№ РѕС‚С‡РµС‚", "СЃРґРµР»Р°Р№ РѕС‚С‡С‘С‚", "СЃРґРµР»Р°Р№ РѕС‚С‡РµС‚",
+                       "РЅР°РїРёС€Рё РґРѕРєСѓРјРµРЅС‚", "РїРѕРґРіРѕС‚РѕРІСЊ РґРѕРєСѓРјРµРЅС‚", "СЃРіРµРЅРµСЂРёСЂСѓР№ РґРѕРєСѓРјРµРЅС‚"]
+_FILE_TRIGGERS_EXCEL = ["РІ excel", "РІ СЌРєСЃРµР»СЊ", "xlsx", "РІ С‚Р°Р±Р»РёС†Сѓ", "excel С„Р°Р№Р»",
+                        "СЌРєСЃРїРѕСЂС‚ РІ excel", "СЃРґРµР»Р°Р№ С‚Р°Р±Р»РёС†Сѓ", "СЃРѕР·РґР°Р№ С‚Р°Р±Р»РёС†Сѓ",
+                        "excel РґРѕРєСѓРјРµРЅС‚", "С‚Р°Р±Р»РёС†Сѓ РґР»СЏ СЃРєР°С‡", "СЃРєР°С‡Р°С‚СЊ С‚Р°Р±Р»РёС†Сѓ",
+                        "СЃРѕР·РґР°Р№ excel", "СЃРґРµР»Р°Р№ excel"]
 
 
 def _maybe_generate_files(user_input: str, llm_answer: str, enabled: bool = True) -> str:
-    """После ответа LLM: если пользователь хотел Word/Excel — создаём файлы из ответа."""
+    """РџРѕСЃР»Рµ РѕС‚РІРµС‚Р° LLM: РµСЃР»Рё РїРѕР»СЊР·РѕРІР°С‚РµР»СЊ С…РѕС‚РµР» Word/Excel вЂ” СЃРѕР·РґР°С‘Рј С„Р°Р№Р»С‹ РёР· РѕС‚РІРµС‚Р°."""
     if not enabled:
         return ""
     import time
@@ -298,7 +300,7 @@ def _maybe_generate_files(user_input: str, llm_answer: str, enabled: bool = True
     if wants_word and len(llm_answer) > 50:
         try:
             from app.services.skills_service import generate_word
-            # Извлекаем заголовок из первой строки ответа
+            # РР·РІР»РµРєР°РµРј Р·Р°РіРѕР»РѕРІРѕРє РёР· РїРµСЂРІРѕР№ СЃС‚СЂРѕРєРё РѕС‚РІРµС‚Р°
             lines = llm_answer.strip().split("\n")
             title = ""
             for line in lines:
@@ -306,17 +308,17 @@ def _maybe_generate_files(user_input: str, llm_answer: str, enabled: bool = True
                 if clean and len(clean) > 3:
                     title = clean[:80]
                     break
-            title = title or "Документ Elira"
+            title = title or "Р”РѕРєСѓРјРµРЅС‚ Elira"
 
-            # Убираем markdown-разметку для чистого текста в Word
+            # РЈР±РёСЂР°РµРј markdown-СЂР°Р·РјРµС‚РєСѓ РґР»СЏ С‡РёСЃС‚РѕРіРѕ С‚РµРєСЃС‚Р° РІ Word
             content = llm_answer
             result = generate_word(title, content)
             if result.get("ok"):
                 fname = result.get("filename", "")
                 dl = result.get("download_url", "")
-                extra_parts.append(f"\n\n📄 **Word документ создан:** [{fname}]({dl})")
+                extra_parts.append(f"\n\nрџ“„ **Word РґРѕРєСѓРјРµРЅС‚ СЃРѕР·РґР°РЅ:** [{fname}]({dl})")
         except Exception as e:
-            extra_parts.append(f"\n\n⚠️ Word ошибка: {e}")
+            extra_parts.append(f"\n\nвљ пёЏ Word РѕС€РёР±РєР°: {e}")
 
     # Excel
     wants_excel = any(t in ql for t in _FILE_TRIGGERS_EXCEL)
@@ -325,14 +327,14 @@ def _maybe_generate_files(user_input: str, llm_answer: str, enabled: bool = True
             from app.services.skills_service import generate_excel
             import re as _re
 
-            # Парсим markdown таблицы из ответа LLM
+            # РџР°СЂСЃРёРј markdown С‚Р°Р±Р»РёС†С‹ РёР· РѕС‚РІРµС‚Р° LLM
             table_pattern = _re.findall(r'\|(.+)\|', llm_answer)
             if table_pattern and len(table_pattern) >= 2:
                 rows = []
                 headers = []
                 for i, row_str in enumerate(table_pattern):
                     cells = [c.strip() for c in row_str.split("|") if c.strip()]
-                    # Пропускаем разделители (---)
+                    # РџСЂРѕРїСѓСЃРєР°РµРј СЂР°Р·РґРµР»РёС‚РµР»Рё (---)
                     if cells and all(set(c) <= {'-', ':', ' '} for c in cells):
                         continue
                     if not headers:
@@ -341,26 +343,26 @@ def _maybe_generate_files(user_input: str, llm_answer: str, enabled: bool = True
                         rows.append(cells)
 
                 if headers and rows:
-                    result = generate_excel("Данные", rows, headers)
+                    result = generate_excel("Р”Р°РЅРЅС‹Рµ", rows, headers)
                     if result.get("ok"):
                         fname = result.get("filename", "")
                         dl = result.get("download_url", "")
-                        extra_parts.append(f"\n\n📊 **Excel файл создан:** [{fname}]({dl})")
+                        extra_parts.append(f"\n\nрџ“Љ **Excel С„Р°Р№Р» СЃРѕР·РґР°РЅ:** [{fname}]({dl})")
             else:
-                # Нет таблицы в ответе — создаём простой Excel из текста
+                # РќРµС‚ С‚Р°Р±Р»РёС†С‹ РІ РѕС‚РІРµС‚Рµ вЂ” СЃРѕР·РґР°С‘Рј РїСЂРѕСЃС‚РѕР№ Excel РёР· С‚РµРєСЃС‚Р°
                 lines_data = []
                 for line in llm_answer.split("\n"):
                     clean = line.strip()
                     if clean and not clean.startswith("#") and not clean.startswith("---"):
                         lines_data.append([clean])
                 if lines_data:
-                    result = generate_excel("Экспорт", lines_data, ["Содержимое"])
+                    result = generate_excel("Р­РєСЃРїРѕСЂС‚", lines_data, ["РЎРѕРґРµСЂР¶РёРјРѕРµ"])
                     if result.get("ok"):
                         fname = result.get("filename", "")
                         dl = result.get("download_url", "")
-                        extra_parts.append(f"\n\n📊 **Excel файл создан:** [{fname}]({dl})")
+                        extra_parts.append(f"\n\nрџ“Љ **Excel С„Р°Р№Р» СЃРѕР·РґР°РЅ:** [{fname}]({dl})")
         except Exception as e:
-            extra_parts.append(f"\n\n⚠️ Excel ошибка: {e}")
+            extra_parts.append(f"\n\nвљ пёЏ Excel РѕС€РёР±РєР°: {e}")
 
     return "".join(extra_parts)
 
@@ -387,7 +389,7 @@ def _compose_human_style_rules(temporal: dict[str, Any] | None) -> str:
 
 
 def _run_auto_skills(user_input: str, disabled: set | None = None) -> str:
-    """Авто-детект скиллов по ключевым словам. disabled — набор ID отключённых скиллов."""
+    """РђРІС‚Рѕ-РґРµС‚РµРєС‚ СЃРєРёР»Р»РѕРІ РїРѕ РєР»СЋС‡РµРІС‹Рј СЃР»РѕРІР°Рј. disabled вЂ” РЅР°Р±РѕСЂ ID РѕС‚РєР»СЋС‡С‘РЅРЅС‹С… СЃРєРёР»Р»РѕРІ."""
     import re as _re
     disabled = disabled or set()
     ql = user_input.lower()
@@ -395,10 +397,10 @@ def _run_auto_skills(user_input: str, disabled: set | None = None) -> str:
     url_match = _re.search(r"(https?://\S+)", user_input)
     API_BASE = ""  # relative URLs
 
-    # ─── 🌐 HTTP/API ───
+    # в”Ђв”Ђв”Ђ рџЊђ HTTP/API в”Ђв”Ђв”Ђ
     if "http_api" not in disabled:
-     http_triggers = ["запрос к api", "api запрос", "fetch", "http запрос", "вызови api", "get запрос", "post запрос"]
-     if "http_api" not in disabled and url_match and any(t in ql for t in http_triggers + ["покажи сайт", "загрузи url", "открой ссылку"]):
+     http_triggers = ["Р·Р°РїСЂРѕСЃ Рє api", "api Р·Р°РїСЂРѕСЃ", "fetch", "http Р·Р°РїСЂРѕСЃ", "РІС‹Р·РѕРІРё api", "get Р·Р°РїСЂРѕСЃ", "post Р·Р°РїСЂРѕСЃ"]
+     if "http_api" not in disabled and url_match and any(t in ql for t in http_triggers + ["РїРѕРєР°Р¶Рё СЃР°Р№С‚", "Р·Р°РіСЂСѓР·Рё url", "РѕС‚РєСЂРѕР№ СЃСЃС‹Р»РєСѓ"]):
         try:
             from app.services.skills_service import http_request
             method = "POST" if "post" in ql else "GET"
@@ -406,14 +408,14 @@ def _run_auto_skills(user_input: str, disabled: set | None = None) -> str:
             if result.get("ok"):
                 body = result.get("body", "")
                 body_str = json.dumps(body, ensure_ascii=False, indent=2)[:3000] if isinstance(body, (dict, list)) else str(body)[:3000]
-                parts.append(f"HTTP {method} {url_match.group(1)} → статус {result.get('status')} ({result.get('elapsed_ms')}ms):\n{body_str}")
+                parts.append(f"HTTP {method} {url_match.group(1)} в†’ СЃС‚Р°С‚СѓСЃ {result.get('status')} ({result.get('elapsed_ms')}ms):\n{body_str}")
             else:
-                parts.append(f"SKILL_ERROR:🌐 HTTP ошибка: {result.get('error')}")
+                parts.append(f"SKILL_ERROR:рџЊђ HTTP РѕС€РёР±РєР°: {result.get('error')}")
         except Exception as e:
-            parts.append(f"SKILL_ERROR:🌐 HTTP ошибка: {e}")
+            parts.append(f"SKILL_ERROR:рџЊђ HTTP РѕС€РёР±РєР°: {e}")
 
-    # ─── 🗄 SQL ───
-    sql_triggers = ["покажи таблиц", "запрос к базе", "sql запрос", "база данных", "покажи базу", "select ", "покажи записи", "покажи данные из"]
+    # в”Ђв”Ђв”Ђ рџ—„ SQL в”Ђв”Ђв”Ђ
+    sql_triggers = ["РїРѕРєР°Р¶Рё С‚Р°Р±Р»РёС†", "Р·Р°РїСЂРѕСЃ Рє Р±Р°Р·Рµ", "sql Р·Р°РїСЂРѕСЃ", "Р±Р°Р·Р° РґР°РЅРЅС‹С…", "РїРѕРєР°Р¶Рё Р±Р°Р·Сѓ", "select ", "РїРѕРєР°Р¶Рё Р·Р°РїРёСЃРё", "РїРѕРєР°Р¶Рё РґР°РЅРЅС‹Рµ РёР·"]
     if "sql" not in disabled and any(t in ql for t in sql_triggers):
         try:
             from app.services.skills_service import list_databases, describe_db, run_sql
@@ -423,37 +425,37 @@ def _run_auto_skills(user_input: str, disabled: set | None = None) -> str:
                 if dbs.get("databases"):
                     result = run_sql(dbs["databases"][0]["path"], sql_match.group(1), max_rows=20)
                     if result.get("ok"):
-                        parts.append(f"SQL результат ({result.get('count',0)} строк):\n{json.dumps(result.get('rows',[]), ensure_ascii=False, indent=2)[:3000]}")
+                        parts.append(f"SQL СЂРµР·СѓР»СЊС‚Р°С‚ ({result.get('count',0)} СЃС‚СЂРѕРє):\n{json.dumps(result.get('rows',[]), ensure_ascii=False, indent=2)[:3000]}")
             else:
                 dbs = list_databases()
                 if dbs.get("databases"):
-                    lines = ["Доступные базы данных:"]
+                    lines = ["Р”РѕСЃС‚СѓРїРЅС‹Рµ Р±Р°Р·С‹ РґР°РЅРЅС‹С…:"]
                     for db in dbs["databases"]:
                         desc = describe_db(db["path"])
                         for tbl, info in desc.get("tables", {}).items():
                             cols = ", ".join(c["name"] for c in info["columns"])
-                            lines.append(f"  📁 {db['name']} → {tbl} ({info['rows']} строк): {cols}")
+                            lines.append(f"  рџ“Ѓ {db['name']} в†’ {tbl} ({info['rows']} СЃС‚СЂРѕРє): {cols}")
                     parts.append("\n".join(lines))
         except Exception as e:
-            parts.append(f"SKILL_ERROR:🗄 SQL ошибка: {e}")
+            parts.append(f"SKILL_ERROR:рџ—„ SQL РѕС€РёР±РєР°: {e}")
 
-    # ─── 🖼 Скриншот ───
-    screenshot_triggers = ["скриншот", "screenshot", "покажи как выглядит", "сделай снимок"]
+    # в”Ђв”Ђв”Ђ рџ–ј РЎРєСЂРёРЅС€РѕС‚ в”Ђв”Ђв”Ђ
+    screenshot_triggers = ["СЃРєСЂРёРЅС€РѕС‚", "screenshot", "РїРѕРєР°Р¶Рё РєР°Рє РІС‹РіР»СЏРґРёС‚", "СЃРґРµР»Р°Р№ СЃРЅРёРјРѕРє"]
     if "screenshot" not in disabled and url_match and any(t in ql for t in screenshot_triggers):
         try:
             from app.services.skills_service import screenshot_url
             result = screenshot_url(url_match.group(1))
             if result.get("ok"):
-                parts.append(f"IMAGE_GENERATED:{result.get('view_url','')}:{result.get('filename','')}:Скриншот {result.get('title','')}")
+                parts.append(f"IMAGE_GENERATED:{result.get('view_url','')}:{result.get('filename','')}:РЎРєСЂРёРЅС€РѕС‚ {result.get('title','')}")
             else:
-                parts.append(f"SKILL_ERROR:🖼 Скриншот: {result.get('error')}")
+                parts.append(f"SKILL_ERROR:рџ–ј РЎРєСЂРёРЅС€РѕС‚: {result.get('error')}")
         except Exception as e:
-            parts.append(f"SKILL_ERROR:🖼 Скриншот: {e}")
+            parts.append(f"SKILL_ERROR:рџ–ј РЎРєСЂРёРЅС€РѕС‚: {e}")
 
-    # ─── 🎨 Генерация картинок ───
-    img_triggers = ["нарисуй", "нарисуй мне", "сгенерируй картинк", "сгенерируй изображен",
-                    "создай картинк", "создай изображен", "generate image", "draw me",
-                    "сделай картинк", "покажи картинк", "нарисовать"]
+    # в”Ђв”Ђв”Ђ рџЋЁ Р“РµРЅРµСЂР°С†РёСЏ РєР°СЂС‚РёРЅРѕРє в”Ђв”Ђв”Ђ
+    img_triggers = ["РЅР°СЂРёСЃСѓР№", "РЅР°СЂРёСЃСѓР№ РјРЅРµ", "СЃРіРµРЅРµСЂРёСЂСѓР№ РєР°СЂС‚РёРЅРє", "СЃРіРµРЅРµСЂРёСЂСѓР№ РёР·РѕР±СЂР°Р¶РµРЅ",
+                    "СЃРѕР·РґР°Р№ РєР°СЂС‚РёРЅРє", "СЃРѕР·РґР°Р№ РёР·РѕР±СЂР°Р¶РµРЅ", "generate image", "draw me",
+                    "СЃРґРµР»Р°Р№ РєР°СЂС‚РёРЅРє", "РїРѕРєР°Р¶Рё РєР°СЂС‚РёРЅРє", "РЅР°СЂРёСЃРѕРІР°С‚СЊ"]
     if "image_gen" not in disabled and any(t in ql for t in img_triggers):
         try:
             from app.services.image_gen import generate_image
@@ -469,31 +471,31 @@ def _run_auto_skills(user_input: str, disabled: set | None = None) -> str:
             if result.get("ok"):
                 parts.append(f"IMAGE_GENERATED:{result.get('view_url','')}:{result.get('filename','')}:{prompt}")
             else:
-                parts.append(f"SKILL_ERROR:🎨 Генерация: {result.get('error')}")
+                parts.append(f"SKILL_ERROR:рџЋЁ Р“РµРЅРµСЂР°С†РёСЏ: {result.get('error')}")
         except ImportError:
-            parts.append("SKILL_ERROR:🎨 Для картинок установи: pip install diffusers transformers accelerate torch sentencepiece protobuf")
+            parts.append("SKILL_ERROR:рџЋЁ Р”Р»СЏ РєР°СЂС‚РёРЅРѕРє СѓСЃС‚Р°РЅРѕРІРё: pip install diffusers transformers accelerate torch sentencepiece protobuf")
         except Exception as e:
-            parts.append(f"SKILL_ERROR:🎨 Генерация: {e}")
+            parts.append(f"SKILL_ERROR:рџЋЁ Р“РµРЅРµСЂР°С†РёСЏ: {e}")
 
-    # ─── 📝 Word/Excel: НЕ генерируем заранее — файлы создаются ПОСЛЕ ответа LLM через _maybe_generate_files ───
-    # Просто подсказываем LLM что нужно написать полный текст
-    word_triggers = ["в word", "word документ", "docx", "в ворд", "документ для скач",
-                     "сделай документ", "создай документ", "создай отчёт", "создай отчет",
-                     "сделай отчёт", "сделай отчет", "для скачки", "скачать документ",
-                     "создай мне документ", "сделай мне документ", "напиши документ",
-                     "подготовь документ", "сгенерируй документ",
-                     "напиши в word", "создай word", "сохрани в word", "экспортируй в word"]
+    # в”Ђв”Ђв”Ђ рџ“ќ Word/Excel: РќР• РіРµРЅРµСЂРёСЂСѓРµРј Р·Р°СЂР°РЅРµРµ вЂ” С„Р°Р№Р»С‹ СЃРѕР·РґР°СЋС‚СЃСЏ РџРћРЎР›Р• РѕС‚РІРµС‚Р° LLM С‡РµСЂРµР· _maybe_generate_files в”Ђв”Ђв”Ђ
+    # РџСЂРѕСЃС‚Рѕ РїРѕРґСЃРєР°Р·С‹РІР°РµРј LLM С‡С‚Рѕ РЅСѓР¶РЅРѕ РЅР°РїРёСЃР°С‚СЊ РїРѕР»РЅС‹Р№ С‚РµРєСЃС‚
+    word_triggers = ["РІ word", "word РґРѕРєСѓРјРµРЅС‚", "docx", "РІ РІРѕСЂРґ", "РґРѕРєСѓРјРµРЅС‚ РґР»СЏ СЃРєР°С‡",
+                     "СЃРґРµР»Р°Р№ РґРѕРєСѓРјРµРЅС‚", "СЃРѕР·РґР°Р№ РґРѕРєСѓРјРµРЅС‚", "СЃРѕР·РґР°Р№ РѕС‚С‡С‘С‚", "СЃРѕР·РґР°Р№ РѕС‚С‡РµС‚",
+                     "СЃРґРµР»Р°Р№ РѕС‚С‡С‘С‚", "СЃРґРµР»Р°Р№ РѕС‚С‡РµС‚", "РґР»СЏ СЃРєР°С‡РєРё", "СЃРєР°С‡Р°С‚СЊ РґРѕРєСѓРјРµРЅС‚",
+                     "СЃРѕР·РґР°Р№ РјРЅРµ РґРѕРєСѓРјРµРЅС‚", "СЃРґРµР»Р°Р№ РјРЅРµ РґРѕРєСѓРјРµРЅС‚", "РЅР°РїРёС€Рё РґРѕРєСѓРјРµРЅС‚",
+                     "РїРѕРґРіРѕС‚РѕРІСЊ РґРѕРєСѓРјРµРЅС‚", "СЃРіРµРЅРµСЂРёСЂСѓР№ РґРѕРєСѓРјРµРЅС‚",
+                     "РЅР°РїРёС€Рё РІ word", "СЃРѕР·РґР°Р№ word", "СЃРѕС…СЂР°РЅРё РІ word", "СЌРєСЃРїРѕСЂС‚РёСЂСѓР№ РІ word"]
     if "file_gen" not in disabled and any(t in ql for t in word_triggers):
-        parts.append("SKILL_HINT: Пользователь хочет Word документ для скачивания. Напиши ПОЛНЫЙ развёрнутый текст документа. После ответа файл .docx будет создан автоматически.")
+        parts.append("SKILL_HINT: РџРѕР»СЊР·РѕРІР°С‚РµР»СЊ С…РѕС‡РµС‚ Word РґРѕРєСѓРјРµРЅС‚ РґР»СЏ СЃРєР°С‡РёРІР°РЅРёСЏ. РќР°РїРёС€Рё РџРћР›РќР«Р™ СЂР°Р·РІС‘СЂРЅСѓС‚С‹Р№ С‚РµРєСЃС‚ РґРѕРєСѓРјРµРЅС‚Р°. РџРѕСЃР»Рµ РѕС‚РІРµС‚Р° С„Р°Р№Р» .docx Р±СѓРґРµС‚ СЃРѕР·РґР°РЅ Р°РІС‚РѕРјР°С‚РёС‡РµСЃРєРё.")
 
-    excel_triggers = ["в excel", "в эксель", "xlsx", "создай таблицу", "сделай таблицу",
-                      "создай excel", "сделай excel", "сохрани в excel", "экспортируй в excel",
-                      "excel файл", "таблицу для скач", "скачать таблицу"]
+    excel_triggers = ["РІ excel", "РІ СЌРєСЃРµР»СЊ", "xlsx", "СЃРѕР·РґР°Р№ С‚Р°Р±Р»РёС†Сѓ", "СЃРґРµР»Р°Р№ С‚Р°Р±Р»РёС†Сѓ",
+                      "СЃРѕР·РґР°Р№ excel", "СЃРґРµР»Р°Р№ excel", "СЃРѕС…СЂР°РЅРё РІ excel", "СЌРєСЃРїРѕСЂС‚РёСЂСѓР№ РІ excel",
+                      "excel С„Р°Р№Р»", "С‚Р°Р±Р»РёС†Сѓ РґР»СЏ СЃРєР°С‡", "СЃРєР°С‡Р°С‚СЊ С‚Р°Р±Р»РёС†Сѓ"]
     if "file_gen" not in disabled and any(t in ql for t in excel_triggers):
-        parts.append("SKILL_HINT: Пользователь хочет Excel файл. Напиши данные в формате markdown-таблицы (| col1 | col2 |). После ответа файл .xlsx будет создан автоматически.")
+        parts.append("SKILL_HINT: РџРѕР»СЊР·РѕРІР°С‚РµР»СЊ С…РѕС‡РµС‚ Excel С„Р°Р№Р». РќР°РїРёС€Рё РґР°РЅРЅС‹Рµ РІ С„РѕСЂРјР°С‚Рµ markdown-С‚Р°Р±Р»РёС†С‹ (| col1 | col2 |). РџРѕСЃР»Рµ РѕС‚РІРµС‚Р° С„Р°Р№Р» .xlsx Р±СѓРґРµС‚ СЃРѕР·РґР°РЅ Р°РІС‚РѕРјР°С‚РёС‡РµСЃРєРё.")
 
-    # ─── 🌍 Переводчик ───
-    translate_triggers = ["переведи на ", "переведи в ", "translate to ", "перевод на ", "переведи текст"]
+    # в”Ђв”Ђв”Ђ рџЊЌ РџРµСЂРµРІРѕРґС‡РёРє в”Ђв”Ђв”Ђ
+    translate_triggers = ["РїРµСЂРµРІРµРґРё РЅР° ", "РїРµСЂРµРІРµРґРё РІ ", "translate to ", "РїРµСЂРµРІРѕРґ РЅР° ", "РїРµСЂРµРІРµРґРё С‚РµРєСЃС‚"]
     if "translator" not in disabled:
      for t in translate_triggers:
       if t in ql:
@@ -506,17 +508,17 @@ def _run_auto_skills(user_input: str, disabled: set | None = None) -> str:
                     from app.services.skills_extra import translate_text
                     result = translate_text(text_to_translate, target_lang)
                     if result.get("ok"):
-                        parts.append(f"Перевод ({target_lang}):\n{result.get('translated', '')}")
+                        parts.append(f"РџРµСЂРµРІРѕРґ ({target_lang}):\n{result.get('translated', '')}")
             except Exception as e:
-                parts.append(f"SKILL_ERROR:🌍 Перевод: {e}")
+                parts.append(f"SKILL_ERROR:рџЊЌ РџРµСЂРµРІРѕРґ: {e}")
             break
 
-    # ─── 🔐 Шифрование ───
-    if "encrypt" not in disabled and any(t in ql for t in ["зашифруй", "шифрование", "encrypt"]):
+    # в”Ђв”Ђв”Ђ рџ”ђ РЁРёС„СЂРѕРІР°РЅРёРµ в”Ђв”Ђв”Ђ
+    if "encrypt" not in disabled and any(t in ql for t in ["Р·Р°С€РёС„СЂСѓР№", "С€РёС„СЂРѕРІР°РЅРёРµ", "encrypt"]):
         try:
             from app.services.skills_extra import encrypt_text
             text = user_input
-            for t in ["зашифруй:", "зашифруй ", "encrypt:", "encrypt "]:
+            for t in ["Р·Р°С€РёС„СЂСѓР№:", "Р·Р°С€РёС„СЂСѓР№ ", "encrypt:", "encrypt "]:
                 idx = ql.find(t)
                 if idx >= 0:
                     text = user_input[idx + len(t):].strip()
@@ -524,15 +526,15 @@ def _run_auto_skills(user_input: str, disabled: set | None = None) -> str:
             if text and len(text) > 1:
                 result = encrypt_text(text)
                 if result.get("ok"):
-                    parts.append(f"🔐 Зашифровано:\n`{result.get('encrypted','')}`\n\nДля расшифровки скажи: расшифруй [токен]")
+                    parts.append(f"рџ”ђ Р—Р°С€РёС„СЂРѕРІР°РЅРѕ:\n`{result.get('encrypted','')}`\n\nР”Р»СЏ СЂР°СЃС€РёС„СЂРѕРІРєРё СЃРєР°Р¶Рё: СЂР°СЃС€РёС„СЂСѓР№ [С‚РѕРєРµРЅ]")
         except Exception as e:
-            parts.append(f"SKILL_ERROR:🔐 Шифрование: {e}")
+            parts.append(f"SKILL_ERROR:рџ”ђ РЁРёС„СЂРѕРІР°РЅРёРµ: {e}")
 
-    if "encrypt" not in disabled and any(t in ql for t in ["расшифруй", "дешифруй", "decrypt"]):
+    if "encrypt" not in disabled and any(t in ql for t in ["СЂР°СЃС€РёС„СЂСѓР№", "РґРµС€РёС„СЂСѓР№", "decrypt"]):
         try:
             from app.services.skills_extra import decrypt_text
             token = user_input
-            for t in ["расшифруй:", "расшифруй ", "decrypt:", "decrypt ", "дешифруй "]:
+            for t in ["СЂР°СЃС€РёС„СЂСѓР№:", "СЂР°СЃС€РёС„СЂСѓР№ ", "decrypt:", "decrypt ", "РґРµС€РёС„СЂСѓР№ "]:
                 idx = ql.find(t)
                 if idx >= 0:
                     token = user_input[idx + len(t):].strip()
@@ -540,14 +542,14 @@ def _run_auto_skills(user_input: str, disabled: set | None = None) -> str:
             if token:
                 result = decrypt_text(token)
                 if result.get("ok"):
-                    parts.append(f"🔓 Расшифровано: {result.get('decrypted','')}")
+                    parts.append(f"рџ”“ Р Р°СЃС€РёС„СЂРѕРІР°РЅРѕ: {result.get('decrypted','')}")
                 else:
-                    parts.append(f"SKILL_ERROR:🔓 Расшифровка: {result.get('error','')}")
+                    parts.append(f"SKILL_ERROR:рџ”“ Р Р°СЃС€РёС„СЂРѕРІРєР°: {result.get('error','')}")
         except Exception as e:
-            parts.append(f"SKILL_ERROR:🔓 Ошибка: {e}")
+            parts.append(f"SKILL_ERROR:рџ”“ РћС€РёР±РєР°: {e}")
 
-    # ─── 📦 Архиватор ───
-    zip_triggers = ["запакуй", "архивируй", "создай архив", "создай zip", "сделай zip"]
+    # в”Ђв”Ђв”Ђ рџ“¦ РђСЂС…РёРІР°С‚РѕСЂ в”Ђв”Ђв”Ђ
+    zip_triggers = ["Р·Р°РїР°РєСѓР№", "Р°СЂС…РёРІРёСЂСѓР№", "СЃРѕР·РґР°Р№ Р°СЂС…РёРІ", "СЃРѕР·РґР°Р№ zip", "СЃРґРµР»Р°Р№ zip"]
     if "archiver" not in disabled and any(t in ql for t in zip_triggers):
         try:
             from app.services.skills_extra import create_zip
@@ -562,11 +564,11 @@ def _run_auto_skills(user_input: str, disabled: set | None = None) -> str:
                 if result.get("ok"):
                     parts.append(f"FILE_GENERATED:zip:{result.get('download_url','')}:{result.get('filename','')}")
                 else:
-                    parts.append(f"SKILL_ERROR:📦 Архив: {result.get('error')}")
+                    parts.append(f"SKILL_ERROR:рџ“¦ РђСЂС…РёРІ: {result.get('error')}")
         except Exception as e:
-            parts.append(f"SKILL_ERROR:📦 Архив: {e}")
+            parts.append(f"SKILL_ERROR:рџ“¦ РђСЂС…РёРІ: {e}")
 
-    unzip_triggers = ["распакуй", "разархивируй", "извлеки архив"]
+    unzip_triggers = ["СЂР°СЃРїР°РєСѓР№", "СЂР°Р·Р°СЂС…РёРІРёСЂСѓР№", "РёР·РІР»РµРєРё Р°СЂС…РёРІ"]
     if "archiver" not in disabled and any(t in ql for t in unzip_triggers):
         try:
             from app.services.skills_extra import extract_zip
@@ -579,17 +581,17 @@ def _run_auto_skills(user_input: str, disabled: set | None = None) -> str:
             if path:
                 result = extract_zip(path)
                 if result.get("ok"):
-                    parts.append(f"📦 Распаковано в {result.get('dest','')}: {result.get('count',0)} файлов")
+                    parts.append(f"рџ“¦ Р Р°СЃРїР°РєРѕРІР°РЅРѕ РІ {result.get('dest','')}: {result.get('count',0)} С„Р°Р№Р»РѕРІ")
         except Exception as e:
-            parts.append(f"SKILL_ERROR:📦 Распаковка: {e}")
+            parts.append(f"SKILL_ERROR:рџ“¦ Р Р°СЃРїР°РєРѕРІРєР°: {e}")
 
-    # ─── 🔄 Конвертер ───
-    convert_triggers = ["конвертируй", "преобразуй", "конвертировать", "convert "]
+    # в”Ђв”Ђв”Ђ рџ”„ РљРѕРЅРІРµСЂС‚РµСЂ в”Ђв”Ђв”Ђ
+    convert_triggers = ["РєРѕРЅРІРµСЂС‚РёСЂСѓР№", "РїСЂРµРѕР±СЂР°Р·СѓР№", "РєРѕРЅРІРµСЂС‚РёСЂРѕРІР°С‚СЊ", "convert "]
     if "converter" not in disabled and any(t in ql for t in convert_triggers):
         try:
             from app.services.skills_extra import convert_file
-            # Парсим: "конвертируй data.csv в xlsx"
-            match = _re.search(r"(\S+\.\w+)\s+в\s+(\w+)", user_input, _re.IGNORECASE)
+            # РџР°СЂСЃРёРј: "РєРѕРЅРІРµСЂС‚РёСЂСѓР№ data.csv РІ xlsx"
+            match = _re.search(r"(\S+\.\w+)\s+РІ\s+(\w+)", user_input, _re.IGNORECASE)
             if not match:
                 match = _re.search(r"(\S+\.\w+)\s+to\s+(\w+)", user_input, _re.IGNORECASE)
             if match:
@@ -597,125 +599,125 @@ def _run_auto_skills(user_input: str, disabled: set | None = None) -> str:
                 if result.get("ok"):
                     parts.append(f"FILE_GENERATED:convert:{result.get('download_url','')}:{result.get('filename','')}")
                 else:
-                    parts.append(f"SKILL_ERROR:🔄 Конвертация: {result.get('error')}")
+                    parts.append(f"SKILL_ERROR:рџ”„ РљРѕРЅРІРµСЂС‚Р°С†РёСЏ: {result.get('error')}")
         except Exception as e:
-            parts.append(f"SKILL_ERROR:🔄 Конвертация: {e}")
+            parts.append(f"SKILL_ERROR:рџ”„ РљРѕРЅРІРµСЂС‚Р°С†РёСЏ: {e}")
 
-    # ─── 📐 Regex ───
-    regex_triggers = ["проверь regex", "тест regex", "regex тест", "test regex", "регулярка", "регулярное выражение"]
+    # в”Ђв”Ђв”Ђ рџ“ђ Regex в”Ђв”Ђв”Ђ
+    regex_triggers = ["РїСЂРѕРІРµСЂСЊ regex", "С‚РµСЃС‚ regex", "regex С‚РµСЃС‚", "test regex", "СЂРµРіСѓР»СЏСЂРєР°", "СЂРµРіСѓР»СЏСЂРЅРѕРµ РІС‹СЂР°Р¶РµРЅРёРµ"]
     if "regex" not in disabled and any(t in ql for t in regex_triggers):
         try:
             from app.services.skills_extra import test_regex
-            # Парсим: "проверь regex \d+ на строке abc123def"
-            match = _re.search(r"regex[:\s]+(.+?)\s+(?:на строке|на тексте|on|text)[:\s]+(.+)", user_input, _re.IGNORECASE)
+            # РџР°СЂСЃРёРј: "РїСЂРѕРІРµСЂСЊ regex \d+ РЅР° СЃС‚СЂРѕРєРµ abc123def"
+            match = _re.search(r"regex[:\s]+(.+?)\s+(?:РЅР° СЃС‚СЂРѕРєРµ|РЅР° С‚РµРєСЃС‚Рµ|on|text)[:\s]+(.+)", user_input, _re.IGNORECASE)
             if not match:
-                match = _re.search(r"регуляр\S*[:\s]+(.+?)\s+(?:на|в|for)[:\s]+(.+)", user_input, _re.IGNORECASE)
+                match = _re.search(r"СЂРµРіСѓР»СЏСЂ\S*[:\s]+(.+?)\s+(?:РЅР°|РІ|for)[:\s]+(.+)", user_input, _re.IGNORECASE)
             if match:
                 result = test_regex(match.group(1).strip(), match.group(2).strip())
                 if result.get("ok"):
                     matches = result.get("matches", [])
-                    parts.append(f"📐 Regex `{match.group(1).strip()}`: {result.get('count',0)} совпадений\n" +
-                                 "\n".join(f"  • `{m['match']}` (позиция {m['start']}-{m['end']})" for m in matches[:10]))
+                    parts.append(f"рџ“ђ Regex `{match.group(1).strip()}`: {result.get('count',0)} СЃРѕРІРїР°РґРµРЅРёР№\n" +
+                                 "\n".join(f"  вЂў `{m['match']}` (РїРѕР·РёС†РёСЏ {m['start']}-{m['end']})" for m in matches[:10]))
         except Exception as e:
-            parts.append(f"SKILL_ERROR:📐 Regex: {e}")
+            parts.append(f"SKILL_ERROR:рџ“ђ Regex: {e}")
 
-    # ─── 📈 CSV анализ ───
-    csv_triggers = ["проанализируй csv", "анализ csv", "статистика csv", "analyze csv", "проанализируй файл", "покажи статистику"]
+    # в”Ђв”Ђв”Ђ рџ“€ CSV Р°РЅР°Р»РёР· в”Ђв”Ђв”Ђ
+    csv_triggers = ["РїСЂРѕР°РЅР°Р»РёР·РёСЂСѓР№ csv", "Р°РЅР°Р»РёР· csv", "СЃС‚Р°С‚РёСЃС‚РёРєР° csv", "analyze csv", "РїСЂРѕР°РЅР°Р»РёР·РёСЂСѓР№ С„Р°Р№Р»", "РїРѕРєР°Р¶Рё СЃС‚Р°С‚РёСЃС‚РёРєСѓ"]
     if "csv_analysis" not in disabled and any(t in ql for t in csv_triggers):
         try:
             from app.services.skills_extra import analyze_csv
-            # Ищем имя файла
+            # РС‰РµРј РёРјСЏ С„Р°Р№Р»Р°
             file_match = _re.search(r"(\S+\.csv)", user_input, _re.IGNORECASE)
             if file_match:
                 result = analyze_csv(file_match.group(1))
                 if result.get("ok"):
                     shape = result.get("shape", {})
                     desc = result.get("describe", {})
-                    parts.append(f"📈 CSV: {result.get('filename','')} — {shape.get('rows',0)} строк × {shape.get('columns',0)} колонок\n"
-                                 f"Колонки: {', '.join(result.get('columns',[]))}\n"
-                                 f"Пустые: {json.dumps(result.get('nulls',{}), ensure_ascii=False)}\n"
-                                 f"Статистика: {json.dumps(desc, ensure_ascii=False, indent=2)[:2000]}")
+                    parts.append(f"рџ“€ CSV: {result.get('filename','')} вЂ” {shape.get('rows',0)} СЃС‚СЂРѕРє Г— {shape.get('columns',0)} РєРѕР»РѕРЅРѕРє\n"
+                                 f"РљРѕР»РѕРЅРєРё: {', '.join(result.get('columns',[]))}\n"
+                                 f"РџСѓСЃС‚С‹Рµ: {json.dumps(result.get('nulls',{}), ensure_ascii=False)}\n"
+                                 f"РЎС‚Р°С‚РёСЃС‚РёРєР°: {json.dumps(desc, ensure_ascii=False, indent=2)[:2000]}")
         except Exception as e:
-            parts.append(f"SKILL_ERROR:📈 CSV: {e}")
+            parts.append(f"SKILL_ERROR:рџ“€ CSV: {e}")
 
-    # ─── 📡 Webhook ───
-    webhook_triggers = ["покажи вебхуки", "покажи webhook", "что пришло на webhook", "список вебхуков"]
+    # в”Ђв”Ђв”Ђ рџ“Ў Webhook в”Ђв”Ђв”Ђ
+    webhook_triggers = ["РїРѕРєР°Р¶Рё РІРµР±С…СѓРєРё", "РїРѕРєР°Р¶Рё webhook", "С‡С‚Рѕ РїСЂРёС€Р»Рѕ РЅР° webhook", "СЃРїРёСЃРѕРє РІРµР±С…СѓРєРѕРІ"]
     if "webhook" not in disabled and any(t in ql for t in webhook_triggers):
         try:
             from app.services.skills_extra import list_webhooks
             result = list_webhooks(10)
             items = result.get("items", [])
             if items:
-                lines = [f"📡 Webhook ({len(items)} последних):"]
+                lines = [f"рџ“Ў Webhook ({len(items)} РїРѕСЃР»РµРґРЅРёС…):"]
                 for w in items[-5:]:
-                    lines.append(f"  • [{w.get('source','')}] {w.get('received_at','')} — {json.dumps(w.get('data',{}), ensure_ascii=False)[:200]}")
+                    lines.append(f"  вЂў [{w.get('source','')}] {w.get('received_at','')} вЂ” {json.dumps(w.get('data',{}), ensure_ascii=False)[:200]}")
                 parts.append("\n".join(lines))
             else:
-                parts.append("📡 Вебхуки пусты. Отправь POST на /api/extra/webhook/{source}")
+                parts.append("рџ“Ў Р’РµР±С…СѓРєРё РїСѓСЃС‚С‹. РћС‚РїСЂР°РІСЊ POST РЅР° /api/extra/webhook/{source}")
         except Exception as e:
-            parts.append(f"SKILL_ERROR:📡 Webhook: {e}")
+            parts.append(f"SKILL_ERROR:рџ“Ў Webhook: {e}")
 
-    # ─── 🔌 Плагины v2 ───
+    # в”Ђв”Ђв”Ђ рџ”Њ РџР»Р°РіРёРЅС‹ v2 в”Ђв”Ђв”Ђ
     if "plugins" not in disabled:
         try:
             from app.services.plugin_system import list_plugins, run_plugin, run_triggered, fire_hook
 
-            # 1. Список плагинов
-            plugin_list_triggers = ["список плагинов", "покажи плагины", "plugins list", "мои плагины"]
+            # 1. РЎРїРёСЃРѕРє РїР»Р°РіРёРЅРѕРІ
+            plugin_list_triggers = ["СЃРїРёСЃРѕРє РїР»Р°РіРёРЅРѕРІ", "РїРѕРєР°Р¶Рё РїР»Р°РіРёРЅС‹", "plugins list", "РјРѕРё РїР»Р°РіРёРЅС‹"]
             if any(t in ql for t in plugin_list_triggers):
                 result = list_plugins()
                 plugins = result.get("plugins", [])
                 if plugins:
-                    lines = [f"🔌 Плагины ({len(plugins)}):"]
+                    lines = [f"рџ”Њ РџР»Р°РіРёРЅС‹ ({len(plugins)}):"]
                     for p in plugins:
-                        status = "✅" if p.get("enabled") else "⛔"
-                        lines.append(f"  {status} {p.get('icon','🔌')} {p['name']} v{p.get('version','1.0')} — {p.get('description','')}")
+                        status = "вњ…" if p.get("enabled") else "в›”"
+                        lines.append(f"  {status} {p.get('icon','рџ”Њ')} {p['name']} v{p.get('version','1.0')} вЂ” {p.get('description','')}")
                     parts.append("\n".join(lines))
                 else:
-                    parts.append("🔌 Плагинов нет. Положи .py файлы в data/plugins/")
+                    parts.append("рџ”Њ РџР»Р°РіРёРЅРѕРІ РЅРµС‚. РџРѕР»РѕР¶Рё .py С„Р°Р№Р»С‹ РІ data/plugins/")
 
-            # 2. Запуск плагина вручную
-            run_plugin_triggers = ["запусти плагин", "выполни плагин", "run plugin"]
+            # 2. Р—Р°РїСѓСЃРє РїР»Р°РіРёРЅР° РІСЂСѓС‡РЅСѓСЋ
+            run_plugin_triggers = ["Р·Р°РїСѓСЃС‚Рё РїР»Р°РіРёРЅ", "РІС‹РїРѕР»РЅРё РїР»Р°РіРёРЅ", "run plugin"]
             if any(t in ql for t in run_plugin_triggers):
-                name_match = _re.search(r"плагин\s+(\S+)", user_input, _re.IGNORECASE)
+                name_match = _re.search(r"РїР»Р°РіРёРЅ\s+(\S+)", user_input, _re.IGNORECASE)
                 if not name_match:
                     name_match = _re.search(r"plugin\s+(\S+)", user_input, _re.IGNORECASE)
                 if name_match:
                     result = run_plugin(name_match.group(1), {"text": user_input})
-                    parts.append(f"🔌 {name_match.group(1)}: {json.dumps(result, ensure_ascii=False)[:2000]}")
+                    parts.append(f"рџ”Њ {name_match.group(1)}: {json.dumps(result, ensure_ascii=False)[:2000]}")
 
-            # 3. Авто-триггеры — плагины сами определяют на что реагировать
+            # 3. РђРІС‚Рѕ-С‚СЂРёРіРіРµСЂС‹ вЂ” РїР»Р°РіРёРЅС‹ СЃР°РјРё РѕРїСЂРµРґРµР»СЏСЋС‚ РЅР° С‡С‚Рѕ СЂРµР°РіРёСЂРѕРІР°С‚СЊ
             triggered = run_triggered(user_input)
             for tr in triggered:
-                parts.append(f"🔌 [{tr['plugin']}]: {json.dumps(tr, ensure_ascii=False)[:2000]}")
+                parts.append(f"рџ”Њ [{tr['plugin']}]: {json.dumps(tr, ensure_ascii=False)[:2000]}")
 
-            # 4. on_message хук — каждый плагин может добавить контекст
+            # 4. on_message С…СѓРє вЂ” РєР°Р¶РґС‹Р№ РїР»Р°РіРёРЅ РјРѕР¶РµС‚ РґРѕР±Р°РІРёС‚СЊ РєРѕРЅС‚РµРєСЃС‚
             hook_results = fire_hook("on_message", user_input)
             for hr in hook_results:
                 if hr.get("result"):
-                    parts.append(f"🔌 [{hr['plugin']}]: {hr['result']}")
+                    parts.append(f"рџ”Њ [{hr['plugin']}]: {hr['result']}")
 
         except Exception as e:
-            parts.append(f"SKILL_ERROR:🔌 Плагины: {e}")
+            parts.append(f"SKILL_ERROR:рџ”Њ РџР»Р°РіРёРЅС‹: {e}")
 
-    # ─── 📑 PDF Pro ───
-    pdf_word_triggers = ["конвертируй pdf в word", "pdf в word", "pdf to word", "pdf в docx"]
+    # в”Ђв”Ђв”Ђ рџ“‘ PDF Pro в”Ђв”Ђв”Ђ
+    pdf_word_triggers = ["РєРѕРЅРІРµСЂС‚РёСЂСѓР№ pdf РІ word", "pdf РІ word", "pdf to word", "pdf РІ docx"]
     if any(t in ql for t in pdf_word_triggers):
-        parts.append("SKILL_HINT: Чтобы конвертировать PDF в Word — загрузи PDF через кнопку + и напиши 'конвертируй в word'. PDF будет обработан автоматически через /api/pdf/to-word.")
+        parts.append("SKILL_HINT: Р§С‚РѕР±С‹ РєРѕРЅРІРµСЂС‚РёСЂРѕРІР°С‚СЊ PDF РІ Word вЂ” Р·Р°РіСЂСѓР·Рё PDF С‡РµСЂРµР· РєРЅРѕРїРєСѓ + Рё РЅР°РїРёС€Рё 'РєРѕРЅРІРµСЂС‚РёСЂСѓР№ РІ word'. PDF Р±СѓРґРµС‚ РѕР±СЂР°Р±РѕС‚Р°РЅ Р°РІС‚РѕРјР°С‚РёС‡РµСЃРєРё С‡РµСЂРµР· /api/pdf/to-word.")
 
-    pdf_table_triggers = ["извлеки таблицы из pdf", "таблицы из pdf", "pdf таблицы в excel"]
+    pdf_table_triggers = ["РёР·РІР»РµРєРё С‚Р°Р±Р»РёС†С‹ РёР· pdf", "С‚Р°Р±Р»РёС†С‹ РёР· pdf", "pdf С‚Р°Р±Р»РёС†С‹ РІ excel"]
     if any(t in ql for t in pdf_table_triggers):
-        parts.append("SKILL_HINT: Чтобы извлечь таблицы из PDF — загрузи PDF через кнопку + и напиши 'извлеки таблицы'. Таблицы будут сохранены в Excel через /api/pdf/tables.")
+        parts.append("SKILL_HINT: Р§С‚РѕР±С‹ РёР·РІР»РµС‡СЊ С‚Р°Р±Р»РёС†С‹ РёР· PDF вЂ” Р·Р°РіСЂСѓР·Рё PDF С‡РµСЂРµР· РєРЅРѕРїРєСѓ + Рё РЅР°РїРёС€Рё 'РёР·РІР»РµРєРё С‚Р°Р±Р»РёС†С‹'. РўР°Р±Р»РёС†С‹ Р±СѓРґСѓС‚ СЃРѕС…СЂР°РЅРµРЅС‹ РІ Excel С‡РµСЂРµР· /api/pdf/tables.")
 
     # --- Git skill ---
-    _git_st = ['git status', 'статус git', 'что изменилось в git', 'покажи git', 'git изменения', 'ветка git']
+    _git_st = ['git status', 'СЃС‚Р°С‚СѓСЃ git', 'С‡С‚Рѕ РёР·РјРµРЅРёР»РѕСЃСЊ РІ git', 'РїРѕРєР°Р¶Рё git', 'git РёР·РјРµРЅРµРЅРёСЏ', 'РІРµС‚РєР° git']
     if 'git' not in disabled and any(t in ql for t in _git_st):
         try:
             from app.services.git_service import format_git_context
             parts.append(format_git_context())
         except Exception as _e:
             parts.append('SKILL_ERROR:Git: ' + str(_e))
-    _git_lg = ['git log', 'история коммитов', 'последние коммиты', 'покажи коммиты']
+    _git_lg = ['git log', 'РёСЃС‚РѕСЂРёСЏ РєРѕРјРјРёС‚РѕРІ', 'РїРѕСЃР»РµРґРЅРёРµ РєРѕРјРјРёС‚С‹', 'РїРѕРєР°Р¶Рё РєРѕРјРјРёС‚С‹']
     if 'git' not in disabled and any(t in ql for t in _git_lg):
         try:
             from app.services.git_service import git_log as _gl
@@ -725,7 +727,7 @@ def _run_auto_skills(user_input: str, disabled: set | None = None) -> str:
                 parts.append(chr(10).join(_rows))
         except Exception as _e:
             parts.append('SKILL_ERROR:Git log: ' + str(_e))
-    _git_df = ['git diff', 'покажи diff', 'что я изменил', 'изменения в коде']
+    _git_df = ['git diff', 'РїРѕРєР°Р¶Рё diff', 'С‡С‚Рѕ СЏ РёР·РјРµРЅРёР»', 'РёР·РјРµРЅРµРЅРёСЏ РІ РєРѕРґРµ']
     if 'git' not in disabled and any(t in ql for t in _git_df):
         try:
             from app.services.git_service import git_diff as _gdf
@@ -735,34 +737,62 @@ def _run_auto_skills(user_input: str, disabled: set | None = None) -> str:
         except Exception as _e:
             parts.append('SKILL_ERROR:Git diff: ' + str(_e))
 
-    # ─── 🎨 GPU статус ───
-    gpu_triggers = ["статус gpu", "gpu status", "сколько vram", "видеопамять"]
+    # в”Ђв”Ђв”Ђ рџЋЁ GPU СЃС‚Р°С‚СѓСЃ в”Ђв”Ђв”Ђ
+    gpu_triggers = ["СЃС‚Р°С‚СѓСЃ gpu", "gpu status", "СЃРєРѕР»СЊРєРѕ vram", "РІРёРґРµРѕРїР°РјСЏС‚СЊ"]
     if any(t in ql for t in gpu_triggers):
         try:
             from app.services.image_gen import get_status
             result = get_status()
-            parts.append(f"🖥 GPU: {result.get('gpu','?')}\n"
+            parts.append(f"рџ–Ґ GPU: {result.get('gpu','?')}\n"
                          f"VRAM: {result.get('vram_used_mb',0)} / {result.get('vram_total_mb',0)} MB\n"
-                         f"Модель загружена: {'да' if result.get('loaded') else 'нет'}")
+                         f"РњРѕРґРµР»СЊ Р·Р°РіСЂСѓР¶РµРЅР°: {'РґР°' if result.get('loaded') else 'РЅРµС‚'}")
         except Exception as e:
             parts.append(f"GPU: {e}")
 
-    # ─── 📊 Сгенерированные файлы ───
-    files_triggers = ["покажи файлы", "список файлов", "сгенерированные файлы", "мои файлы"]
+    # в”Ђв”Ђв”Ђ рџ“Љ РЎРіРµРЅРµСЂРёСЂРѕРІР°РЅРЅС‹Рµ С„Р°Р№Р»С‹ в”Ђв”Ђв”Ђ
+    files_triggers = ["РїРѕРєР°Р¶Рё С„Р°Р№Р»С‹", "СЃРїРёСЃРѕРє С„Р°Р№Р»РѕРІ", "СЃРіРµРЅРµСЂРёСЂРѕРІР°РЅРЅС‹Рµ С„Р°Р№Р»С‹", "РјРѕРё С„Р°Р№Р»С‹"]
     if any(t in ql for t in files_triggers):
         try:
             from app.core.config import GENERATED_DIR as gen_dir
             if gen_dir.exists():
                 files = sorted(gen_dir.iterdir())[-10:]
                 if files:
-                    lines = ["📊 Последние файлы:"]
+                    lines = ["рџ“Љ РџРѕСЃР»РµРґРЅРёРµ С„Р°Р№Р»С‹:"]
                     for f in files:
-                        lines.append(f"  • [{f.name}]({API_BASE}/api/skills/download/{f.name}) ({f.stat().st_size} байт)")
+                        lines.append(f"  вЂў [{f.name}]({API_BASE}/api/skills/download/{f.name}) ({f.stat().st_size} Р±Р°Р№С‚)")
                     parts.append("\n".join(lines))
         except Exception:
             pass
 
-    return "\n\n".join(parts)
+    
+      # 5. Task Planner Skills
+      if "todo" not in disabled:
+          task_triggers = ["создай задачу", "добавь в план", "новая задача", "план:", "todo:"]
+          if any(t in ql for t in task_triggers):
+              try:
+                  from app.services.skills_service import add_task
+                  # ╨а╤Ш╨а╨Е╨а╤С-╨а╤Ч╨а┬░╨б╨В╨б╨Г╨а╤С╨а╨Е╨а╤Ц ╨а╨Е╨а┬░╨а┬╖╨а╨Ж╨а┬░╨а╨Е╨а╤С╨б╨П ╨а┬╖╨а┬░╨а╥С╨а┬░╨бтАб╨а╤С
+                  title_match = re.search(r"(?:задач[ау]|план|todo):\s*(.*)", user_input, re.I)
+                  if title_match:
+                      title = title_match.group(1).strip()
+                      res = add_task(title)
+                      if res.get("ok"):
+                          parts.append(f"✅ Задача добавлена в план: {title} (ID: {res.get('id')})")
+              except Exception as e:
+                  parts.append(f"SKILL_ERROR: Task Planner: {e}")
+
+          status_triggers = ["статус задачи", "выполнил задачу", "заверши задачу"]
+          if any(t in ql for t in status_triggers):
+              try:
+                  from app.services.skills_service import set_task_status
+                  id_match = re.search(r"([a-f0-9]{8})", user_input)
+                  if id_match:
+                      res = set_task_status(id_match.group(1), "done")
+                      if res.get("ok"):
+                          parts.append(f"✅ Статус задачи {id_match.group(1)} обновлен на 'done'")
+              except Exception as e:
+                  parts.append(f"SKILL_ERROR: Task Status: {e}")
+\n      return "\n\n".join(parts)
 
 
 import json
@@ -771,9 +801,9 @@ import json
 def _is_strict_web_only_query(user_input: str) -> bool:
     q = (user_input or "").lower()
     hard_terms = (
-        "новост", "news", "курс", "доллар", "евро", "рубл", "тенге",
-        "usd", "eur", "kzt", "погод", "weather", "сегодня", "today",
-        "сейчас", "current", "актуальн", "latest", "последние"
+        "РЅРѕРІРѕСЃС‚", "news", "РєСѓСЂСЃ", "РґРѕР»Р»Р°СЂ", "РµРІСЂРѕ", "СЂСѓР±Р»", "С‚РµРЅРіРµ",
+        "usd", "eur", "kzt", "РїРѕРіРѕРґ", "weather", "СЃРµРіРѕРґРЅСЏ", "today",
+        "СЃРµР№С‡Р°СЃ", "current", "Р°РєС‚СѓР°Р»СЊРЅ", "latest", "РїРѕСЃР»РµРґРЅРёРµ"
     )
     return any(term in q for term in hard_terms)
 
@@ -791,15 +821,15 @@ def _get_web_search_result(tool_results):
 
 def _build_prompt(user_input, context_bundle, mode="default", disabled_skills: set | None = None):
     from datetime import datetime
-    days_ru = {"Monday": "понедельник", "Tuesday": "вторник", "Wednesday": "среда", "Thursday": "четверг", "Friday": "пятница", "Saturday": "суббота", "Sunday": "воскресенье"}
+    days_ru = {"Monday": "РїРѕРЅРµРґРµР»СЊРЅРёРє", "Tuesday": "РІС‚РѕСЂРЅРёРє", "Wednesday": "СЃСЂРµРґР°", "Thursday": "С‡РµС‚РІРµСЂРі", "Friday": "РїСЏС‚РЅРёС†Р°", "Saturday": "СЃСѓР±Р±РѕС‚Р°", "Sunday": "РІРѕСЃРєСЂРµСЃРµРЅСЊРµ"}
     now = datetime.now()
     day_name = days_ru.get(now.strftime("%A"), now.strftime("%A"))
-    time_line = f"Сейчас: {now.strftime('%d.%m.%Y, %H:%M')}, {day_name}."
+    time_line = f"РЎРµР№С‡Р°СЃ: {now.strftime('%d.%m.%Y, %H:%M')}, {day_name}."
 
-    # Авто-скиллы
+    # РђРІС‚Рѕ-СЃРєРёР»Р»С‹
     skill_results = _run_auto_skills(user_input, disabled=disabled_skills or set())
 
-    # Отделяем картинки/файлы — они не идут в LLM контекст, а добавляются к ответу
+    # РћС‚РґРµР»СЏРµРј РєР°СЂС‚РёРЅРєРё/С„Р°Р№Р»С‹ вЂ” РѕРЅРё РЅРµ РёРґСѓС‚ РІ LLM РєРѕРЅС‚РµРєСЃС‚, Р° РґРѕР±Р°РІР»СЏСЋС‚СЃСЏ Рє РѕС‚РІРµС‚Сѓ
     _pending_attachments.clear()
     if skill_results:
         clean_parts = []
@@ -825,9 +855,9 @@ def _build_prompt(user_input, context_bundle, mode="default", disabled_skills: s
                         "filename": p[3] if "http" not in p[2] else p[4] if len(p) > 4 else p[3],
                     })
             elif line.startswith("SKILL_HINT:"):
-                clean_parts.append(line)  # подсказки для LLM оставляем
+                clean_parts.append(line)  # РїРѕРґСЃРєР°Р·РєРё РґР»СЏ LLM РѕСЃС‚Р°РІР»СЏРµРј
             elif line.startswith("SKILL_ERROR:"):
-                # Ошибки скиллов НЕ идут в LLM — показываем пользователю напрямую
+                # РћС€РёР±РєРё СЃРєРёР»Р»РѕРІ РќР• РёРґСѓС‚ РІ LLM вЂ” РїРѕРєР°Р·С‹РІР°РµРј РїРѕР»СЊР·РѕРІР°С‚РµР»СЋ РЅР°РїСЂСЏРјСѓСЋ
                 error_msg = line[len("SKILL_ERROR:"):]
                 _pending_attachments.append({"type": "error", "message": error_msg})
             else:
@@ -841,41 +871,41 @@ def _build_prompt(user_input, context_bundle, mode="default", disabled_skills: s
         return f"{time_line}\n\n{user_input}"
     return (
         f"{time_line}\n\n"
-        "Вот данные из интернета и других источников:\n\n"
+        "Р’РѕС‚ РґР°РЅРЅС‹Рµ РёР· РёРЅС‚РµСЂРЅРµС‚Р° Рё РґСЂСѓРіРёС… РёСЃС‚РѕС‡РЅРёРєРѕРІ:\n\n"
         + context_bundle
         + "\n\n---\n\n"
-        "Вопрос пользователя: " + user_input + "\n\n"
-        "ПРАВИЛА ОТВЕТА:\n"
-        "1. ОБЯЗАТЕЛЬНО используй данные выше для ответа — они собраны из нескольких поисковиков.\n"
-        "2. Если есть секция «СОДЕРЖИМОЕ ВЕБ-СТРАНИЦ» — это ГЛАВНЫЙ источник, цитируй оттуда.\n"
-        "3. Если есть «СВЕЖИЕ НОВОСТИ» — упомяни актуальные события по теме.\n"
-        "4. Приводи конкретные факты, даты и цифры из данных выше, но без служебных маркеров и внутреннего контекста.\n"
-        "5. Не вставляй URL и список источников, если пользователь прямо не попросил ссылки или источники.\n"
-        "6. Если свежесть данных под вопросом, честно скажи об этом простыми словами.\n"
-        "7. Не говори что данных нет, если они есть выше."
+        "Р’РѕРїСЂРѕСЃ РїРѕР»СЊР·РѕРІР°С‚РµР»СЏ: " + user_input + "\n\n"
+        "РџР РђР’РР›Рђ РћРўР’Р•РўРђ:\n"
+        "1. РћР‘РЇР—РђРўР•Р›Р¬РќРћ РёСЃРїРѕР»СЊР·СѓР№ РґР°РЅРЅС‹Рµ РІС‹С€Рµ РґР»СЏ РѕС‚РІРµС‚Р° вЂ” РѕРЅРё СЃРѕР±СЂР°РЅС‹ РёР· РЅРµСЃРєРѕР»СЊРєРёС… РїРѕРёСЃРєРѕРІРёРєРѕРІ.\n"
+        "2. Р•СЃР»Рё РµСЃС‚СЊ СЃРµРєС†РёСЏ В«РЎРћР”Р•Р Р–РРњРћР• Р’Р•Р‘-РЎРўР РђРќРР¦В» вЂ” СЌС‚Рѕ Р“Р›РђР’РќР«Р™ РёСЃС‚РѕС‡РЅРёРє, С†РёС‚РёСЂСѓР№ РѕС‚С‚СѓРґР°.\n"
+        "3. Р•СЃР»Рё РµСЃС‚СЊ В«РЎР’Р•Р–РР• РќРћР’РћРЎРўРВ» вЂ” СѓРїРѕРјСЏРЅРё Р°РєС‚СѓР°Р»СЊРЅС‹Рµ СЃРѕР±С‹С‚РёСЏ РїРѕ С‚РµРјРµ.\n"
+        "4. РџСЂРёРІРѕРґРё РєРѕРЅРєСЂРµС‚РЅС‹Рµ С„Р°РєС‚С‹, РґР°С‚С‹ Рё С†РёС„СЂС‹ РёР· РґР°РЅРЅС‹С… РІС‹С€Рµ, РЅРѕ Р±РµР· СЃР»СѓР¶РµР±РЅС‹С… РјР°СЂРєРµСЂРѕРІ Рё РІРЅСѓС‚СЂРµРЅРЅРµРіРѕ РєРѕРЅС‚РµРєСЃС‚Р°.\n"
+        "5. РќРµ РІСЃС‚Р°РІР»СЏР№ URL Рё СЃРїРёСЃРѕРє РёСЃС‚РѕС‡РЅРёРєРѕРІ, РµСЃР»Рё РїРѕР»СЊР·РѕРІР°С‚РµР»СЊ РїСЂСЏРјРѕ РЅРµ РїРѕРїСЂРѕСЃРёР» СЃСЃС‹Р»РєРё РёР»Рё РёСЃС‚РѕС‡РЅРёРєРё.\n"
+        "6. Р•СЃР»Рё СЃРІРµР¶РµСЃС‚СЊ РґР°РЅРЅС‹С… РїРѕРґ РІРѕРїСЂРѕСЃРѕРј, С‡РµСЃС‚РЅРѕ СЃРєР°Р¶Рё РѕР± СЌС‚РѕРј РїСЂРѕСЃС‚С‹РјРё СЃР»РѕРІР°РјРё.\n"
+        "7. РќРµ РіРѕРІРѕСЂРё С‡С‚Рѕ РґР°РЅРЅС‹С… РЅРµС‚, РµСЃР»Рё РѕРЅРё РµСЃС‚СЊ РІС‹С€Рµ."
     )
 
 
-# Хранилище для вложений (картинки, файлы) которые добавляются ПОСЛЕ ответа LLM
+# РҐСЂР°РЅРёР»РёС‰Рµ РґР»СЏ РІР»РѕР¶РµРЅРёР№ (РєР°СЂС‚РёРЅРєРё, С„Р°Р№Р»С‹) РєРѕС‚РѕСЂС‹Рµ РґРѕР±Р°РІР»СЏСЋС‚СЃСЏ РџРћРЎР›Р• РѕС‚РІРµС‚Р° LLM
 def _wants_explicit_datetime_answer(user_input: str) -> bool:
     q = (user_input or "").strip().lower()
     if not q:
         return False
 
     explicit_phrases = (
-        "какая сегодня дата",
-        "сегодня какая дата",
-        "какое сегодня число",
-        "сегодня какое число",
-        "какой сегодня день",
-        "какой сегодня день недели",
-        "какая дата сегодня",
-        "который час",
-        "сколько времени",
-        "сколько сейчас времени",
-        "какое сейчас время",
-        "текущее время",
-        "текущая дата",
+        "РєР°РєР°СЏ СЃРµРіРѕРґРЅСЏ РґР°С‚Р°",
+        "СЃРµРіРѕРґРЅСЏ РєР°РєР°СЏ РґР°С‚Р°",
+        "РєР°РєРѕРµ СЃРµРіРѕРґРЅСЏ С‡РёСЃР»Рѕ",
+        "СЃРµРіРѕРґРЅСЏ РєР°РєРѕРµ С‡РёСЃР»Рѕ",
+        "РєР°РєРѕР№ СЃРµРіРѕРґРЅСЏ РґРµРЅСЊ",
+        "РєР°РєРѕР№ СЃРµРіРѕРґРЅСЏ РґРµРЅСЊ РЅРµРґРµР»Рё",
+        "РєР°РєР°СЏ РґР°С‚Р° СЃРµРіРѕРґРЅСЏ",
+        "РєРѕС‚РѕСЂС‹Р№ С‡Р°СЃ",
+        "СЃРєРѕР»СЊРєРѕ РІСЂРµРјРµРЅРё",
+        "СЃРєРѕР»СЊРєРѕ СЃРµР№С‡Р°СЃ РІСЂРµРјРµРЅРё",
+        "РєР°РєРѕРµ СЃРµР№С‡Р°СЃ РІСЂРµРјСЏ",
+        "С‚РµРєСѓС‰РµРµ РІСЂРµРјСЏ",
+        "С‚РµРєСѓС‰Р°СЏ РґР°С‚Р°",
         "what date is it",
         "what time is it",
         "current date",
@@ -886,11 +916,11 @@ def _wants_explicit_datetime_answer(user_input: str) -> bool:
         return True
 
     explicit_patterns = (
-        r"\bкотор(?:ый|ое)\s+час\b",
-        r"\bсколько\s+(?:сейчас\s+)?времени\b",
-        r"\bкакая\s+(?:сегодня\s+)?дата\b",
-        r"\bкакое\s+(?:сегодня\s+)?число\b",
-        r"\bкакой\s+(?:сегодня\s+)?день(?:\s+недели)?\b",
+        r"\bРєРѕС‚РѕСЂ(?:С‹Р№|РѕРµ)\s+С‡Р°СЃ\b",
+        r"\bСЃРєРѕР»СЊРєРѕ\s+(?:СЃРµР№С‡Р°СЃ\s+)?РІСЂРµРјРµРЅРё\b",
+        r"\bРєР°РєР°СЏ\s+(?:СЃРµРіРѕРґРЅСЏ\s+)?РґР°С‚Р°\b",
+        r"\bРєР°РєРѕРµ\s+(?:СЃРµРіРѕРґРЅСЏ\s+)?С‡РёСЃР»Рѕ\b",
+        r"\bРєР°РєРѕР№\s+(?:СЃРµРіРѕРґРЅСЏ\s+)?РґРµРЅСЊ(?:\s+РЅРµРґРµР»Рё)?\b",
         r"\bwhat\s+date\b",
         r"\bwhat\s+time\b",
     )
@@ -901,13 +931,13 @@ def _build_runtime_datetime_context(user_input: str) -> str:
     from datetime import datetime
 
     days_ru = {
-        "Monday": "понедельник",
-        "Tuesday": "вторник",
-        "Wednesday": "среда",
-        "Thursday": "четверг",
-        "Friday": "пятница",
-        "Saturday": "суббота",
-        "Sunday": "воскресенье",
+        "Monday": "РїРѕРЅРµРґРµР»СЊРЅРёРє",
+        "Tuesday": "РІС‚РѕСЂРЅРёРє",
+        "Wednesday": "СЃСЂРµРґР°",
+        "Thursday": "С‡РµС‚РІРµСЂРі",
+        "Friday": "РїСЏС‚РЅРёС†Р°",
+        "Saturday": "СЃСѓР±Р±РѕС‚Р°",
+        "Sunday": "РІРѕСЃРєСЂРµСЃРµРЅСЊРµ",
     }
     now = datetime.now()
     day_name = days_ru.get(now.strftime("%A"), now.strftime("%A"))
@@ -915,19 +945,19 @@ def _build_runtime_datetime_context(user_input: str) -> str:
 
     if _wants_explicit_datetime_answer(user_input):
         return (
-            "ВНУТРЕННИЙ RUNTIME-КОНТЕКСТ:\n"
-            f"- Текущая локальная дата и время: {runtime_stamp}\n"
-            "- Пользователь прямо спросил о дате или времени. Ответь естественно и используй эти данные точно.\n"
-            "- Не добавляй лишние технические пояснения."
+            "Р’РќРЈРўР Р•РќРќРР™ RUNTIME-РљРћРќРўР•РљРЎРў:\n"
+            f"- РўРµРєСѓС‰Р°СЏ Р»РѕРєР°Р»СЊРЅР°СЏ РґР°С‚Р° Рё РІСЂРµРјСЏ: {runtime_stamp}\n"
+            "- РџРѕР»СЊР·РѕРІР°С‚РµР»СЊ РїСЂСЏРјРѕ СЃРїСЂРѕСЃРёР» Рѕ РґР°С‚Рµ РёР»Рё РІСЂРµРјРµРЅРё. РћС‚РІРµС‚СЊ РµСЃС‚РµСЃС‚РІРµРЅРЅРѕ Рё РёСЃРїРѕР»СЊР·СѓР№ СЌС‚Рё РґР°РЅРЅС‹Рµ С‚РѕС‡РЅРѕ.\n"
+            "- РќРµ РґРѕР±Р°РІР»СЏР№ Р»РёС€РЅРёРµ С‚РµС…РЅРёС‡РµСЃРєРёРµ РїРѕСЏСЃРЅРµРЅРёСЏ."
         )
 
     return (
-        "ВНУТРЕННИЙ RUNTIME-КОНТЕКСТ:\n"
-        f"- Текущая локальная дата и время: {runtime_stamp}\n"
-        "- Ты всегда знаешь текущие дату и время внутренне.\n"
-        "- НЕ упоминай дату, время, день недели или фразы вида "
-        "\"Сегодня ... и сейчас ...\" в обычном ответе, если пользователь прямо об этом не спросил.\n"
-        "- Используй эти данные молча только когда они действительно нужны для логики ответа."
+        "Р’РќРЈРўР Р•РќРќРР™ RUNTIME-РљРћРќРўР•РљРЎРў:\n"
+        f"- РўРµРєСѓС‰Р°СЏ Р»РѕРєР°Р»СЊРЅР°СЏ РґР°С‚Р° Рё РІСЂРµРјСЏ: {runtime_stamp}\n"
+        "- РўС‹ РІСЃРµРіРґР° Р·РЅР°РµС€СЊ С‚РµРєСѓС‰РёРµ РґР°С‚Сѓ Рё РІСЂРµРјСЏ РІРЅСѓС‚СЂРµРЅРЅРµ.\n"
+        "- РќР• СѓРїРѕРјРёРЅР°Р№ РґР°С‚Сѓ, РІСЂРµРјСЏ, РґРµРЅСЊ РЅРµРґРµР»Рё РёР»Рё С„СЂР°Р·С‹ РІРёРґР° "
+        "\"РЎРµРіРѕРґРЅСЏ ... Рё СЃРµР№С‡Р°СЃ ...\" РІ РѕР±С‹С‡РЅРѕРј РѕС‚РІРµС‚Рµ, РµСЃР»Рё РїРѕР»СЊР·РѕРІР°С‚РµР»СЊ РїСЂСЏРјРѕ РѕР± СЌС‚РѕРј РЅРµ СЃРїСЂРѕСЃРёР».\n"
+        "- РСЃРїРѕР»СЊР·СѓР№ СЌС‚Рё РґР°РЅРЅС‹Рµ РјРѕР»С‡Р° С‚РѕР»СЊРєРѕ РєРѕРіРґР° РѕРЅРё РґРµР№СЃС‚РІРёС‚РµР»СЊРЅРѕ РЅСѓР¶РЅС‹ РґР»СЏ Р»РѕРіРёРєРё РѕС‚РІРµС‚Р°."
     )
 
 
@@ -971,23 +1001,23 @@ def _build_prompt(user_input, context_bundle, mode="default", disabled_skills: s
         context_bundle = (context_bundle + "\n\n" + skill_results) if context_bundle.strip() else skill_results
 
     if not context_bundle.strip():
-        return f"{runtime_context}\n\nВопрос пользователя: {user_input}"
+        return f"{runtime_context}\n\nР’РѕРїСЂРѕСЃ РїРѕР»СЊР·РѕРІР°С‚РµР»СЏ: {user_input}"
 
     return (
         f"{runtime_context}\n\n"
-        "Вот данные из интернета и других источников:\n\n"
+        "Р’РѕС‚ РґР°РЅРЅС‹Рµ РёР· РёРЅС‚РµСЂРЅРµС‚Р° Рё РґСЂСѓРіРёС… РёСЃС‚РѕС‡РЅРёРєРѕРІ:\n\n"
         + context_bundle
         + "\n\n---\n\n"
-        "Вопрос пользователя: " + user_input + "\n\n"
-        "ПРАВИЛА ОТВЕТА:\n"
-        "1. Обязательно используй данные выше для ответа.\n"
-        "2. Если есть содержимое веб-страниц или свежие новости, опирайся на них как на главный источник.\n"
-        "3. Приводи конкретные факты, даты и цифры, но без служебных маркеров и внутреннего контекста.\n"
-        "4. Не вставляй URL и список источников, если пользователь прямо не попросил ссылки или источники.\n"
-        "5. Если свежесть данных под вопросом, честно скажи об этом простыми словами.\n"
-        "6. Не говори, что данных нет, если они есть выше.\n"
-        "7. Не упоминай текущую дату или время, если пользователь прямо об этом не спросил. "
-        "Если спросил — отвечай точно и естественно."
+        "Р’РѕРїСЂРѕСЃ РїРѕР»СЊР·РѕРІР°С‚РµР»СЏ: " + user_input + "\n\n"
+        "РџР РђР’РР›Рђ РћРўР’Р•РўРђ:\n"
+        "1. РћР±СЏР·Р°С‚РµР»СЊРЅРѕ РёСЃРїРѕР»СЊР·СѓР№ РґР°РЅРЅС‹Рµ РІС‹С€Рµ РґР»СЏ РѕС‚РІРµС‚Р°.\n"
+        "2. Р•СЃР»Рё РµСЃС‚СЊ СЃРѕРґРµСЂР¶РёРјРѕРµ РІРµР±-СЃС‚СЂР°РЅРёС† РёР»Рё СЃРІРµР¶РёРµ РЅРѕРІРѕСЃС‚Рё, РѕРїРёСЂР°Р№СЃСЏ РЅР° РЅРёС… РєР°Рє РЅР° РіР»Р°РІРЅС‹Р№ РёСЃС‚РѕС‡РЅРёРє.\n"
+        "3. РџСЂРёРІРѕРґРё РєРѕРЅРєСЂРµС‚РЅС‹Рµ С„Р°РєС‚С‹, РґР°С‚С‹ Рё С†РёС„СЂС‹, РЅРѕ Р±РµР· СЃР»СѓР¶РµР±РЅС‹С… РјР°СЂРєРµСЂРѕРІ Рё РІРЅСѓС‚СЂРµРЅРЅРµРіРѕ РєРѕРЅС‚РµРєСЃС‚Р°.\n"
+        "4. РќРµ РІСЃС‚Р°РІР»СЏР№ URL Рё СЃРїРёСЃРѕРє РёСЃС‚РѕС‡РЅРёРєРѕРІ, РµСЃР»Рё РїРѕР»СЊР·РѕРІР°С‚РµР»СЊ РїСЂСЏРјРѕ РЅРµ РїРѕРїСЂРѕСЃРёР» СЃСЃС‹Р»РєРё РёР»Рё РёСЃС‚РѕС‡РЅРёРєРё.\n"
+        "5. Р•СЃР»Рё СЃРІРµР¶РµСЃС‚СЊ РґР°РЅРЅС‹С… РїРѕРґ РІРѕРїСЂРѕСЃРѕРј, С‡РµСЃС‚РЅРѕ СЃРєР°Р¶Рё РѕР± СЌС‚РѕРј РїСЂРѕСЃС‚С‹РјРё СЃР»РѕРІР°РјРё.\n"
+        "6. РќРµ РіРѕРІРѕСЂРё, С‡С‚Рѕ РґР°РЅРЅС‹С… РЅРµС‚, РµСЃР»Рё РѕРЅРё РµСЃС‚СЊ РІС‹С€Рµ.\n"
+        "7. РќРµ СѓРїРѕРјРёРЅР°Р№ С‚РµРєСѓС‰СѓСЋ РґР°С‚Сѓ РёР»Рё РІСЂРµРјСЏ, РµСЃР»Рё РїРѕР»СЊР·РѕРІР°С‚РµР»СЊ РїСЂСЏРјРѕ РѕР± СЌС‚РѕРј РЅРµ СЃРїСЂРѕСЃРёР». "
+        "Р•СЃР»Рё СЃРїСЂРѕСЃРёР» вЂ” РѕС‚РІРµС‡Р°Р№ С‚РѕС‡РЅРѕ Рё РµСЃС‚РµСЃС‚РІРµРЅРЅРѕ."
     )
 
 
@@ -995,7 +1025,7 @@ _pending_attachments: list[dict] = []
 
 
 def _get_and_clear_attachments() -> str:
-    """Возвращает markdown-блок с картинками/файлами/ошибками и очищает очередь."""
+    """Р’РѕР·РІСЂР°С‰Р°РµС‚ markdown-Р±Р»РѕРє СЃ РєР°СЂС‚РёРЅРєР°РјРё/С„Р°Р№Р»Р°РјРё/РѕС€РёР±РєР°РјРё Рё РѕС‡РёС‰Р°РµС‚ РѕС‡РµСЂРµРґСЊ."""
     if not _pending_attachments:
         return ""
     api_base = ""
@@ -1004,23 +1034,23 @@ def _get_and_clear_attachments() -> str:
         if att["type"] == "image":
             url = att["view_url"] if att["view_url"].startswith("http") else f"{api_base}{att['view_url']}"
             dl = f"{api_base}/api/skills/download/{att.get('filename', '')}"
-            parts.append(f"\n\n🎨 **Сгенерировано:**\n\n![{att.get('prompt','')}]({url})\n\n📥 [Скачать]({dl})")
+            parts.append(f"\n\nрџЋЁ **РЎРіРµРЅРµСЂРёСЂРѕРІР°РЅРѕ:**\n\n![{att.get('prompt','')}]({url})\n\nрџ“Ґ [РЎРєР°С‡Р°С‚СЊ]({dl})")
         elif att["type"] == "file":
             dl = att["download_url"] if att["download_url"].startswith("http") else f"{api_base}{att['download_url']}"
-            icon = {"word": "📄", "zip": "📦", "convert": "🔄", "excel": "📊"}.get(att.get("file_type", ""), "📎")
-            parts.append(f"\n\n{icon} **Файл создан:** [{att.get('filename', '')}]({dl})")
+            icon = {"word": "рџ“„", "zip": "рџ“¦", "convert": "рџ”„", "excel": "рџ“Љ"}.get(att.get("file_type", ""), "рџ“Ћ")
+            parts.append(f"\n\n{icon} **Р¤Р°Р№Р» СЃРѕР·РґР°РЅ:** [{att.get('filename', '')}]({dl})")
         elif att["type"] == "error":
-            parts.append(f"\n\n⚠️ {att.get('message', 'Ошибка скилла')}")
+            parts.append(f"\n\nвљ пёЏ {att.get('message', 'РћС€РёР±РєР° СЃРєРёР»Р»Р°')}")
     _pending_attachments.clear()
     return "\n".join(parts)
 
 
-# ═══════════════════════════════════════════════════════════════
-# ГЛУБОКИЙ ВЕБ-ПОИСК: поиск → заход на сайты → извлечение текста
-# ═══════════════════════════════════════════════════════════════
+# в•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђ
+# Р“Р›РЈР‘РћРљРР™ Р’Р•Р‘-РџРћРРЎРљ: РїРѕРёСЃРє в†’ Р·Р°С…РѕРґ РЅР° СЃР°Р№С‚С‹ в†’ РёР·РІР»РµС‡РµРЅРёРµ С‚РµРєСЃС‚Р°
+# в•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђ
 
 def _fetch_page_text(url, max_chars=4000):
-    """Заходит на сайт и извлекает основной текст. Улучшенная версия."""
+    """Р—Р°С…РѕРґРёС‚ РЅР° СЃР°Р№С‚ Рё РёР·РІР»РµРєР°РµС‚ РѕСЃРЅРѕРІРЅРѕР№ С‚РµРєСЃС‚. РЈР»СѓС‡С€РµРЅРЅР°СЏ РІРµСЂСЃРёСЏ."""
     try:
         import requests
         from bs4 import BeautifulSoup
@@ -1033,23 +1063,23 @@ def _fetch_page_text(url, max_chars=4000):
         if resp.status_code != 200:
             return ""
 
-        # Пробуем определить кодировку
+        # РџСЂРѕР±СѓРµРј РѕРїСЂРµРґРµР»РёС‚СЊ РєРѕРґРёСЂРѕРІРєСѓ
         if resp.encoding and resp.encoding.lower() != "utf-8":
             resp.encoding = resp.apparent_encoding or "utf-8"
 
         soup = BeautifulSoup(resp.text, "html.parser")
 
-        # Удаляем мусор
+        # РЈРґР°Р»СЏРµРј РјСѓСЃРѕСЂ
         for tag in soup(["script", "style", "nav", "header", "footer", "aside",
                          "form", "button", "iframe", "noscript", "svg", "img",
                          "menu", "advertisement", "ad", "banner"]):
             tag.decompose()
 
-        # Удаляем элементы с рекламными классами
+        # РЈРґР°Р»СЏРµРј СЌР»РµРјРµРЅС‚С‹ СЃ СЂРµРєР»Р°РјРЅС‹РјРё РєР»Р°СЃСЃР°РјРё
         for el in soup.select("[class*='advert'], [class*='banner'], [class*='cookie'], [class*='popup'], [class*='modal'], [id*='advert'], [id*='banner']"):
             el.decompose()
 
-        # Ищем основной контент (приоритет по порядку)
+        # РС‰РµРј РѕСЃРЅРѕРІРЅРѕР№ РєРѕРЅС‚РµРЅС‚ (РїСЂРёРѕСЂРёС‚РµС‚ РїРѕ РїРѕСЂСЏРґРєСѓ)
         content_selectors = [
             "article", "main", "[role='main']",
             ".article-body", ".article-content", ".post-content", ".entry-content",
@@ -1066,18 +1096,18 @@ def _fetch_page_text(url, max_chars=4000):
         if main_el:
             text = main_el.get_text(separator="\n", strip=True)
         else:
-            # Fallback: берём body, но убираем короткие строки (навигация)
+            # Fallback: Р±РµСЂС‘Рј body, РЅРѕ СѓР±РёСЂР°РµРј РєРѕСЂРѕС‚РєРёРµ СЃС‚СЂРѕРєРё (РЅР°РІРёРіР°С†РёСЏ)
             body = soup.find("body")
             if body:
                 text = body.get_text(separator="\n", strip=True)
             else:
                 text = soup.get_text(separator="\n", strip=True)
 
-        # Убираем пустые и слишком короткие строки (навигация, кнопки)
+        # РЈР±РёСЂР°РµРј РїСѓСЃС‚С‹Рµ Рё СЃР»РёС€РєРѕРј РєРѕСЂРѕС‚РєРёРµ СЃС‚СЂРѕРєРё (РЅР°РІРёРіР°С†РёСЏ, РєРЅРѕРїРєРё)
         lines = []
         for line in text.split("\n"):
             line = line.strip()
-            if len(line) > 20:  # Пропускаем "Главная", "Меню", "Войти" и т.д.
+            if len(line) > 20:  # РџСЂРѕРїСѓСЃРєР°РµРј "Р“Р»Р°РІРЅР°СЏ", "РњРµРЅСЋ", "Р’РѕР№С‚Рё" Рё С‚.Рґ.
                 lines.append(line)
 
         text = "\n".join(lines)
@@ -1105,7 +1135,7 @@ def _build_single_web_subquery_context(subquery):
     from app.core.web import research_web, search_news as core_search_news, search_web as core_search
 
     query = subquery.get("query", "")
-    label = subquery.get("label", "Поиск")
+    label = subquery.get("label", "РџРѕРёСЃРє")
     intent_kind = subquery.get("intent_kind", "")
     geo_scope = subquery.get("geo_scope", "")
     local_first = bool(subquery.get("local_first"))
@@ -1201,10 +1231,10 @@ def _build_single_web_subquery_context(subquery):
         )
         deeper_search = bool(deep_context)
 
-    parts = [f"=== ПОДТЕМА: {label} ===", f"Запрос: {query}"]
+    parts = [f"=== РџРћР”РўР•РњРђ: {label} ===", f"Р—Р°РїСЂРѕСЃ: {query}"]
 
     if deep_content:
-        parts.append("СОДЕРЖИМОЕ ВЕБ-СТРАНИЦ:\n" + "\n\n".join(deep_content))
+        parts.append("РЎРћР”Р•Р Р–РРњРћР• Р’Р•Р‘-РЎРўР РђРќРР¦:\n" + "\n\n".join(deep_content))
 
     if news_results:
         lines = []
@@ -1212,18 +1242,18 @@ def _build_single_web_subquery_context(subquery):
             date_str = f" [{item['date']}]" if item.get("date") else ""
             source_str = f" ({item['source']})" if item.get("source") else ""
             lines.append(f"- {item['title']}{date_str}{source_str}: {item['snippet']}")
-        parts.append("СВЕЖИЕ НОВОСТИ:\n" + "\n".join(lines))
+        parts.append("РЎР’Р•Р–РР• РќРћР’РћРЎРўР:\n" + "\n".join(lines))
 
     remaining = [item for item in normalized_search if item["url"] not in fetched_urls][:4]
     if remaining:
         lines = [f"- {item['title']}: {item['snippet']}" for item in remaining]
-        parts.append("ОСТАЛЬНЫЕ РЕЗУЛЬТАТЫ:\n" + "\n".join(lines))
+        parts.append("РћРЎРўРђР›Р¬РќР«Р• Р Р•Р—РЈР›Р¬РўРђРўР«:\n" + "\n".join(lines))
 
     if deep_context:
-        parts.append("УГЛУБЛЕННЫЙ ПОИСК:\n" + deep_context)
+        parts.append("РЈР“Р›РЈР‘Р›Р•РќРќР«Р™ РџРћРРЎРљ:\n" + deep_context)
 
     if not normalized_search and not news_results and not deep_context:
-        parts.append("Недостаточно свежих подтвержденных данных по этой подтеме.")
+        parts.append("РќРµРґРѕСЃС‚Р°С‚РѕС‡РЅРѕ СЃРІРµР¶РёС… РїРѕРґС‚РІРµСЂР¶РґРµРЅРЅС‹С… РґР°РЅРЅС‹С… РїРѕ СЌС‚РѕР№ РїРѕРґС‚РµРјРµ.")
 
     engines_used = sorted(
         {
@@ -1253,13 +1283,13 @@ def _build_single_web_subquery_context(subquery):
 
 def _do_web_search(query, timeline, tool_results):
     """
-    Multi-engine поиск: DDG + Bing + Google + Yandex + DDG News.
-    Параллельный fetch top-3 страниц через BeautifulSoup.
-    Использует core/web.py для мульти-поиска.
+    Multi-engine РїРѕРёСЃРє: DDG + Bing + Google + Yandex + DDG News.
+    РџР°СЂР°Р»Р»РµР»СЊРЅС‹Р№ fetch top-3 СЃС‚СЂР°РЅРёС† С‡РµСЂРµР· BeautifulSoup.
+    РСЃРїРѕР»СЊР·СѓРµС‚ core/web.py РґР»СЏ РјСѓР»СЊС‚Рё-РїРѕРёСЃРєР°.
     """
     search_query = _clean_query(query)
 
-    # ═══ Шаг 1: Multi-engine поиск ═══
+    # в•ђв•ђв•ђ РЁР°Рі 1: Multi-engine РїРѕРёСЃРє в•ђв•ђв•ђ
     search_results = []
     engines_used = []
     try:
@@ -1280,7 +1310,7 @@ def _do_web_search(query, timeline, tool_results):
     except Exception as e:
         logger.warning(f"Web search failed: {e}")
 
-    # Fallback: только DDG если мульти-поиск упал
+    # Fallback: С‚РѕР»СЊРєРѕ DDG РµСЃР»Рё РјСѓР»СЊС‚Рё-РїРѕРёСЃРє СѓРїР°Р»
     if not search_results:
         try:
             DDGS = None
@@ -1298,7 +1328,7 @@ def _do_web_search(query, timeline, tool_results):
         except Exception as e:
             logger.warning(f"DDG fallback also failed: {e}")
 
-    # ═══ Шаг 1.5: DDG News (свежие новости) ═══
+    # в•ђв•ђв•ђ РЁР°Рі 1.5: DDG News (СЃРІРµР¶РёРµ РЅРѕРІРѕСЃС‚Рё) в•ђв•ђв•ђ
     news_results = []
     try:
         news_raw = core_search_news(search_query, max_results=5)
@@ -1315,21 +1345,21 @@ def _do_web_search(query, timeline, tool_results):
         if news_results and "ddg-news" not in engines_used:
             engines_used.append("ddg-news")
     except Exception:
-        pass  # Новости — бонус, не критично
+        pass  # РќРѕРІРѕСЃС‚Рё вЂ” Р±РѕРЅСѓСЃ, РЅРµ РєСЂРёС‚РёС‡РЅРѕ
 
     if not search_results and not news_results:
-        _tl(timeline, "tool_web", "Веб-поиск", "error", "Нет результатов")
+        _tl(timeline, "tool_web", "Р’РµР±-РїРѕРёСЃРє", "error", "РќРµС‚ СЂРµР·СѓР»СЊС‚Р°С‚РѕРІ")
         tool_results.append({"tool": "web_search", "result": {"count": 0}})
-        return "[Поиск не дал результатов]"
+        return "[РџРѕРёСЃРє РЅРµ РґР°Р» СЂРµР·СѓР»СЊС‚Р°С‚РѕРІ]"
 
-    # ═══ Шаг 2: Deep fetch top-3 страниц (параллельно) ═══
+    # в•ђв•ђв•ђ РЁР°Рі 2: Deep fetch top-3 СЃС‚СЂР°РЅРёС† (РїР°СЂР°Р»Р»РµР»СЊРЅРѕ) в•ђв•ђв•ђ
     deep_content = []
     fetched_urls = set()
     skip_domains = ["youtube.com", "youtu.be", "facebook.com", "instagram.com",
                     "tiktok.com", "twitter.com", "x.com", "vk.com", "t.me",
                     "pinterest.com"]
 
-    # Дедупликация URL, фильтр соцсетей
+    # Р”РµРґСѓРїР»РёРєР°С†РёСЏ URL, С„РёР»СЊС‚СЂ СЃРѕС†СЃРµС‚РµР№
     all_urls_seen = set()
     fetch_candidates = []
     for item in search_results[:7]:
@@ -1338,23 +1368,23 @@ def _do_web_search(query, timeline, tool_results):
             all_urls_seen.add(url)
             fetch_candidates.append(item)
 
-    # Параллельный fetch через ThreadPoolExecutor
+    # РџР°СЂР°Р»Р»РµР»СЊРЅС‹Р№ fetch С‡РµСЂРµР· ThreadPoolExecutor
     from concurrent.futures import ThreadPoolExecutor, as_completed
-    targets = fetch_candidates[:5]  # Пробуем 5, берём лучшие 3
+    targets = fetch_candidates[:5]  # РџСЂРѕР±СѓРµРј 5, Р±РµСЂС‘Рј Р»СѓС‡С€РёРµ 3
     if targets:
-        page_results = {}  # url → text
+        page_results = {}  # url в†’ text
         with ThreadPoolExecutor(max_workers=min(len(targets), 4)) as executor:
             future_map = {executor.submit(core_fetch, t["url"]): t for t in targets}
             for future in as_completed(future_map):
                 item = future_map[future]
                 try:
                     text = (future.result() or "")[:3000]
-                    if text and len(text) > 100 and not text.lower().startswith("рћс€рёр±рєр°"):
+                    if text and len(text) > 100 and not text.lower().startswith("СЂС›СЃв‚¬СЂС‘СЂВ±СЂС”СЂВ°"):
                         page_results[item["url"]] = (item, text)
                 except Exception:
                     pass
 
-        # Берём первые 3 успешных (по порядку оригинальных результатов)
+        # Р‘РµСЂС‘Рј РїРµСЂРІС‹Рµ 3 СѓСЃРїРµС€РЅС‹С… (РїРѕ РїРѕСЂСЏРґРєСѓ РѕСЂРёРіРёРЅР°Р»СЊРЅС‹С… СЂРµР·СѓР»СЊС‚Р°С‚РѕРІ)
         for t in targets:
             if t["url"] in page_results and len(deep_content) < 3:
                 item, text = page_results[t["url"]]
@@ -1366,7 +1396,7 @@ def _do_web_search(query, timeline, tool_results):
 
     fetched_count = len(deep_content)
 
-    # ═══ Шаг 3: Формируем контекст ═══
+    # в•ђв•ђв•ђ РЁР°Рі 3: Р¤РѕСЂРјРёСЂСѓРµРј РєРѕРЅС‚РµРєСЃС‚ в•ђв•ђв•ђ
     engines_str = ", ".join(engines_used) if engines_used else "search"
     tool_results.append({"tool": "web_search", "result": {
         "query": search_query,
@@ -1375,36 +1405,64 @@ def _do_web_search(query, timeline, tool_results):
         "fetched_pages": fetched_count,
         "engines": engines_used,
     }})
-    _tl(timeline, "tool_web", "Веб-поиск", "done",
-        f"{len(search_results)} найдено ({engines_str}), {fetched_count} страниц загружено, {len(news_results)} новостей")
+    _tl(timeline, "tool_web", "Р’РµР±-РїРѕРёСЃРє", "done",
+        f"{len(search_results)} РЅР°Р№РґРµРЅРѕ ({engines_str}), {fetched_count} СЃС‚СЂР°РЅРёС† Р·Р°РіСЂСѓР¶РµРЅРѕ, {len(news_results)} РЅРѕРІРѕСЃС‚РµР№")
 
     parts = []
 
-    # Глубокий контент (со страниц)
+    # Р“Р»СѓР±РѕРєРёР№ РєРѕРЅС‚РµРЅС‚ (СЃРѕ СЃС‚СЂР°РЅРёС†)
     if deep_content:
-        parts.append("══ СОДЕРЖИМОЕ ВЕБ-СТРАНИЦ (ИСПОЛЬЗУЙ ЭТИ ДАННЫЕ!) ══\n\n" + "\n\n".join(deep_content))
+        parts.append("в•ђв•ђ РЎРћР”Р•Р Р–РРњРћР• Р’Р•Р‘-РЎРўР РђРќРР¦ (РРЎРџРћР›Р¬Р—РЈР™ Р­РўР Р”РђРќРќР«Р•!) в•ђв•ђ\n\n" + "\n\n".join(deep_content))
 
-    # Свежие новости
+    # РЎРІРµР¶РёРµ РЅРѕРІРѕСЃС‚Рё
     if news_results:
         news_lines = []
         for n in news_results[:5]:
             date_str = f" [{n['date']}]" if n.get("date") else ""
             source_str = f" ({n['source']})" if n.get("source") else ""
             news_lines.append(f"- {n['title']}{date_str}{source_str}: {n['snippet']}")
-        parts.append("══ СВЕЖИЕ НОВОСТИ ══\n" + "\n".join(news_lines))
+        parts.append("в•ђв•ђ РЎР’Р•Р–РР• РќРћР’РћРЎРўР в•ђв•ђ\n" + "\n".join(news_lines))
 
-    # Сниппеты остальных результатов (исключаем уже загруженные)
+    # РЎРЅРёРїРїРµС‚С‹ РѕСЃС‚Р°Р»СЊРЅС‹С… СЂРµР·СѓР»СЊС‚Р°С‚РѕРІ (РёСЃРєР»СЋС‡Р°РµРј СѓР¶Рµ Р·Р°РіСЂСѓР¶РµРЅРЅС‹Рµ)
     remaining = [s for s in search_results if s["url"] not in fetched_urls][:5]
     if remaining:
         snippet_lines = [f"- {s['title']}: {s['snippet']}" for s in remaining]
-        parts.append("══ ДРУГИЕ РЕЗУЛЬТАТЫ ══\n" + "\n".join(snippet_lines))
+        parts.append("в•ђв•ђ Р”Р РЈР“РР• Р Р•Р—РЈР›Р¬РўРђРўР« в•ђв•ђ\n" + "\n".join(snippet_lines))
 
-    return "\n\n".join(parts)
+    
+      # 5. Task Planner Skills
+      if "todo" not in disabled:
+          task_triggers = ["создай задачу", "добавь в план", "новая задача", "план:", "todo:"]
+          if any(t in ql for t in task_triggers):
+              try:
+                  from app.services.skills_service import add_task
+                  # ╨а╤Ш╨а╨Е╨а╤С-╨а╤Ч╨а┬░╨б╨В╨б╨Г╨а╤С╨а╨Е╨а╤Ц ╨а╨Е╨а┬░╨а┬╖╨а╨Ж╨а┬░╨а╨Е╨а╤С╨б╨П ╨а┬╖╨а┬░╨а╥С╨а┬░╨бтАб╨а╤С
+                  title_match = re.search(r"(?:задач[ау]|план|todo):\s*(.*)", user_input, re.I)
+                  if title_match:
+                      title = title_match.group(1).strip()
+                      res = add_task(title)
+                      if res.get("ok"):
+                          parts.append(f"✅ Задача добавлена в план: {title} (ID: {res.get('id')})")
+              except Exception as e:
+                  parts.append(f"SKILL_ERROR: Task Planner: {e}")
+
+          status_triggers = ["статус задачи", "выполнил задачу", "заверши задачу"]
+          if any(t in ql for t in status_triggers):
+              try:
+                  from app.services.skills_service import set_task_status
+                  id_match = re.search(r"([a-f0-9]{8})", user_input)
+                  if id_match:
+                      res = set_task_status(id_match.group(1), "done")
+                      if res.get("ok"):
+                          parts.append(f"✅ Статус задачи {id_match.group(1)} обновлен на 'done'")
+              except Exception as e:
+                  parts.append(f"SKILL_ERROR: Task Status: {e}")
+\n      return "\n\n".join(parts)
 
 
-# ═══════════════════════════════════════════════════════════════
-# КОНТЕКСТ
-# ═══════════════════════════════════════════════════════════════
+# в•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђ
+# РљРћРќРўР•РљРЎРў
+# в•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђ
 
 def _do_temporal_web_search(query, timeline, tool_results, temporal=None):
     temporal = temporal or {}
@@ -1434,13 +1492,13 @@ def _do_temporal_web_search(query, timeline, tool_results, temporal=None):
                 if deep_context:
                     deeper_search = True
                     context = (
-                        context + "\n\nДополнительный углубленный веб-поиск:\n" + deep_context
+                        context + "\n\nР”РѕРїРѕР»РЅРёС‚РµР»СЊРЅС‹Р№ СѓРіР»СѓР±Р»РµРЅРЅС‹Р№ РІРµР±-РїРѕРёСЃРє:\n" + deep_context
                         if context
                         else deep_context
                     )
-                    _tl(timeline, "tool_web_deep", "Углубленный веб-поиск", "done", "Дополнительная проверка источников")
+                    _tl(timeline, "tool_web_deep", "РЈРіР»СѓР±Р»РµРЅРЅС‹Р№ РІРµР±-РїРѕРёСЃРє", "done", "Р”РѕРїРѕР»РЅРёС‚РµР»СЊРЅР°СЏ РїСЂРѕРІРµСЂРєР° РёСЃС‚РѕС‡РЅРёРєРѕРІ")
             except Exception as exc:
-                _tl(timeline, "tool_web_deep", "Углубленный веб-поиск", "error", str(exc))
+                _tl(timeline, "tool_web_deep", "РЈРіР»СѓР±Р»РµРЅРЅС‹Р№ РІРµР±-РїРѕРёСЃРє", "error", str(exc))
 
     if temporal.get("freshness_sensitive"):
         freshness_state = "fresh_checked" if has_current_evidence and (news_count > 0 or fetched_pages >= 2 or deeper_search) else "unverified_current"
@@ -1572,7 +1630,7 @@ def _do_web_search(query, timeline, tool_results, web_plan=None):
                 _tl(
                     timeline,
                     f"tool_web_{pass_name}_{len(pass_queries)}",
-                    f"Веб-поиск {pass_name}",
+                    f"Р’РµР±-РїРѕРёСЃРє {pass_name}",
                     "done",
                     f"{debug.get('query', '')}: found={found}, news={news_hits}, pages={fetched_pages}",
                 )
@@ -1580,7 +1638,7 @@ def _do_web_search(query, timeline, tool_results, web_plan=None):
                 _tl(
                     timeline,
                     f"tool_web_{pass_name}_{len(pass_queries)}",
-                    f"Веб-поиск {pass_name}",
+                    f"Р’РµР±-РїРѕРёСЃРє {pass_name}",
                     "error",
                     f"{debug.get('query', '')}: no confirmed results",
                 )
@@ -1599,9 +1657,9 @@ def _do_web_search(query, timeline, tool_results, web_plan=None):
         _tl(
             timeline,
             f"tool_web_{pass_name}",
-            f"Веб-проход {pass_index}",
+            f"Р’РµР±-РїСЂРѕС…РѕРґ {pass_index}",
             "done",
-            f"{len(pass_queries)} подтем, found={pass_found}, news={pass_news}, pages={pass_pages}",
+            f"{len(pass_queries)} РїРѕРґС‚РµРј, found={pass_found}, news={pass_news}, pages={pass_pages}",
         )
 
     unique_uncovered = list(dict.fromkeys(item for item in uncovered_subqueries if item))
@@ -1634,15 +1692,15 @@ def _do_web_search(query, timeline, tool_results, web_plan=None):
     tool_results.append({"tool": "web_search", "result": result_payload})
 
     if not sections:
-        _tl(timeline, "tool_web", "Веб-поиск", "error", "Нет подтвержденных результатов")
-        return "[Поиск не дал результатов]"
+        _tl(timeline, "tool_web", "Р’РµР±-РїРѕРёСЃРє", "error", "РќРµС‚ РїРѕРґС‚РІРµСЂР¶РґРµРЅРЅС‹С… СЂРµР·СѓР»СЊС‚Р°С‚РѕРІ")
+        return "[РџРѕРёСЃРє РЅРµ РґР°Р» СЂРµР·СѓР»СЊС‚Р°С‚РѕРІ]"
 
     _tl(
         timeline,
         "tool_web",
-        "Веб-поиск",
+        "Р’РµР±-РїРѕРёСЃРє",
         "done",
-        f"{total_found} найдено, {total_news} новостей, {total_fetched} страниц, {len(raw_subqueries)} подтем, {len(pass_summaries)} проходов",
+        f"{total_found} РЅР°Р№РґРµРЅРѕ, {total_news} РЅРѕРІРѕСЃС‚РµР№, {total_fetched} СЃС‚СЂР°РЅРёС†, {len(raw_subqueries)} РїРѕРґС‚РµРј, {len(pass_summaries)} РїСЂРѕС…РѕРґРѕРІ",
     )
     return "\n\n".join(section for section in sections if section.strip())
 
@@ -1682,13 +1740,13 @@ def _do_temporal_web_search(query, timeline, tool_results, temporal=None, web_pl
                 if deep_context:
                     deeper_search = True
                     context = (
-                        context + "\n\nДополнительный углубленный веб-поиск:\n" + deep_context
+                        context + "\n\nР”РѕРїРѕР»РЅРёС‚РµР»СЊРЅС‹Р№ СѓРіР»СѓР±Р»РµРЅРЅС‹Р№ РІРµР±-РїРѕРёСЃРє:\n" + deep_context
                         if context
                         else deep_context
                     )
-                    _tl(timeline, "tool_web_deep", "Углубленный веб-поиск", "done", "Дополнительная проверка источников")
+                    _tl(timeline, "tool_web_deep", "РЈРіР»СѓР±Р»РµРЅРЅС‹Р№ РІРµР±-РїРѕРёСЃРє", "done", "Р”РѕРїРѕР»РЅРёС‚РµР»СЊРЅР°СЏ РїСЂРѕРІРµСЂРєР° РёСЃС‚РѕС‡РЅРёРєРѕРІ")
             except Exception as exc:
-                _tl(timeline, "tool_web_deep", "Углубленный веб-поиск", "error", str(exc))
+                _tl(timeline, "tool_web_deep", "РЈРіР»СѓР±Р»РµРЅРЅС‹Р№ РІРµР±-РїРѕРёСЃРє", "error", str(exc))
 
     if temporal.get("freshness_sensitive"):
         freshness_state = "fresh_checked" if has_current_evidence and (news_count > 0 or fetched_pages >= 2 or deeper_search) else "unverified_current"
@@ -1743,12 +1801,12 @@ def _collect_context(
                 )
                 tool_results.append({"tool": "search_memory", "result": result})
                 items = result.get("items", [])
-                _tl(timeline, "tool_memory", "Память", "done", str(result.get("count", 0)))
+                _tl(timeline, "tool_memory", "РџР°РјСЏС‚СЊ", "done", str(result.get("count", 0)))
                 if items:
-                    parts.append("Из памяти:\n" + "\n".join("- " + i.get("text", "") for i in items))
+                    parts.append("РР· РїР°РјСЏС‚Рё:\n" + "\n".join("- " + i.get("text", "") for i in items))
 
             elif tool_name == "library_context":
-                _tl(timeline, "tool_library", "Библиотека", "skip", "Фронтенд")
+                _tl(timeline, "tool_library", "Р‘РёР±Р»РёРѕС‚РµРєР°", "skip", "Р¤СЂРѕРЅС‚РµРЅРґ")
 
             elif tool_name == "web_search":
                 web_ctx = _do_temporal_web_search(user_input, timeline, tool_results, temporal=temporal, web_plan=web_plan)
@@ -1757,7 +1815,7 @@ def _collect_context(
 
             elif tool_name == "project_mode":
                 project_ctx = ""
-                # Попытка 1: старый project_service
+                # РџРѕРїС‹С‚РєР° 1: СЃС‚Р°СЂС‹Р№ project_service
                 try:
                     tree = run_tool(
                         "list_project_tree",
@@ -1777,11 +1835,11 @@ def _collect_context(
                     snippets = search.get("items") or search.get("results") or []
                     if snippets:
                         rendered = ["- " + (item.get("path","") + ": " + (item.get("snippet","") or item.get("preview","")) if isinstance(item,dict) else str(item)) for item in snippets[:10]]
-                        project_ctx = "Из проекта:\n" + "\n".join(rendered)
+                        project_ctx = "РР· РїСЂРѕРµРєС‚Р°:\n" + "\n".join(rendered)
                 except Exception:
                     pass
 
-                # Попытка 2: advanced project API (если открыт через UI)
+                # РџРѕРїС‹С‚РєР° 2: advanced project API (РµСЃР»Рё РѕС‚РєСЂС‹С‚ С‡РµСЂРµР· UI)
                 if not project_ctx:
                     try:
                         from app.api.routes.advanced_routes import _project_path
@@ -1793,21 +1851,21 @@ def _collect_context(
                                 for f in sorted(root.rglob("*"))[:50]:
                                     if f.is_file() and not any(b in str(f) for b in [".git","node_modules","__pycache__",".venv","dist"]):
                                         file_list.append(str(f.relative_to(root)))
-                                project_ctx = f"Открыт проект: {root.name}\nФайлы ({len(file_list)}):\n" + "\n".join("- " + f for f in file_list[:30])
+                                project_ctx = f"РћС‚РєСЂС‹С‚ РїСЂРѕРµРєС‚: {root.name}\nР¤Р°Р№Р»С‹ ({len(file_list)}):\n" + "\n".join("- " + f for f in file_list[:30])
                     except Exception:
                         pass
 
                 if project_ctx:
                     parts.append(project_ctx)
-                    _tl(timeline, "tool_project", "Проект", "done", "Контекст загружен")
+                    _tl(timeline, "tool_project", "РџСЂРѕРµРєС‚", "done", "РљРѕРЅС‚РµРєСЃС‚ Р·Р°РіСЂСѓР¶РµРЅ")
                 else:
-                    _tl(timeline, "tool_project", "Проект", "skip", "Не открыт")
+                    _tl(timeline, "tool_project", "РџСЂРѕРµРєС‚", "skip", "РќРµ РѕС‚РєСЂС‹С‚")
 
             elif tool_name == "python_executor":
-                _tl(timeline, "tool_python", "Python", "ready", "Выполнение по запросу")
+                _tl(timeline, "tool_python", "Python", "ready", "Р’С‹РїРѕР»РЅРµРЅРёРµ РїРѕ Р·Р°РїСЂРѕСЃСѓ")
 
             elif tool_name == "project_patch":
-                _tl(timeline, "tool_patch", "Патчинг", "ready", "")
+                _tl(timeline, "tool_patch", "РџР°С‚С‡РёРЅРі", "ready", "")
 
         except Exception as exc:
             _tl(timeline, "tool_" + tool_name, tool_name, "error", str(exc))
@@ -1815,15 +1873,18 @@ def _collect_context(
     return "\n\n".join(p for p in parts if p.strip())
 
 
-# ═══════════════════════════════════════════════════════════════
+# в•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђ
 # run_agent
-# ═══════════════════════════════════════════════════════════════
+# в•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђ
 
 def run_agent(*, model_name, profile_name, user_input, session_id=None, agent_id=None, use_memory=True, use_library=True, use_reflection=False, history=None, num_ctx=8192, use_web_search=True, use_python_exec=True, use_image_gen=True, use_file_gen=True, use_http_api=True, use_sql=True, use_screenshot=True, use_encrypt=True, use_archiver=True, use_converter=True, use_regex=True, use_translator=True, use_csv=True, use_webhook=True, use_plugins=True):
+    from app.services.chat_history_service import save_message, get_history
+    if session_id and not history:
+        history = get_history(session_id, limit=20)
     import time as _time
     _agent_start = _time.monotonic()
 
-    # Agent OS: если указан agent_id, загружаем определение из реестра
+    # Agent OS: РµСЃР»Рё СѓРєР°Р·Р°РЅ agent_id, Р·Р°РіСЂСѓР¶Р°РµРј РѕРїСЂРµРґРµР»РµРЅРёРµ РёР· СЂРµРµСЃС‚СЂР°
     _registry_agent = None
     if agent_id:
         try:
@@ -1878,11 +1939,11 @@ def run_agent(*, model_name, profile_name, user_input, session_id=None, agent_id
         if is_memory_command(planner_input):
             selected = [t for t in selected if t != "memory_search"]
 
-        # Умная память: извлекаем факты из сообщения
+        # РЈРјРЅР°СЏ РїР°РјСЏС‚СЊ: РёР·РІР»РµРєР°РµРј С„Р°РєС‚С‹ РёР· СЃРѕРѕР±С‰РµРЅРёСЏ
         try:
             saved = extract_and_save(planner_input)
             if saved:
-                _tl(timeline, "memory_save", "Память", "done", "Сохранено: " + str(len(saved)))
+                _tl(timeline, "memory_save", "РџР°РјСЏС‚СЊ", "done", "РЎРѕС…СЂР°РЅРµРЅРѕ: " + str(len(saved)))
         except Exception:
             pass
 
@@ -1908,7 +1969,7 @@ def run_agent(*, model_name, profile_name, user_input, session_id=None, agent_id
             run_id=run["run_id"],
         )
 
-        # Умная память + RAG: добавляем релевантные воспоминания только когда это реально нужно
+        # РЈРјРЅР°СЏ РїР°РјСЏС‚СЊ + RAG: РґРѕР±Р°РІР»СЏРµРј СЂРµР»РµРІР°РЅС‚РЅС‹Рµ РІРѕСЃРїРѕРјРёРЅР°РЅРёСЏ С‚РѕР»СЊРєРѕ РєРѕРіРґР° СЌС‚Рѕ СЂРµР°Р»СЊРЅРѕ РЅСѓР¶РЅРѕ
         if _should_recall_memory_context(planner_input, route, temporal):
             try:
                 mem_limit, rag_limit = _get_memory_recall_limits(planner_input)
@@ -1919,30 +1980,30 @@ def run_agent(*, model_name, profile_name, user_input, session_id=None, agent_id
                         mem_ctx = (mem_ctx + "\n\n" + rag_ctx) if mem_ctx else rag_ctx
                 if mem_ctx:
                     ctx = mem_ctx + "\n\n" + ctx if ctx else mem_ctx
-                    _tl(timeline, "memory_recall", "Память", "done", "Найдены релевантные заметки")
+                    _tl(timeline, "memory_recall", "РџР°РјСЏС‚СЊ", "done", "РќР°Р№РґРµРЅС‹ СЂРµР»РµРІР°РЅС‚РЅС‹Рµ Р·Р°РјРµС‚РєРё")
             except Exception:
                 pass
 
         prompt = _build_prompt(raw_user_input, ctx, disabled_skills=_disabled_skills) + _compose_human_style_rules(temporal)
-        task_context = f"Маршрут: {route}. Инструменты: {', '.join(selected) if selected else 'нет дополнительных инструментов'}."
+        task_context = f"РњР°СЂС€СЂСѓС‚: {route}. РРЅСЃС‚СЂСѓРјРµРЅС‚С‹: {', '.join(selected) if selected else 'РЅРµС‚ РґРѕРїРѕР»РЅРёС‚РµР»СЊРЅС‹С… РёРЅСЃС‚СЂСѓРјРµРЅС‚РѕРІ'}."
         draft = run_chat(model_name=effective_model, profile_name=profile_name, user_input=prompt, history=history, num_ctx=num_ctx, task_context=task_context)
         if not draft.get("ok"):
             raise RuntimeError("; ".join(draft.get("warnings", [])) or "LLM failed")
         answer = draft.get("answer", "")
 
-        # Reflection: для code/project ИЛИ если пользователь включил скилл
+        # Reflection: РґР»СЏ code/project РР›Р РµСЃР»Рё РїРѕР»СЊР·РѕРІР°С‚РµР»СЊ РІРєР»СЋС‡РёР» СЃРєРёР»Р»
         has_generated_files = any(a["type"] in ("image", "file") for a in _pending_attachments)
         should_reflect = (route in _REFLECTION_ROUTES) or use_reflection
         if should_reflect and answer.strip() and not has_generated_files:
-            ref = run_reflection_loop(model_name=effective_model, profile_name=profile_name, user_input=raw_user_input, draft_text=answer, review_text="Улучши.", context=ctx)
+            ref = run_reflection_loop(model_name=effective_model, profile_name=profile_name, user_input=raw_user_input, draft_text=answer, review_text="РЈР»СѓС‡С€Рё.", context=ctx)
             answer = ref.get("answer") or answer
 
-        # Добавляем вложения (картинки, файлы)
+        # Р”РѕР±Р°РІР»СЏРµРј РІР»РѕР¶РµРЅРёСЏ (РєР°СЂС‚РёРЅРєРё, С„Р°Р№Р»С‹)
         attachments = _get_and_clear_attachments()
         if attachments:
             answer += attachments
 
-        # POST-генерация: Word/Excel из ответа LLM
+        # POST-РіРµРЅРµСЂР°С†РёСЏ: Word/Excel РёР· РѕС‚РІРµС‚Р° LLM
         post_files = _maybe_generate_files(raw_user_input, answer, enabled=use_file_gen)
         if post_files:
             answer += post_files
@@ -1994,7 +2055,7 @@ def run_agent(*, model_name, profile_name, user_input, session_id=None, agent_id
             selected_tools=selected,
         )
 
-        # Agent OS: записываем запуск в реестр
+        # Agent OS: Р·Р°РїРёСЃС‹РІР°РµРј Р·Р°РїСѓСЃРє РІ СЂРµРµСЃС‚СЂ
         if agent_id or _registry_agent:
             try:
                 from app.services.agent_registry import record_agent_run
@@ -2069,11 +2130,11 @@ def run_agent(*, model_name, profile_name, user_input, session_id=None, agent_id
         )
         return err
     except Exception as exc:
-        err = {"ok": False, "answer": "", "timeline": timeline + [{"step": "error", "title": "Ошибка", "status": "error", "detail": str(exc)}], "tool_results": tool_results, "meta": {"error": str(exc), "run_id": run["run_id"]}}
+        err = {"ok": False, "answer": "", "timeline": timeline + [{"step": "error", "title": "РћС€РёР±РєР°", "status": "error", "detail": str(exc)}], "tool_results": tool_results, "meta": {"error": str(exc), "run_id": run["run_id"]}}
         _HISTORY.finish_run(run["run_id"], err)
         _duration_ms = int((_time.monotonic() - _agent_start) * 1000)
 
-        # Agent OS: записываем ошибочный запуск
+        # Agent OS: Р·Р°РїРёСЃС‹РІР°РµРј РѕС€РёР±РѕС‡РЅС‹Р№ Р·Р°РїСѓСЃРє
         _record_agent_os_monitoring(
             agent_id=_effective_agent_id,
             run_id=run["run_id"],
@@ -2120,9 +2181,9 @@ def run_agent(*, model_name, profile_name, user_input, session_id=None, agent_id
         return err
 
 
-# ═══════════════════════════════════════════════════════════════
+# в•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђ
 # run_agent_stream
-# ═══════════════════════════════════════════════════════════════
+# в•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђ
 
 def run_agent_stream(*, model_name, profile_name, user_input, session_id=None, use_memory=True, use_library=True, use_reflection=False, history=None, num_ctx=8192, use_web_search=True, use_python_exec=True, use_image_gen=True, use_file_gen=True, use_http_api=True, use_sql=True, use_screenshot=True, use_encrypt=True, use_archiver=True, use_converter=True, use_regex=True, use_translator=True, use_csv=True, use_webhook=True, use_plugins=True):
     import time as _time
@@ -2148,7 +2209,7 @@ def run_agent_stream(*, model_name, profile_name, user_input, session_id=None, u
         },
     )
     try:
-        yield {"token": "", "done": False, "phase": "planning", "message": "Думаю..."}
+        yield {"token": "", "done": False, "phase": "planning", "message": "Р”СѓРјР°СЋ..."}
 
         plan = planner.plan(planner_input)
         _HISTORY.add_event(run["run_id"], "planner", plan)
@@ -2164,7 +2225,7 @@ def run_agent_stream(*, model_name, profile_name, user_input, session_id=None, u
         if is_memory_command(planner_input):
             selected = [t for t in selected if t != "memory_search"]
 
-        # ═══ АВТО-ВЫБОР МОДЕЛИ (тихо, без UI) ═══
+        # в•ђв•ђв•ђ РђР’РўРћ-Р’Р«Р‘РћР  РњРћР”Р•Р›Р (С‚РёС…Рѕ, Р±РµР· UI) в•ђв•ђв•ђ
         effective_model = pick_model_for_route(route, model_name)
         preflight_or_raise(
             agent_id=_effective_agent_id,
@@ -2175,13 +2236,13 @@ def run_agent_stream(*, model_name, profile_name, user_input, session_id=None, u
             streaming=True,
         )
         if effective_model != model_name:
-            _tl(timeline, "auto_model", "Авто-модель", "ok", f"{model_name} → {effective_model} (route={route})")
+            _tl(timeline, "auto_model", "РђРІС‚Рѕ-РјРѕРґРµР»СЊ", "ok", f"{model_name} в†’ {effective_model} (route={route})")
 
-        # ═══ КЭШИРОВАНИЕ ═══
+        # в•ђв•ђв•ђ РљР­РЁРР РћР’РђРќРР• в•ђв•ђв•ђ
         if should_cache(planner_input, route) and not history:
             cached = get_cached(planner_input, effective_model, profile_name)
             if cached:
-                _tl(timeline, "cache_hit", "Кэш", "ok", "Ответ из кэша")
+                _tl(timeline, "cache_hit", "РљСЌС€", "ok", "РћС‚РІРµС‚ РёР· РєСЌС€Р°")
                 identity_guard = _apply_identity_guard(raw_user_input, cached, timeline)
                 cached = identity_guard.get("text", cached)
                 provenance_guard = _apply_provenance_guard(raw_user_input, cached, timeline)
@@ -2235,7 +2296,7 @@ def run_agent_stream(*, model_name, profile_name, user_input, session_id=None, u
                         "streaming": True,
                     },
                 )
-                # Стримим кэшированный ответ по токенам (выглядит естественно)
+                # РЎС‚СЂРёРјРёРј РєСЌС€РёСЂРѕРІР°РЅРЅС‹Р№ РѕС‚РІРµС‚ РїРѕ С‚РѕРєРµРЅР°Рј (РІС‹РіР»СЏРґРёС‚ РµСЃС‚РµСЃС‚РІРµРЅРЅРѕ)
                 words = cached.split(" ")
                 for i, word in enumerate(words):
                     token = word if i == 0 else " " + word
@@ -2243,16 +2304,16 @@ def run_agent_stream(*, model_name, profile_name, user_input, session_id=None, u
                 yield {"token": "", "done": True, "full_text": cached, "meta": meta, "timeline": timeline}
                 return
 
-        # Умная память: извлекаем факты
+        # РЈРјРЅР°СЏ РїР°РјСЏС‚СЊ: РёР·РІР»РµРєР°РµРј С„Р°РєС‚С‹
         try:
             extract_and_save(planner_input)
         except Exception:
             pass
 
         if "web_search" in selected:
-            yield {"token": "", "done": False, "phase": "searching", "message": "Ищу..."}
+            yield {"token": "", "done": False, "phase": "searching", "message": "РС‰Сѓ..."}
         elif selected:
-            yield {"token": "", "done": False, "phase": "tools", "message": "Собираю контекст..."}
+            yield {"token": "", "done": False, "phase": "tools", "message": "РЎРѕР±РёСЂР°СЋ РєРѕРЅС‚РµРєСЃС‚..."}
 
         ctx = _collect_context(
             profile_name=profile_name,
@@ -2267,7 +2328,7 @@ def run_agent_stream(*, model_name, profile_name, user_input, session_id=None, u
             run_id=run["run_id"],
         )
 
-        # Умная память + RAG
+        # РЈРјРЅР°СЏ РїР°РјСЏС‚СЊ + RAG
         mem_count = 0
         if _should_recall_memory_context(planner_input, route, temporal):
             try:
@@ -2284,29 +2345,29 @@ def run_agent_stream(*, model_name, profile_name, user_input, session_id=None, u
             except Exception:
                 pass
 
-        yield {"token": "", "done": False, "phase": "thinking", "message": "Пишу ответ..."}
+        yield {"token": "", "done": False, "phase": "thinking", "message": "РџРёС€Сѓ РѕС‚РІРµС‚..."}
 
         prompt = _build_prompt(raw_user_input, ctx, disabled_skills=_disabled_skills) + _compose_human_style_rules(temporal)
         full_text = ""
-        task_context = f"Маршрут: {route}. Инструменты: {', '.join(selected) if selected else 'нет дополнительных инструментов'}."
+        task_context = f"РњР°СЂС€СЂСѓС‚: {route}. РРЅСЃС‚СЂСѓРјРµРЅС‚С‹: {', '.join(selected) if selected else 'РЅРµС‚ РґРѕРїРѕР»РЅРёС‚РµР»СЊРЅС‹С… РёРЅСЃС‚СЂСѓРјРµРЅС‚РѕРІ'}."
         for token in run_chat_stream(model_name=effective_model, profile_name=profile_name, user_input=prompt, history=history, num_ctx=num_ctx, task_context=task_context):
             full_text += token
             yield {"token": token, "done": False}
 
-        # Добавляем вложения (картинки, файлы) — быстрая операция
+        # Р”РѕР±Р°РІР»СЏРµРј РІР»РѕР¶РµРЅРёСЏ (РєР°СЂС‚РёРЅРєРё, С„Р°Р№Р»С‹) вЂ” Р±С‹СЃС‚СЂР°СЏ РѕРїРµСЂР°С†РёСЏ
         attachments = _get_and_clear_attachments()
         if attachments:
             full_text += attachments
 
-        # Проверяем нужны ли тяжёлые пост-операции
+        # РџСЂРѕРІРµСЂСЏРµРј РЅСѓР¶РЅС‹ Р»Рё С‚СЏР¶С‘Р»С‹Рµ РїРѕСЃС‚-РѕРїРµСЂР°С†РёРё
         has_generated_files = any(a["type"] in ("image", "file") for a in _pending_attachments)
         should_reflect = (route in _REFLECTION_ROUTES) or use_reflection
         ql_check = raw_user_input.lower()
         needs_file_gen = any(t in ql_check for t in _FILE_TRIGGERS_WORD + _FILE_TRIGGERS_EXCEL)
 
-        # Если нет тяжёлых операций — отправляем done СРАЗУ (быстрый путь)
+        # Р•СЃР»Рё РЅРµС‚ С‚СЏР¶С‘Р»С‹С… РѕРїРµСЂР°С†РёР№ вЂ” РѕС‚РїСЂР°РІР»СЏРµРј done РЎР РђР—РЈ (Р±С‹СЃС‚СЂС‹Р№ РїСѓС‚СЊ)
         if not should_reflect and not needs_file_gen:
-            # Авто-выполнение Python (лёгкое, только если есть код)
+            # РђРІС‚Рѕ-РІС‹РїРѕР»РЅРµРЅРёРµ Python (Р»С‘РіРєРѕРµ, С‚РѕР»СЊРєРѕ РµСЃР»Рё РµСЃС‚СЊ РєРѕРґ)
             try:
                 full_text = _maybe_auto_exec_python(raw_user_input, full_text, timeline, enabled=use_python_exec)
             except Exception:
@@ -2376,11 +2437,11 @@ def run_agent_stream(*, model_name, profile_name, user_input, session_id=None, u
             )
             yield {"token": "", "done": True, "full_text": full_text, "meta": meta, "timeline": timeline}
         else:
-            # Тяжёлый путь — reflection и/или генерация файлов
+            # РўСЏР¶С‘Р»С‹Р№ РїСѓС‚СЊ вЂ” reflection Рё/РёР»Рё РіРµРЅРµСЂР°С†РёСЏ С„Р°Р№Р»РѕРІ
             if should_reflect and full_text.strip() and not has_generated_files:
-                yield {"token": "", "done": False, "phase": "reflecting", "message": "Проверяю..."}
+                yield {"token": "", "done": False, "phase": "reflecting", "message": "РџСЂРѕРІРµСЂСЏСЋ..."}
                 try:
-                    ref = run_reflection_loop(model_name=effective_model, profile_name=profile_name, user_input=raw_user_input, draft_text=full_text, review_text="Улучши.", context=ctx)
+                    ref = run_reflection_loop(model_name=effective_model, profile_name=profile_name, user_input=raw_user_input, draft_text=full_text, review_text="РЈР»СѓС‡С€Рё.", context=ctx)
                     refined = ref.get("answer", "")
                     if refined and refined != full_text:
                         full_text = refined
@@ -2394,7 +2455,7 @@ def run_agent_stream(*, model_name, profile_name, user_input, session_id=None, u
                 pass
 
             if needs_file_gen:
-                yield {"token": "", "done": False, "phase": "generating_file", "message": "Готовлю файл..."}
+                yield {"token": "", "done": False, "phase": "generating_file", "message": "Р“РѕС‚РѕРІР»СЋ С„Р°Р№Р»..."}
             post_files = _maybe_generate_files(raw_user_input, full_text, enabled=use_file_gen)
             if post_files:
                 full_text += post_files
@@ -2407,7 +2468,7 @@ def run_agent_stream(*, model_name, profile_name, user_input, session_id=None, u
                 full_text = guarded_text
                 yield {"token": "", "done": False, "phase": "reflection_replace", "full_text": full_text}
 
-            # Кэшируем после всех пост-обработок
+            # РљСЌС€РёСЂСѓРµРј РїРѕСЃР»Рµ РІСЃРµС… РїРѕСЃС‚-РѕР±СЂР°Р±РѕС‚РѕРє
             if should_cache(planner_input, route) and full_text.strip():
                 try:
                     set_cached(planner_input, effective_model, profile_name, full_text)
