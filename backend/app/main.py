@@ -44,6 +44,7 @@ from app.api.routes.agent_registry_routes import router as agent_registry_router
 from app.api.routes.event_bus_routes import router as event_bus_router
 from app.api.routes.workflow_routes import router as workflow_router
 from app.api.routes.agent_monitor_routes import router as agent_monitor_router
+from app.api.routes.tool_registry_routes import router as tool_registry_router
 from app.services.runtime_service import init_runtime_state
 
 app = FastAPI(title="Elira AI API")
@@ -109,6 +110,7 @@ app.include_router(agent_registry_router)
 app.include_router(event_bus_router)
 app.include_router(workflow_router)
 app.include_router(agent_monitor_router)
+app.include_router(tool_registry_router)
 
 init_runtime_state()
 
@@ -119,6 +121,9 @@ from app.services.agent_monitor import seed_default_limits
 seed_builtin_agents()
 seed_builtin_workflows()
 seed_default_limits()
+
+from app.services.tool_registry import seed_builtin_tools
+seed_builtin_tools()
 
 @app.get("/health")
 def health():
