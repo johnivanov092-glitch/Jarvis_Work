@@ -201,6 +201,80 @@ subscriptions (
 
 ---
 
+## Planned Next Waves (NOT STARTED)
+
+### Wave 7: Async Runtime Foundation
+
+**Статус:** planned only, do not start until the current consolidation line is merged and accepted on `main`.
+
+**Цель:** move Agent OS from a mostly synchronous request-bound runtime to a queued/background execution model for long-lived tools, workflows, and multi-agent orchestration.
+
+**Primary owner:** Claude Code  
+**Supporting owner:** Codex
+
+**Scope:**
+- turn Event Bus from audit-only storage into a real async dispatcher foundation;
+- add queued/background execution for tool runs and workflow runs;
+- support lifecycle states like `queued`, `running`, `paused`, `resumed`, `cancelled`, `failed`, `completed`;
+- decouple long workflow and autopipeline execution from a single HTTP request path.
+
+**Out of scope for this wave:**
+- operator UI expansion;
+- hard OS/container isolation;
+- unrelated browser/project-brain stubs.
+
+**Suggested dependency gate:**
+- merge Wave 6 to `main` first;
+- keep Tool Registry / Workflow Engine / Monitoring semantics stable during the async refactor.
+
+### Wave 8: Operator Console
+
+**Статус:** planned only, do not start until Wave 7 runtime primitives exist.
+
+**Цель:** turn the current read-only Agent OS dashboard into an actual control surface for operators.
+
+**Primary owner:** Codex  
+**Supporting owner:** Claude Code
+
+**Scope:**
+- event stream inspection;
+- workflow run inspection and control;
+- agent inbox/message inspection;
+- tool registry state inspection;
+- limits/policy editor;
+- manual `resume`, `cancel`, `retry`, and related operator actions.
+
+**Out of scope for this wave:**
+- hard sandbox enforcement;
+- brand-new execution engine changes beyond what Wave 7 exposes.
+
+**Suggested dependency gate:**
+- build on top of Wave 7 async lifecycle, not in parallel with it;
+- keep existing dashboard cards intact while Agent OS control UI grows around them.
+
+### Wave 9: Hard Sandboxing
+
+**Статус:** planned only, do not start until Wave 7 and Wave 8 are stable.
+
+**Цель:** move from soft guards to stronger execution isolation and enforceable safety boundaries.
+
+**Primary owner:** shared planning required before start
+
+**Scope:**
+- stronger worker/process boundaries for risky tool execution;
+- real timeout / kill semantics;
+- stricter isolation for dangerous tool steps;
+- policy enforcement that goes beyond soft monitoring/preflight checks.
+
+**Out of scope for this wave:**
+- broad UI redesign;
+- new capability waves unrelated to execution safety.
+
+**Planning note:**
+- this wave needs a dedicated pre-start design review because it changes runtime guarantees, operational assumptions, and failure semantics more deeply than Waves 1–8.
+
+---
+
 ## Лог изменений
 
 | Дата | Кто | Что |
@@ -215,3 +289,4 @@ subscriptions (
 | 2026-03-30 | Codex | Phase 5 завершена: read-only `Agent OS` секция добавлена в dashboard, UI подтягивает health/dashboard/limits, `npm --prefix frontend run build` зелёный, фаза помечена как DONE |
 | 2026-03-31 | Codex | Wave 6 consolidation выполнена: Tool Registry стал каноническим источником `tool.executed` и execution semantics, workflow tool steps переведены на registry-native execution, `multi_agent_chain.py` очищен до thin workflow shim |
 | 2026-03-31 | Codex | Зафиксирована runtime hygiene policy: live SQLite/state исключены из обычного git tracking, добавлены integration tests и расширен smoke-check для Agent OS post-merge цепочки |
+| 2026-03-31 | Codex | В workplan добавлены следующие волны без старта реализации: Wave 7 Async Runtime Foundation, Wave 8 Operator Console, Wave 9 Hard Sandboxing, с разделением ролей между агентами |

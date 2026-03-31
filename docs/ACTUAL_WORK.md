@@ -431,3 +431,16 @@ Live repair log for concrete backend/runtime fixes.
   Tool Registry is now the single source of truth for tool metadata, direct execution, workflow tool execution semantics, canonical `tool.executed`, and tool-aware sandbox allowlists;
   Agent OS now has one explicit integration gate on top of the already completed phase slices, instead of relying only on isolated per-phase greens;
   runtime SQLite/state churn is no longer supposed to pollute normal development commits, so `git status` can stay focused on code/docs/fixtures rather than live local state.
+
+### 28. Agent OS Next Waves Planning
+- Status: planning only
+- Scope: added the next Agent OS roadmap waves to [AGENT_OS_WORKPLAN.md](/D:/AIWork/Elira_AI/docs/AGENT_OS_WORKPLAN.md) without starting implementation work.
+- Planned order:
+  Wave 7 — `Async Runtime Foundation`, owned primarily by Claude Code, with Codex as supporting owner;
+  Wave 8 — `Operator Console`, owned primarily by Codex, with Claude Code as supporting owner;
+  Wave 9 — `Hard Sandboxing`, explicitly left as a future shared-design wave.
+- Planning constraints:
+  none of these waves are marked `IN PROGRESS`;
+  Wave 7 should start only after the current consolidation line is merged and accepted on `main`;
+  Wave 8 should build on top of Wave 7 runtime primitives rather than racing them;
+  Wave 9 needs a dedicated design review before implementation because it changes runtime guarantees and execution safety semantics more deeply than the previous waves.
