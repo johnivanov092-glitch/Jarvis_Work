@@ -48,6 +48,10 @@ REQUIRED_PATHS = {
     "/api/agent-os/dashboard",
     "/api/agent-os/limits",
     "/api/agent-os/limits/{agent_id}",
+    "/api/agent-os/tools",
+    "/api/agent-os/tools/{name}",
+    "/api/agent-os/tools/{name}/execute",
+    "/api/agent-os/tools/{name}/validate",
 }
 
 DEAD_FRONTEND_ENDPOINTS = {
@@ -110,6 +114,20 @@ AGENT_OS_DASHBOARD_REQUIRED_KEYS = {
     "warnings",
 }
 AGENT_OS_LIMITS_REQUIRED_KEYS = {"items", "total"}
+TOOL_LIST_REQUIRED_KEYS = {"tools", "total"}
+TOOL_EXECUTE_REQUIRED_KEYS = {"ok", "tool_name", "result", "errors"}
+TOOL_EXECUTED_EVENT_REQUIRED_KEYS = {
+    "tool_name",
+    "source",
+    "agent_id",
+    "run_id",
+    "workflow_id",
+    "step_id",
+    "ok",
+    "args",
+    "error",
+    "result_summary",
+}
 EXPECTED_SEARCH_ENGINES = ("tavily", "duckduckgo", "wikipedia")
 LEGACY_ENGINE_SNIPPETS = {
     '"brave"',
@@ -371,6 +389,65 @@ def validate_agent_os_limits_shape(payload: Any) -> list[str]:
     return failures
 
 
+def validate_tool_list_shape(payload: Any) -> list[str]:
+    failures: list[str] = []
+    if not isinstance(payload, dict):
+        return [f"tool_list: expected dict, got {type(payload).__name__}"]
+
+    missing = sorted(TOOL_LIST_REQUIRED_KEYS - set(payload))
+    if missing:
+        failures.append(f"tool_list: missing keys {', '.join(missing)}")
+    if not isinstance(payload.get("tools"), list):
+        failures.append("tool_list: 'tools' must be list")
+    if not isinstance(payload.get("total"), int):
+        failures.append("tool_list: 'total' must be int")
+    return failures
+
+
+def validate_tool_execute_shape(payload: Any) -> list[str]:
+    failures: list[str] = []
+    if not isinstance(payload, dict):
+        return [f"tool_execute: expected dict, got {type(payload).__name__}"]
+
+    missing = sorted(TOOL_EXECUTE_REQUIRED_KEYS - set(payload))
+    if missing:
+        failures.append(f"tool_execute: missing keys {', '.join(missing)}")
+    if payload.get("tool_name") != "git_status":
+        failures.append("tool_execute: expected git_status tool_name")
+    if not isinstance(payload.get("result"), dict):
+        failures.append("tool_execute: 'result' must be dict")
+    if not isinstance(payload.get("errors"), list):
+        failures.append("tool_execute: 'errors' must be list")
+    return failures
+
+
+def validate_tool_executed_event(payload: Any) -> list[str]:
+    failures: list[str] = []
+    if not isinstance(payload, dict):
+        return [f"tool_executed_event: expected dict, got {type(payload).__name__}"]
+
+    events = payload.get("events")
+    if not isinstance(events, list) or not events:
+        return ["tool_executed_event: expected non-empty events list"]
+
+    event = events[0]
+    if not isinstance(event, dict):
+        return ["tool_executed_event: first event must be dict"]
+
+    event_payload = event.get("payload")
+    if not isinstance(event_payload, dict):
+        return ["tool_executed_event: payload must be dict"]
+
+    missing = sorted(TOOL_EXECUTED_EVENT_REQUIRED_KEYS - set(event_payload))
+    if missing:
+        failures.append(f"tool_executed_event: missing payload keys {', '.join(missing)}")
+    if event.get("event_type") != "tool.executed":
+        failures.append("tool_executed_event: expected event_type tool.executed")
+    if event_payload.get("tool_name") != "git_status":
+        failures.append("tool_executed_event: expected tool_name git_status")
+    return failures
+
+
 def collect_failures() -> dict[str, Any]:
     schema = app.openapi()
     paths = set(schema.get("paths", {}))
@@ -384,6 +461,9 @@ def collect_failures() -> dict[str, Any]:
     agent_os_health = client.get("/api/agent-os/health").json()
     agent_os_dashboard = client.get("/api/agent-os/dashboard").json()
     agent_os_limits = client.get("/api/agent-os/limits").json()
+    tool_list = client.get("/api/agent-os/tools").json()
+    tool_execute = client.post("/api/agent-os/tools/git_status/execute", json={"args": {}}).json()
+    tool_executed_events = client.get("/api/agent-os/events", params={"event_type": "tool.executed", "limit": 5}).json()
 
     return {
         "paths_count": len(paths),
@@ -395,6 +475,9 @@ def collect_failures() -> dict[str, Any]:
         "agent_os_health": agent_os_health,
         "agent_os_dashboard": agent_os_dashboard,
         "agent_os_limits": agent_os_limits,
+        "tool_list": tool_list,
+        "tool_execute": tool_execute,
+        "tool_executed_events": tool_executed_events,
         "missing_paths": sorted(REQUIRED_PATHS - paths),
         "raw_fetch_hits": find_raw_relative_fetches(),
         "dead_endpoint_hits": find_dead_endpoint_refs(),
@@ -410,6 +493,9 @@ def collect_failures() -> dict[str, Any]:
         "agent_os_health_failures": validate_agent_os_health_shape(agent_os_health),
         "agent_os_dashboard_failures": validate_agent_os_dashboard_shape(agent_os_dashboard),
         "agent_os_limits_failures": validate_agent_os_limits_shape(agent_os_limits),
+        "tool_list_failures": validate_tool_list_shape(tool_list),
+        "tool_execute_failures": validate_tool_execute_shape(tool_execute),
+        "tool_executed_event_failures": validate_tool_executed_event(tool_executed_events),
     }
 
 
@@ -425,6 +511,9 @@ def main() -> int:
     print("Agent OS health:", json.dumps(results["agent_os_health"], ensure_ascii=True))
     print("Agent OS dashboard:", json.dumps(results["agent_os_dashboard"], ensure_ascii=True))
     print("Agent OS limits:", json.dumps(results["agent_os_limits"], ensure_ascii=True))
+    print("Tool list:", json.dumps(results["tool_list"], ensure_ascii=True))
+    print("Tool execute:", json.dumps(results["tool_execute"], ensure_ascii=True))
+    print("Tool executed events:", json.dumps(results["tool_executed_events"], ensure_ascii=True))
 
     failed = False
     failure_sections = (
@@ -440,6 +529,9 @@ def main() -> int:
         ("Agent OS health shape issues", results["agent_os_health_failures"]),
         ("Agent OS dashboard shape issues", results["agent_os_dashboard_failures"]),
         ("Agent OS limits shape issues", results["agent_os_limits_failures"]),
+        ("Tool list shape issues", results["tool_list_failures"]),
+        ("Tool execute shape issues", results["tool_execute_failures"]),
+        ("tool.executed event integration issues", results["tool_executed_event_failures"]),
     )
 
     for title, items in failure_sections:

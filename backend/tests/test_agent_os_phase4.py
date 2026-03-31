@@ -17,8 +17,11 @@ if str(BACKEND_ROOT) not in sys.path:
     sys.path.insert(0, str(BACKEND_ROOT))
 
 from app.api.routes.workflow_routes import router as workflow_router  # noqa: E402
+from app.services import agent_monitor  # noqa: E402
+from app.services import agent_registry  # noqa: E402
 from app.services import autopipeline_service  # noqa: E402
 from app.services import event_bus as bus  # noqa: E402
+from app.services import tool_registry as reg  # noqa: E402
 from app.services import workflow_engine  # noqa: E402
 
 
@@ -26,19 +29,43 @@ class WorkflowDbMixin(unittest.TestCase):
     def setUp(self) -> None:
         super().setUp()
         self._tmpdir = tempfile.TemporaryDirectory()
+        self._original_monitor_db = agent_monitor.DB_PATH
+        self._original_registry_db = agent_registry.DB_PATH
         self._original_workflow_db = workflow_engine.DB_PATH
         self._original_event_bus_db = bus.DB_PATH
+        self._original_tool_registry_db = reg.DB_PATH
+        self._original_limit_seed = agent_monitor._LIMIT_SEED_DONE
+        self._original_agent_seed = agent_registry._BUILTIN_AGENTS_SEEDED
         self._original_seeded = workflow_engine._BUILTIN_WORKFLOWS_SEEDED
+        self._original_tool_seeded = reg._BUILTIN_SEEDED
+        agent_monitor.DB_PATH = Path(self._tmpdir.name) / "agent_monitor.db"
+        agent_registry.DB_PATH = Path(self._tmpdir.name) / "agent_registry.db"
         workflow_engine.DB_PATH = Path(self._tmpdir.name) / "workflow_engine.db"
         bus.DB_PATH = Path(self._tmpdir.name) / "event_bus.db"
+        reg.DB_PATH = Path(self._tmpdir.name) / "tool_registry.db"
+        agent_monitor._LIMIT_SEED_DONE = False
+        agent_registry._BUILTIN_AGENTS_SEEDED = False
         workflow_engine._BUILTIN_WORKFLOWS_SEEDED = False
+        reg._BUILTIN_SEEDED = False
+        agent_monitor._init_db()
+        agent_registry._init_db()
         workflow_engine._init_db()
         bus._init_db()
+        reg._init_db()
+        agent_registry.seed_builtin_agents()
+        reg.seed_builtin_tools()
+        agent_monitor.seed_default_limits()
 
     def tearDown(self) -> None:
+        agent_monitor.DB_PATH = self._original_monitor_db
+        agent_registry.DB_PATH = self._original_registry_db
         workflow_engine.DB_PATH = self._original_workflow_db
         bus.DB_PATH = self._original_event_bus_db
+        reg.DB_PATH = self._original_tool_registry_db
+        agent_monitor._LIMIT_SEED_DONE = self._original_limit_seed
+        agent_registry._BUILTIN_AGENTS_SEEDED = self._original_agent_seed
         workflow_engine._BUILTIN_WORKFLOWS_SEEDED = self._original_seeded
+        reg._BUILTIN_SEEDED = self._original_tool_seeded
         self._tmpdir.cleanup()
         super().tearDown()
 
@@ -144,6 +171,17 @@ class WorkflowEngineServiceTest(WorkflowDbMixin):
         self.assertEqual(cancelled["status"], "cancelled")
 
     def test_tool_step_uses_adapter_and_emits_tool_event(self) -> None:
+        reg.register_tool(name="test-workflow-tool", handler=lambda args: {"ok": True, "items": [{"text": args.get("query", "")}]})
+        current = agent_monitor.ensure_agent_limit(agent_monitor.WORKFLOW_ENGINE_AGENT_ID)
+        agent_monitor.update_agent_limit(
+            agent_monitor.WORKFLOW_ENGINE_AGENT_ID,
+            {
+                "max_runs_per_hour": current["max_runs_per_hour"],
+                "max_execution_seconds": current["max_execution_seconds"],
+                "max_context_tokens": current["max_context_tokens"],
+                "allowed_tools": [*current["allowed_tools"], "test-workflow-tool"],
+            },
+        )
         workflow_engine.create_workflow_template(
             {
                 "id": "test.workflow.tool",
@@ -154,7 +192,7 @@ class WorkflowEngineServiceTest(WorkflowDbMixin):
                         {
                             "id": "tool-step",
                             "type": "tool",
-                            "tool_name": "search_memory",
+                            "tool_name": "test-workflow-tool",
                             "input_map": {"query": "$.input.query"},
                             "save_as": "tool_result",
                             "next": None,
@@ -165,16 +203,18 @@ class WorkflowEngineServiceTest(WorkflowDbMixin):
             }
         )
 
-        with patch("app.services.tool_service.run_tool", return_value={"ok": True, "items": [{"text": "fact"}]}):
-            run = workflow_engine.start_workflow_run(
-                workflow_id="test.workflow.tool",
-                workflow_input={"query": "memory"},
-            )
+        run = workflow_engine.start_workflow_run(
+            workflow_id="test.workflow.tool",
+            workflow_input={"query": "memory"},
+        )
 
         self.assertEqual(run["status"], "completed")
         self.assertTrue(run["step_results"]["tool_result"]["ok"])
         events, _ = bus.list_events(limit=20)
-        self.assertIn("tool.executed", [event["event_type"] for event in events])
+        tool_event = next(event for event in events if event["event_type"] == "tool.executed")
+        self.assertEqual(tool_event["payload"]["tool_name"], "test-workflow-tool")
+        self.assertEqual(tool_event["payload"]["workflow_id"], "test.workflow.tool")
+        self.assertEqual(tool_event["payload"]["step_id"], "tool-step")
 
 
 class WorkflowRoutesTest(WorkflowDbMixin):

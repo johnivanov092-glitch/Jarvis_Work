@@ -622,6 +622,7 @@ def _execute_tool_step(
     from app.services.tool_service import run_tool
 
     tool_name = str(step.get("tool_name", "")).strip()
+    step_id = str(step.get("id", "")).strip()
     args = mapped_inputs if isinstance(mapped_inputs, dict) else {"input": mapped_inputs}
     preflight_or_raise(
         agent_id=WORKFLOW_ENGINE_AGENT_ID,
@@ -629,18 +630,20 @@ def _execute_tool_step(
         selected_tools=[tool_name],
         run_id=run_id,
         workflow_id=workflow_id,
-        step_id=str(step.get("id", "")),
+        step_id=step_id,
         route="workflow.tool",
         streaming=False,
     )
-    result = run_tool(tool_name, args)
-    ok = bool(result.get("ok"))
-    _emit_workflow_event(
-        "tool.executed",
-        workflow_id,
-        run_id,
-        payload={"step_id": step["id"], "tool_name": tool_name, "ok": ok},
+    result = run_tool(
+        tool_name,
+        args,
+        source="workflow",
+        source_agent_id=workflow_id,
+        run_id=run_id,
+        workflow_id=workflow_id,
+        step_id=step_id,
     )
+    ok = bool(result.get("ok"))
     return {
         "ok": ok,
         "tool_name": tool_name,

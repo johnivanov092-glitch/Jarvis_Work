@@ -3,7 +3,12 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any
 
-from app.services.agent_monitor import ensure_agent_limit, count_agent_runs_last_hour, record_sandbox_block
+from app.services.agent_monitor import (
+    count_agent_runs_last_hour,
+    ensure_agent_limit,
+    get_enabled_tool_policy_names,
+    record_sandbox_block,
+)
 
 
 _PROFILE_AGENT_HINTS: list[tuple[tuple[str, ...], str]] = [
@@ -87,6 +92,7 @@ def evaluate_preflight(
     normalized_agent_id = str(agent_id or "").strip() or "builtin-universal"
     limit = ensure_agent_limit(normalized_agent_id)
     tools = _normalize_tool_names(selected_tools)
+    enabled_tools = {str(item or "").strip() for item in get_enabled_tool_policy_names() if str(item or "").strip()}
 
     max_context_tokens = int(limit.get("max_context_tokens", 0) or 0)
     if max_context_tokens > 0 and int(num_ctx or 0) > max_context_tokens:
@@ -100,7 +106,22 @@ def evaluate_preflight(
             },
         )
 
+    if enabled_tools:
+        disabled_selected = [tool for tool in tools if tool not in enabled_tools]
+        if disabled_selected:
+            raise _make_error(
+                agent_id=normalized_agent_id,
+                reason="tool_not_enabled",
+                message=f"Agent sandbox blocked run: disabled registry tool selected {', '.join(disabled_selected)}.",
+                details={
+                    "selected_tools": tools,
+                    "disabled_tools": disabled_selected,
+                },
+            )
+
     allowed_tools = {str(item or "").strip() for item in limit.get("allowed_tools", []) if str(item or "").strip()}
+    if allowed_tools and enabled_tools:
+        allowed_tools &= enabled_tools
     if allowed_tools:
         disallowed = [tool for tool in tools if tool not in allowed_tools]
         if disallowed:

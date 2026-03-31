@@ -22,7 +22,11 @@ def search_memory_tool(profile: str, query: str, limit: int = 5) -> dict[str, An
     return result
 
 
-def run_tool(tool_name: str, args: dict[str, Any] | None = None) -> dict[str, Any]:
+def run_tool(
+    tool_name: str,
+    args: dict[str, Any] | None = None,
+    **execution_context: Any,
+) -> dict[str, Any]:
     """Выполнить инструмент через Tool Registry."""
     from app.services.tool_registry import execute_tool
-    return execute_tool(tool_name, args)
+    return execute_tool(tool_name, args, **execution_context)

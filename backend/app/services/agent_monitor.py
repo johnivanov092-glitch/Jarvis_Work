@@ -120,41 +120,51 @@ def _row_to_usage(row: sqlite3.Row | None) -> dict[str, Any] | None:
     return data
 
 
-def _planner_tool_aliases() -> list[str]:
-    return [
-        "web_search",
-        "memory_search",
-        "library_context",
-        "project_mode",
-        "project_context",
-        "python_executor",
-        "project_patch",
-    ]
-
-
-def _all_known_tools() -> list[str]:
-    tool_names: list[str] = []
-    try:
-        from app.services.tool_service import list_tools
-
-        payload = list_tools()
-        for item in payload.get("tools", []):
-            name = str((item or {}).get("name", "")).strip()
-            if name:
-                tool_names.append(name)
-    except Exception:
-        pass
-
-    tool_names.extend(_planner_tool_aliases())
+def _dedupe_tool_names(tool_names: list[str]) -> list[str]:
     deduped: list[str] = []
     seen: set[str] = set()
     for name in tool_names:
-        key = name.strip()
+        key = str(name or "").strip()
         if not key or key in seen:
             continue
         seen.add(key)
         deduped.append(key)
     return deduped
+
+
+def _tool_policy_aliases(enabled_tools: set[str]) -> list[str]:
+    aliases: list[str] = []
+    if enabled_tools.intersection({"search_web", "research_web", "multi_web_search", "browser_search"}):
+        aliases.append("web_search")
+    if "search_memory" in enabled_tools:
+        aliases.append("memory_search")
+    if enabled_tools.intersection({"list_library", "build_library_context"}):
+        aliases.append("library_context")
+    if enabled_tools.intersection({"list_project_tree", "search_project", "read_project_file"}):
+        aliases.extend(["project_mode", "project_context"])
+    if enabled_tools.intersection({"preview_project_patch", "apply_project_patch", "replace_in_file", "apply_replace_in_file"}):
+        aliases.append("project_patch")
+    if "python_execute" in enabled_tools:
+        aliases.append("python_executor")
+    return aliases
+
+
+def get_enabled_tool_policy_names() -> list[str]:
+    tool_names: list[str] = []
+    try:
+        from app.services.tool_registry import list_tools_with_schemas, seed_builtin_tools
+
+        seed_builtin_tools()
+        tool_names = [
+            str((item or {}).get("name", "")).strip()
+            for item in list_tools_with_schemas(enabled_only=True)
+            if str((item or {}).get("name", "")).strip()
+        ]
+    except Exception:
+        tool_names = []
+
+    enabled_tools = {name for name in tool_names if name}
+    return _dedupe_tool_names([*tool_names, *_tool_policy_aliases(enabled_tools)])
 
 
 def _default_limit_payload(agent_id: str) -> dict[str, Any]:
@@ -164,7 +174,7 @@ def _default_limit_payload(agent_id: str) -> dict[str, Any]:
         "max_runs_per_hour": DEFAULT_MAX_RUNS_PER_HOUR,
         "max_execution_seconds": DEFAULT_MAX_EXECUTION_SECONDS,
         "max_context_tokens": DEFAULT_MAX_CONTEXT_TOKENS,
-        "allowed_tools": _all_known_tools(),
+        "allowed_tools": get_enabled_tool_policy_names(),
         "created_at": now,
         "updated_at": now,
     }
@@ -408,6 +418,39 @@ def record_agent_run_metric(
         amount=len(list(tools or [])),
         unit="count",
         details={"route": route},
+    )
+
+
+def record_tool_execution_metric(
+    *,
+    agent_id: str,
+    tool_name: str,
+    ok: bool,
+    duration_ms: int = 0,
+    run_id: str = "",
+    workflow_id: str = "",
+    step_id: str = "",
+    details: dict[str, Any] | None = None,
+) -> None:
+    record_metric(
+        metric_type="tool.execution",
+        agent_id=agent_id,
+        run_id=run_id,
+        workflow_id=workflow_id,
+        step_id=step_id,
+        ok=ok,
+        duration_ms=duration_ms,
+        details={"tool_name": tool_name, **(details or {})},
+    )
+    record_resource_usage(
+        agent_id=agent_id,
+        run_id=run_id,
+        workflow_id=workflow_id,
+        step_id=step_id,
+        resource="tool_execution",
+        amount=1,
+        unit="count",
+        details={"tool_name": tool_name, **(details or {})},
     )
 
 

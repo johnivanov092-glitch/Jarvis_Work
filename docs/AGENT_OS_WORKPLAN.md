@@ -10,9 +10,9 @@
 | Фаза | Описание | Исполнитель | Ветка | Статус | Зависимости |
 |------|----------|-------------|-------|--------|-------------|
 | 1 | Agent Registry + Persistent State | Claude Code | `feat/agent-os-phase1-registry` | **DONE** | — |
-| 2 | Tool Registry с JSON Schema | Claude Code | `feat/agent-os-phase2-tools` | **TODO** | Phase 1 |
-| 3 | Event Bus + межагентные сообщения | Codex | `feat/agent-os-phase3-eventbus` | **DONE** | Phase 1 (core), Phase 2 (`tool.executed` — заглушка) |
-| 4 | Workflow Engine | Codex | `feat/agent-os-phase4-workflows` | **DONE** | Phase 1 + 3 (core), Phase 2 (tool adapter only) |
+| 2 | Tool Registry с JSON Schema | Claude Code | `feat/agent-os-phase2-tools` | **DONE** | Phase 1 |
+| 3 | Event Bus + межагентные сообщения | Codex | `feat/agent-os-phase3-eventbus` | **DONE** | Phase 1 + 2 |
+| 4 | Workflow Engine | Codex | `feat/agent-os-phase4-workflows` | **DONE** | Phase 1 + 2 + 3 |
 | 5 | Monitoring + Sandboxing | Codex | `feat/agent-os-phase5-monitoring` | **DONE** | Phase 3 + 4 |
 
 ---
@@ -138,17 +138,17 @@ subscriptions (
 **Типы событий:**
 - `agent.run.started`
 - `agent.run.completed`
-- `tool.executed` — заглушка до мержа Phase 2
-- `workflow.step.completed` — заглушка до Phase 4
+- `tool.executed` — каноническое tool-событие из реального пути Tool Registry
+- `workflow.step.completed` — штатное workflow step-событие для workflow runtime
 
 **Модификации:**
 - `agents_service.py` — emit `agent.run.started` и `agent.run.completed`
 - `main.py` — подключение роутера Event Bus
 
-**Что не трогать до Phase 2:**
-- `tool_service.py`
-- `plugin_system.py`
-- wiring `tool.executed` кроме явного TODO-стыка
+**Состояние после Phase 2 merge:**
+- `tool_service.py` делегирует execution в Tool Registry
+- `workflow_engine.py` использует registry-native tool execution semantics
+- `tool.executed` эмитится из канонического Tool Registry execution path
 
 **API:**
 - `POST /api/agent-os/events`
@@ -171,8 +171,33 @@ subscriptions (
 
 ## Phase 5: Monitoring + Sandboxing
 
-**Зависимости:** в `main` должна быть Phase 3.  
+**Зависимости:** в `main` должна быть Phase 1 + 2 + 3 + 4.  
 **Детали:** см. `C:\Users\Root\.claude\plans\parallel-drifting-lampson.md`
+
+---
+
+## Wave 6: Consolidation First (DONE)
+
+**Цель:** after the Phase 2 merge on `main`, close the remaining post-merge seams and make Agent OS behave like one integrated runtime instead of five loosely green slices.
+
+**Track 6A - Tool/Event Convergence**
+- `tool.executed` must come from the real Tool Registry execution path.
+- Workflow tool steps must use registry-native execution semantics instead of a Phase 4 adapter seam.
+- Soft-sandbox allowlists must derive from enabled Tool Registry tools, not from static local names.
+
+**Track 6B - Runtime Hygiene + Integration Hardening**
+- Runtime SQLite/state files must stop polluting `git status` during normal development.
+- `multi_agent_chain.py` must remain a thin workflow-backed shim with no dead legacy body above the override.
+- One integration suite must cover `agent run -> tool execution -> event emission -> workflow run -> monitoring metrics`.
+
+**Merge gate for this wave**
+- Finish convergence first, then finish runtime cleanup and the full integration pass.
+
+**Wave 6 outcome**
+- Tool Registry is the single source of truth for tool metadata, execution, canonical `tool.executed`, and tool-aware sandbox allowlists.
+- Workflow tool steps now use registry-native execution semantics instead of a post-Phase-2 adapter seam.
+- Runtime SQLite/state files are excluded from normal git tracking; code/docs/fixtures remain tracked, while live state stays local.
+- Consolidation is verified by a dedicated integration chain covering `agent run -> tool execution -> event emission -> workflow run -> monitoring metrics`.
 
 ---
 
@@ -188,3 +213,5 @@ subscriptions (
 | 2026-03-30 | Codex | Взята Phase 4, создана ветка `feat/agent-os-phase4-workflows`, Workflow Engine стартует параллельно незавершённой Phase 2 через локальный tool adapter |
 | 2026-03-30 | Codex | Взята Phase 5, создана ветка `feat/agent-os-phase5-monitoring`, backend checkpoint готов: monitoring DB, soft sandbox hooks, workflow metrics, новые `/api/agent-os/health|dashboard|limits*`, tests + smoke зелёные; следующий шаг — read-only UI секция |
 | 2026-03-30 | Codex | Phase 5 завершена: read-only `Agent OS` секция добавлена в dashboard, UI подтягивает health/dashboard/limits, `npm --prefix frontend run build` зелёный, фаза помечена как DONE |
+| 2026-03-31 | Codex | Wave 6 consolidation выполнена: Tool Registry стал каноническим источником `tool.executed` и execution semantics, workflow tool steps переведены на registry-native execution, `multi_agent_chain.py` очищен до thin workflow shim |
+| 2026-03-31 | Codex | Зафиксирована runtime hygiene policy: live SQLite/state исключены из обычного git tracking, добавлены integration tests и расширен smoke-check для Agent OS post-merge цепочки |

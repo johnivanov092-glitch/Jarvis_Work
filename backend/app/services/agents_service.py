@@ -1717,12 +1717,30 @@ def _do_temporal_web_search(query, timeline, tool_results, temporal=None, web_pl
     return context
 
 
-def _collect_context(*, profile_name, user_input, tools, tool_results, timeline, use_reflection=False, temporal=None, web_plan=None):
+def _collect_context(
+    *,
+    profile_name,
+    user_input,
+    tools,
+    tool_results,
+    timeline,
+    use_reflection=False,
+    temporal=None,
+    web_plan=None,
+    source_agent_id="",
+    run_id="",
+):
     parts = []
     for tool_name in tools:
         try:
             if tool_name == "memory_search":
-                result = run_tool("search_memory", {"profile": profile_name, "query": user_input, "limit": 5})
+                result = run_tool(
+                    "search_memory",
+                    {"profile": profile_name, "query": user_input, "limit": 5},
+                    source="agent_run",
+                    source_agent_id=source_agent_id,
+                    run_id=run_id,
+                )
                 tool_results.append({"tool": "search_memory", "result": result})
                 items = result.get("items", [])
                 _tl(timeline, "tool_memory", "Память", "done", str(result.get("count", 0)))
@@ -1741,8 +1759,20 @@ def _collect_context(*, profile_name, user_input, tools, tool_results, timeline,
                 project_ctx = ""
                 # Попытка 1: старый project_service
                 try:
-                    tree = run_tool("list_project_tree", {"max_depth": 3, "max_items": 200})
-                    search = run_tool("search_project", {"query": user_input, "max_hits": 20})
+                    tree = run_tool(
+                        "list_project_tree",
+                        {"max_depth": 3, "max_items": 200},
+                        source="agent_run",
+                        source_agent_id=source_agent_id,
+                        run_id=run_id,
+                    )
+                    search = run_tool(
+                        "search_project",
+                        {"query": user_input, "max_hits": 20},
+                        source="agent_run",
+                        source_agent_id=source_agent_id,
+                        run_id=run_id,
+                    )
                     tool_results.append({"tool": "project", "result": {"tree": tree.get("count", 0), "hits": search.get("count", 0)}})
                     snippets = search.get("items") or search.get("results") or []
                     if snippets:
@@ -1865,7 +1895,18 @@ def run_agent(*, model_name, profile_name, user_input, session_id=None, agent_id
             streaming=False,
         )
 
-        ctx = _collect_context(profile_name=profile_name, user_input=planner_input, tools=selected, tool_results=tool_results, timeline=timeline, use_reflection=use_reflection, temporal=temporal, web_plan=web_plan)
+        ctx = _collect_context(
+            profile_name=profile_name,
+            user_input=planner_input,
+            tools=selected,
+            tool_results=tool_results,
+            timeline=timeline,
+            use_reflection=use_reflection,
+            temporal=temporal,
+            web_plan=web_plan,
+            source_agent_id=_effective_agent_id,
+            run_id=run["run_id"],
+        )
 
         # Умная память + RAG: добавляем релевантные воспоминания только когда это реально нужно
         if _should_recall_memory_context(planner_input, route, temporal):
@@ -2213,7 +2254,18 @@ def run_agent_stream(*, model_name, profile_name, user_input, session_id=None, u
         elif selected:
             yield {"token": "", "done": False, "phase": "tools", "message": "Собираю контекст..."}
 
-        ctx = _collect_context(profile_name=profile_name, user_input=planner_input, tools=selected, tool_results=tool_results, timeline=timeline, use_reflection=use_reflection, temporal=temporal, web_plan=web_plan)
+        ctx = _collect_context(
+            profile_name=profile_name,
+            user_input=planner_input,
+            tools=selected,
+            tool_results=tool_results,
+            timeline=timeline,
+            use_reflection=use_reflection,
+            temporal=temporal,
+            web_plan=web_plan,
+            source_agent_id=_effective_agent_id,
+            run_id=run["run_id"],
+        )
 
         # Умная память + RAG
         mem_count = 0

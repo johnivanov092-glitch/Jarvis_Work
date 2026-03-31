@@ -116,14 +116,13 @@ init_runtime_state()
 
 # Seed встроенных агентов в Agent Registry при старте
 from app.services.agent_registry import seed_builtin_agents
+from app.services.tool_registry import seed_builtin_tools
 from app.services.workflow_engine import seed_builtin_workflows
 from app.services.agent_monitor import seed_default_limits
 seed_builtin_agents()
+seed_builtin_tools()
 seed_builtin_workflows()
 seed_default_limits()
-
-from app.services.tool_registry import seed_builtin_tools
-seed_builtin_tools()
 
 @app.get("/health")
 def health():

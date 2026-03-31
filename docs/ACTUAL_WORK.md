@@ -407,3 +407,27 @@ Live repair log for concrete backend/runtime fixes.
 - Result:
   Agent OS now has a complete Phase 5 layer: backend monitoring/soft-sandboxing, audit events, policy-limit endpoints, workflow-aware metrics, and a read-only dashboard view for runtime operators;
   ordinary chat and multi-agent flows stay compatible under the seeded soft defaults, while policy blocks and limit updates are visible both in API responses and in the dashboard summary.
+
+### 27. Agent OS Wave 6 - Consolidation First
+- Status: completed
+- Scope: completed the post-Phase-2 consolidation wave on branch `feat/agent-os-phase6b-runtime-hardening`, closing the remaining Tool Registry/Event Bus/Workflow seams and fixing runtime git hygiene on the active Agent OS line.
+- Start:
+  confirmed on `main` that Tool Registry was already merged and wired in [backend/app/main.py](/D:/AIWork/Elira_AI/backend/app/main.py), so the correct priority was consolidation rather than a new capability phase;
+  split the wave logically into `6A` and `6B`: tool/event convergence first, runtime hygiene and integration hardening second;
+  fixed the coordination contract in repo docs so the second agent can read the current merge gate and runtime policy directly from [AGENT_OS_WORKPLAN.md](/D:/AIWork/Elira_AI/docs/AGENT_OS_WORKPLAN.md).
+- Finish:
+  made [backend/app/services/tool_registry.py](/D:/AIWork/Elira_AI/backend/app/services/tool_registry.py) the canonical source of `tool.executed`, execution summaries, and tool execution metrics, while extending [backend/app/services/tool_service.py](/D:/AIWork/Elira_AI/backend/app/services/tool_service.py) and [backend/app/api/routes/tool_registry_routes.py](/D:/AIWork/Elira_AI/backend/app/api/routes/tool_registry_routes.py) to pass execution context through the real Tool Registry path;
+  removed the old workflow-side `tool.executed` seam in [backend/app/services/workflow_engine.py](/D:/AIWork/Elira_AI/backend/app/services/workflow_engine.py), so workflow tool steps now execute through registry-native semantics and emit the same canonical event/metric shape as direct tool calls;
+  switched soft-sandbox seeding and preflight logic in [backend/app/services/agent_monitor.py](/D:/AIWork/Elira_AI/backend/app/services/agent_monitor.py) and [backend/app/services/agent_sandbox.py](/D:/AIWork/Elira_AI/backend/app/services/agent_sandbox.py) from static tool-name lists to enabled Tool Registry tools, and adjusted [backend/app/main.py](/D:/AIWork/Elira_AI/backend/app/main.py) seed order so builtin tools are available before default limits are seeded;
+  simplified [backend/app/services/multi_agent_chain.py](/D:/AIWork/Elira_AI/backend/app/services/multi_agent_chain.py) into one clean workflow-backed shim instead of keeping dead legacy logic above the workflow path;
+  introduced [backend/tests/test_agent_os_phase6.py](/D:/AIWork/Elira_AI/backend/tests/test_agent_os_phase6.py) as the consolidation integration suite covering `agent run -> tool execution -> event emission -> workflow run -> monitoring metrics`, extended [backend/tests/test_agent_os_phase4.py](/D:/AIWork/Elira_AI/backend/tests/test_agent_os_phase4.py), [backend/tests/test_agent_os_phase5.py](/D:/AIWork/Elira_AI/backend/tests/test_agent_os_phase5.py), and expanded [scripts/smoke_contract_check.py](/D:/AIWork/Elira_AI/scripts/smoke_contract_check.py) so post-merge Agent OS breakage is caught by one common smoke path;
+  fixed runtime hygiene in [.gitignore](/D:/AIWork/Elira_AI/.gitignore) and git index policy: live SQLite/state files under `data/`, generated outputs, uploads, local `.claude/` worktree state, `run_history.json`, `plugins_config.json`, and SQLite WAL/SHM companions are no longer part of normal tracked repo state.
+- Verification:
+  `python -m compileall backend/app`;
+  `D:\\AIWork\\Elira_AI\\backend\\.venv\\Scripts\\python.exe -m unittest backend/tests/test_agent_os_phase4.py backend/tests/test_agent_os_phase5.py backend/tests/test_agent_os_phase6.py -v`;
+  `D:\\AIWork\\Elira_AI\\backend\\.venv\\Scripts\\python.exe -m unittest discover -s backend/tests -p "test_*.py"` -> 90 tests OK;
+  `D:\\AIWork\\Elira_AI\\backend\\.venv\\Scripts\\python.exe scripts\\smoke_contract_check.py` -> passed.
+- Result:
+  Tool Registry is now the single source of truth for tool metadata, direct execution, workflow tool execution semantics, canonical `tool.executed`, and tool-aware sandbox allowlists;
+  Agent OS now has one explicit integration gate on top of the already completed phase slices, instead of relying only on isolated per-phase greens;
+  runtime SQLite/state churn is no longer supposed to pollute normal development commits, so `git status` can stay focused on code/docs/fixtures rather than live local state.

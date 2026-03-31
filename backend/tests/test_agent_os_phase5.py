@@ -22,6 +22,7 @@ from app.services import agent_registry  # noqa: E402
 from app.services import agent_sandbox  # noqa: E402
 from app.services import agents_service  # noqa: E402
 from app.services import event_bus as bus  # noqa: E402
+from app.services import tool_registry as reg  # noqa: E402
 from app.services import workflow_engine  # noqa: E402
 
 
@@ -35,32 +36,39 @@ class AgentOsPhase5DbMixin(unittest.TestCase):
         self._original_registry_db = agent_registry.DB_PATH
         self._original_event_bus_db = bus.DB_PATH
         self._original_workflow_db = workflow_engine.DB_PATH
+        self._original_tool_registry_db = reg.DB_PATH
         self._original_limit_seed = agent_monitor._LIMIT_SEED_DONE
         self._original_agent_seed = agent_registry._BUILTIN_AGENTS_SEEDED
         self._original_workflow_seed = workflow_engine._BUILTIN_WORKFLOWS_SEEDED
+        self._original_tool_seed = reg._BUILTIN_SEEDED
 
         agent_monitor.DB_PATH = tmp_root / "agent_monitor.db"
         agent_registry.DB_PATH = tmp_root / "agent_registry.db"
         bus.DB_PATH = tmp_root / "event_bus.db"
         workflow_engine.DB_PATH = tmp_root / "workflow_engine.db"
+        reg.DB_PATH = tmp_root / "tool_registry.db"
 
         agent_monitor._LIMIT_SEED_DONE = False
         agent_registry._BUILTIN_AGENTS_SEEDED = False
         workflow_engine._BUILTIN_WORKFLOWS_SEEDED = False
+        reg._BUILTIN_SEEDED = False
 
         agent_monitor._init_db()
         agent_registry._init_db()
         bus._init_db()
         workflow_engine._init_db()
+        reg._init_db()
 
     def tearDown(self) -> None:
         agent_monitor.DB_PATH = self._original_monitor_db
         agent_registry.DB_PATH = self._original_registry_db
         bus.DB_PATH = self._original_event_bus_db
         workflow_engine.DB_PATH = self._original_workflow_db
+        reg.DB_PATH = self._original_tool_registry_db
         agent_monitor._LIMIT_SEED_DONE = self._original_limit_seed
         agent_registry._BUILTIN_AGENTS_SEEDED = self._original_agent_seed
         workflow_engine._BUILTIN_WORKFLOWS_SEEDED = self._original_workflow_seed
+        reg._BUILTIN_SEEDED = self._original_tool_seed
         self._tmpdir.cleanup()
         super().tearDown()
 

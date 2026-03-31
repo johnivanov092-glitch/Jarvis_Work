@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import json
 import sqlite3
+import time
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Callable
@@ -133,6 +134,97 @@ def _noop_handler(args: dict) -> dict:
     return {"ok": False, "error": "No handler registered for this tool"}
 
 
+def _json_safe(value: Any) -> Any:
+    try:
+        json.dumps(value, ensure_ascii=False)
+        return value
+    except (TypeError, ValueError):
+        return str(value)
+
+
+def _summarize_tool_result(result: dict[str, Any]) -> dict[str, Any]:
+    summary: dict[str, Any] = {
+        "ok": bool(result.get("ok")),
+        "keys": sorted(str(key) for key in result.keys()),
+    }
+    if "count" in result:
+        summary["count"] = result.get("count")
+    if isinstance(result.get("items"), list):
+        summary["items_count"] = len(result.get("items", []))
+    if isinstance(result.get("results"), list):
+        summary["results_count"] = len(result.get("results", []))
+    if result.get("error"):
+        summary["error"] = str(result.get("error", ""))
+    return summary
+
+
+def _emit_tool_executed_event(
+    *,
+    tool_name: str,
+    args: dict[str, Any],
+    result: dict[str, Any],
+    source: str,
+    source_agent_id: str,
+    run_id: str,
+    workflow_id: str,
+    step_id: str,
+) -> None:
+    try:
+        from app.services.event_bus import emit_event
+
+        emit_event(
+            event_type="tool.executed",
+            source_agent_id=source_agent_id or "tool-registry",
+            payload={
+                "tool_name": tool_name,
+                "source": source,
+                "agent_id": source_agent_id or "",
+                "run_id": run_id,
+                "workflow_id": workflow_id,
+                "step_id": step_id,
+                "ok": bool(result.get("ok")),
+                "args": _json_safe(args),
+                "error": str(result.get("error", "")) if not result.get("ok") else "",
+                "result_summary": _summarize_tool_result(result),
+            },
+        )
+    except Exception:
+        return
+
+
+def _record_tool_execution(
+    *,
+    tool_name: str,
+    args: dict[str, Any],
+    result: dict[str, Any],
+    source: str,
+    source_agent_id: str,
+    run_id: str,
+    workflow_id: str,
+    step_id: str,
+    duration_ms: int,
+) -> None:
+    try:
+        from app.services.agent_monitor import record_tool_execution_metric
+
+        record_tool_execution_metric(
+            agent_id=source_agent_id or "tool-registry",
+            tool_name=tool_name,
+            ok=bool(result.get("ok")),
+            duration_ms=duration_ms,
+            run_id=run_id,
+            workflow_id=workflow_id,
+            step_id=step_id,
+            details={
+                "source": source,
+                "args": _json_safe(args),
+                "result_summary": _summarize_tool_result(result),
+            },
+        )
+    except Exception:
+        return
+
+
 # ── CRUD ─────────────────────────────────────────────────────
 
 def get_tool(name: str) -> dict | None:
@@ -211,25 +303,61 @@ def delete_tool(name: str) -> dict:
 
 # ── Выполнение ───────────────────────────────────────────────
 
-def execute_tool(name: str, args: dict[str, Any] | None = None) -> dict:
+def execute_tool(
+    name: str,
+    args: dict[str, Any] | None = None,
+    *,
+    source: str = "tool_registry",
+    source_agent_id: str | None = None,
+    run_id: str = "",
+    workflow_id: str = "",
+    step_id: str = "",
+) -> dict:
     """Вызвать зарегистрированный инструмент."""
     args = args or {}
+    effective_source_agent_id = str(source_agent_id or "").strip() or "tool-registry"
+    started_at = time.monotonic()
+
+    def _finalize(result: dict[str, Any]) -> dict[str, Any]:
+        normalized = result if isinstance(result, dict) else {"ok": True, "result": result}
+        duration_ms = int((time.monotonic() - started_at) * 1000)
+        _emit_tool_executed_event(
+            tool_name=name,
+            args=args,
+            result=normalized,
+            source=source,
+            source_agent_id=effective_source_agent_id,
+            run_id=run_id,
+            workflow_id=workflow_id,
+            step_id=step_id,
+        )
+        _record_tool_execution(
+            tool_name=name,
+            args=args,
+            result=normalized,
+            source=source,
+            source_agent_id=effective_source_agent_id,
+            run_id=run_id,
+            workflow_id=workflow_id,
+            step_id=step_id,
+            duration_ms=duration_ms,
+        )
+        return normalized
+
     handler = _handlers.get(name)
     if not handler:
-        return {"ok": False, "error": f"No handler for tool: {name}"}
+        return _finalize({"ok": False, "error": f"No handler for tool: {name}"})
 
     # Проверяем enabled
     tool_meta = get_tool(name)
     if tool_meta and not tool_meta.get("enabled", True):
-        return {"ok": False, "error": f"Tool '{name}' is disabled"}
+        return _finalize({"ok": False, "error": f"Tool '{name}' is disabled"})
 
     try:
         result = handler(args)
-        if not isinstance(result, dict):
-            result = {"ok": True, "result": result}
-        return result
+        return _finalize(result if isinstance(result, dict) else {"ok": True, "result": result})
     except Exception as exc:
-        return {"ok": False, "error": str(exc)}
+        return _finalize({"ok": False, "error": str(exc)})
 
 
 def validate_tool_args(name: str, args: dict) -> list[str]:

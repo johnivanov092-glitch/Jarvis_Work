@@ -124,6 +124,22 @@ backend/data/smart_memory.db
 backend/data/response_cache.db
 backend/data/rag_memory.db
 
+# rooted runtime state (single data root)
+.claude/
+data/*.db
+data/*.db-shm
+data/*.db-wal
+data/generated/
+data/uploads/
+data/chat_uploads_tmp/
+data/browser_downloads/
+data/outputs/
+data/patch_backups/
+data/workspace/
+data/system/
+data/run_history.json
+data/plugins_config.json
+
 # local env / secrets
 .env
 .env.local
